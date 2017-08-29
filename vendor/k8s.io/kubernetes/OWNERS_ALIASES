@@ -1,0 +1,104 @@
+aliases:
+  sig-scheduling-maintainers:
+    - davidopp
+    - timothysc
+    - wojtek-t
+    - k82cn
+  sig-scheduling:
+    - davidopp
+    - bsalamat
+    - timothysc
+    - wojtek-t
+    - k82cn
+    - jayunit100
+    - resouer
+  sig-cli-maintainers:
+    - adohe
+    - brendandburns
+    - deads2k
+    - fabianofranz
+    - janetkuo
+    - liggitt
+    - pwittrock
+    - smarterclayton
+  sig-cli:
+    - adohe
+    - deads2k
+    - derekwaynecarr
+    - dims
+    - dshulyak
+    - eparis
+    - ericchiang
+    - fabianofranz
+    - ghodss
+    - mengqiy
+    - rootfs
+    - shiywang
+    - smarterclayton
+    - soltysh
+    - sttts
+  sig-testing-reviewers:
+    - fejta
+    - ixdy
+    - rmmh
+    - spiffxp
+    - spxtr
+  sig-testing-approvers:
+    - fejta
+    - ixdy
+    - rmmh
+    - spiffxp
+    - spxtr
+  sig-node-reviewers:
+    - Random-Liu
+    - dashpole
+    - dchen1107
+    - derekwaynecarr
+    - dims
+    - feiskyer
+    - mtaufen
+    - ncdc
+    - pmorie
+    - resouer
+    - sjpotter
+    - tallclair
+    - tmrts
+    - vishh
+    - yifan-gu
+    - yujuhong
+  sig-network-approvers:
+    - bowei
+    - caseydavenport
+    - danwinship
+    - dcbw
+    - dnardo
+    - freehan
+    - mrhohn
+    - nicksardo
+    - thockin
+  sig-network-reviewers:
+    - bowei
+    - caseydavenport
+    - danwinship
+    - dcbw
+    - dnardo
+    - freehan
+    - mrhohn
+    - nicksardo
+    - thockin
+  sig-apps-reviewers:
+    - enisoc
+    - erictune
+    - foxish
+    - janetkuo
+    - kargakis
+    - kow3ns
+    - lukaszo
+    - mfojtik
+    - smarterclayton
+    - soltysh
+  sig-apps-api-approvers:
+    - erictune
+    - smarterclayton
+  sig-leads:
+    - spiffxp
