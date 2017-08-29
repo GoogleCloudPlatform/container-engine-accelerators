@@ -34,4 +34,15 @@ presubmit: vet
 	@echo ">> checking file boilerplate"
 	@./build/check_boilerplate.sh
 
-.PHONY: all format test vet presubmit
+TAG?=v0.3
+REGISTRY?=gcr.io/jiayingz-gke-dev
+IMAGE=device-plugin-gpu
+
+build:
+	cd nvidia_gpu; go build nvidia_gpu.go
+	docker build --pull -t ${REGISTRY}/${IMAGE}:${TAG} nvidia_gpu/
+
+push:
+	gcloud docker -- push ${REGISTRY}/${IMAGE}:${TAG}
+
+.PHONY: all format test vet presubmit build push
