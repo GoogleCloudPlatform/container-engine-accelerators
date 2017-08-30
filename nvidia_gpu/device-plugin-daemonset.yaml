@@ -1,0 +1,77 @@
+# Copyright 2017 Google Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Yaml file to install a DaemonSet that contains a device plugin for
+# managing nvidia gpu devices. Expected to be deployed in Kubernetes
+# clusters with nvidia gpu devices. On each node, the DaemonSet detects
+# whether there are nvidia gpu devices, and if so, sets up the devices
+# in ready state and report them to Kubelet through the device plugin
+# interface. The device plugin simply sleeps if there is no nvidia
+# gpu device on the node.
+
+apiVersion: extensions/v1beta1
+kind: DaemonSet
+metadata:
+    name: nvidia-device-plugin
+    namespace: kube-system
+spec:
+  template:
+    metadata:
+      labels:
+        name: nvidia-device-plugin
+    spec:
+      hostNetwork: true
+      hostPID: true
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: nvidia-overlay
+        hostPath:
+          path: /home/kubernetes/bin/nvidia
+      - name: os-release
+        hostPath:
+          path: /etc/os-release
+      - name: sysrq
+        hostPath:
+          path: /proc/sysrq-trigger
+      containers:
+      - image: "gcr.io/google_containers/device-plugin-gpu@sha256:9811a1810a1c15f91e2cf95eeeab0b59c1a3f68296cff08ac86b70beab47f090"
+        command: ["/usr/bin/device_plugins"]
+        name: nvidia-driver-installer
+        resources:
+          requests:
+            cpu: 0.15
+        securityContext:
+          privileged: true
+        env:
+          - name: BASE_DIR
+            value: "/rootfs/nvidia"
+          - name: DEVICE_PLUGIN_ENABLED
+            value: "true"
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /device-plugin
+        - name: nvidia-overlay
+          mountPath: /rootfs/nvidia
+        - name: dev
+          mountPath: /dev
+        - name: os-release
+          mountPath: /rootfs/etc/os-release
+        - name: sysrq
+          mountPath: /sysrq
+
