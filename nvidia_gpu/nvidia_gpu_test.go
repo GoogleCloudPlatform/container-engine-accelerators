@@ -20,6 +20,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 )
 
 type KubeletStub struct {
+	sync.Mutex
 	socket         string
 	pluginEndpoint string
 	server         *grpc.Server
@@ -44,6 +46,8 @@ func NewKubeletStub(socket string) *KubeletStub {
 }
 
 func (k *KubeletStub) Register(ctx context.Context, r *pluginapi.RegisterRequest) (*pluginapi.Empty, error) {
+	k.Lock()
+	defer k.Unlock()
 	k.pluginEndpoint = r.Endpoint
 	return &pluginapi.Empty{}, nil
 }
@@ -83,8 +87,9 @@ func TestNvidiaGPUManager(t *testing.T) {
 	as.Nil(err)
 
 	// Tests discoverGPUs()
-	err = testGpuManager.discoverGPUs()
-	if !os.IsNotExist(err) {
+	if _, err = os.Stat(nvidiaCtlDevice); err == nil {
+		err = testGpuManager.discoverGPUs()
+		as.Nil(err)
 		gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()
 		as.NotZero(gpus)
 	}
@@ -99,8 +104,11 @@ func TestNvidiaGPUManager(t *testing.T) {
 	}()
 
 	time.Sleep(5 * time.Second)
+	kubeletStub.Lock()
+	devicePluginSock := path.Join("/tmp", kubeletStub.pluginEndpoint)
+	kubeletStub.Unlock()
 	// Verifies the grpcServer is ready to serve services.
-	conn, err := grpc.Dial(path.Join("/tmp", kubeletStub.pluginEndpoint), grpc.WithInsecure(),
+	conn, err := grpc.Dial(devicePluginSock, grpc.WithInsecure(),
 		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
 		}))

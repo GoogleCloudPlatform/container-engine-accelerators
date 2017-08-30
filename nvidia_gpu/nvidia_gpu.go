@@ -54,6 +54,7 @@ const (
 
 // nvidiaGPUManager manages nvidia gpu devices.
 type nvidiaGPUManager struct {
+	sync.Mutex
 	defaultDevices []string
 	devices        map[string]pluginapi.Device
 	grpcServer     *grpc.Server
@@ -231,14 +232,19 @@ func (ngm *nvidiaGPUManager) Serve(dpMountPath, kEndpoint, pEndpointPrefix strin
 			}
 			grpcServer := grpc.NewServer()
 			pluginapi.RegisterDevicePluginServer(grpcServer, ngm)
+			ngm.Lock()
 			ngm.grpcServer = grpcServer
+			ngm.Unlock()
 			ngm.grpcServer.Serve(lis)
 		}()
 
 		// Wait till the grpcServer is ready to serve services.
 		for {
-			if ngm.grpcServer != nil {
-				services := ngm.grpcServer.GetServiceInfo()
+			ngm.Lock()
+			server := ngm.grpcServer
+			ngm.Unlock()
+			if server != nil {
+				services := server.GetServiceInfo()
 				if len(services) > 0 {
 					break
 				}

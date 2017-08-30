@@ -5,6 +5,7 @@ go:
 
 script:
   - make presubmit
+  - make test
 
 notifications:
   email:
