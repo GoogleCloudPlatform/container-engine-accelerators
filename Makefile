@@ -35,7 +35,7 @@ presubmit: vet
 	@./build/check_boilerplate.sh
 
 TAG?=v0.3
-REGISTRY?=gcr.io/jiayingz-gke-dev
+REGISTRY?=gcr.io/google_containers
 IMAGE=device-plugin-gpu
 
 build:
