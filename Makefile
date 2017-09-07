@@ -34,15 +34,17 @@ presubmit: vet
 	@echo ">> checking file boilerplate"
 	@./build/check_boilerplate.sh
 
-TAG?=v0.3
+TAG?=v0.5.1
 REGISTRY?=gcr.io/google_containers
 IMAGE=device-plugin-gpu
 
 build:
-	cd nvidia_gpu; go build nvidia_gpu.go
-	docker build --pull -t ${REGISTRY}/${IMAGE}:${TAG} nvidia_gpu/
+	cd cmd/nvidia_gpu; go build nvidia_gpu.go
+
+container:
+	docker build --pull -t ${REGISTRY}/${IMAGE}:${TAG} .
 
 push:
 	gcloud docker -- push ${REGISTRY}/${IMAGE}:${TAG}
 
-.PHONY: all format test vet presubmit build push
+.PHONY: all format test vet presubmit build container push
