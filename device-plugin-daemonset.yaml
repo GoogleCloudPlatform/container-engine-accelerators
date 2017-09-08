@@ -50,7 +50,7 @@ spec:
         hostPath:
           path: /proc/sysrq-trigger
       containers:
-      - image: "gcr.io/google_containers/device-plugin-gpu@sha256:9811a1810a1c15f91e2cf95eeeab0b59c1a3f68296cff08ac86b70beab47f090"
+      - image: "gcr.io/google_containers/device-plugin-gpu@sha256:f42e1dae81ba01564f64d8b7c824cc2287d0ac71988a3b1263d72ae48a475997"
         command: ["/usr/bin/device_plugins"]
         name: nvidia-driver-installer
         resources:
