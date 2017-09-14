@@ -81,13 +81,12 @@ func TestRegister(t *testing.T) {
 
 func TestNvidiaGPUManager(t *testing.T) {
 	// Expects a valid GPUManager to be created.
-	testGpuManager, err := NewNvidiaGPUManager()
+	testGpuManager := NewNvidiaGPUManager()
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
-	as.Nil(err)
 
 	// Tests discoverGPUs()
-	if _, err = os.Stat(nvidiaCtlDevice); err == nil {
+	if _, err := os.Stat(nvidiaCtlDevice); err == nil {
 		err = testGpuManager.discoverGPUs()
 		as.Nil(err)
 		gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()

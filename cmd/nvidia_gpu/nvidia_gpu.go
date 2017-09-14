@@ -59,10 +59,10 @@ type nvidiaGPUManager struct {
 	grpcServer     *grpc.Server
 }
 
-func NewNvidiaGPUManager() (*nvidiaGPUManager, error) {
+func NewNvidiaGPUManager() *nvidiaGPUManager {
 	return &nvidiaGPUManager{
 		devices: make(map[string]pluginapi.Device),
-	}, nil
+	}
 }
 
 // Discovers all NVIDIA GPU devices available on the local node by walking `/dev` directory.
@@ -264,16 +264,8 @@ func (ngm *nvidiaGPUManager) Serve(dpMountPath, kEndpoint, pEndpointPrefix strin
 func main() {
 	flag.Parse()
 	fmt.Printf("device-plugin started\n")
-	ngm, err := NewNvidiaGPUManager()
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Sleep forever.
-			select {}
-		}
-		glog.Fatal(err)
-		os.Exit(1)
-	}
-	err = ngm.Start()
+	ngm := NewNvidiaGPUManager()
+	err := ngm.Start()
 	if err != nil {
 		glog.Fatal(err)
 		os.Exit(1)
