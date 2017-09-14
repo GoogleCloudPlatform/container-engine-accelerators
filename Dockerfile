@@ -17,7 +17,7 @@ WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
 RUN go build cmd/nvidia_gpu/nvidia_gpu.go
 
-FROM gcr.io/google_containers/cos-nvidia-driver-install@sha256:456f272257d4557518afcaa7b0a1bba22d6861b20061ed5a1bd3f38aa7f8fb1a
+FROM gcr.io/google_containers/cos-nvidia-driver-install@sha256:d9c3fea134fcc8850c110ea0bc0e9ff1cca6b474352712d2d8f2762a29d95327
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/device_plugins
 RUN chmod a+x /usr/bin/device_plugins
 CMD ["/usr/bin/device_plugins"]
