@@ -49,9 +49,10 @@ spec:
       - name: sysrq
         hostPath:
           path: /proc/sysrq-trigger
-      containers:
-      - image: "gcr.io/google_containers/device-plugin-gpu@sha256:f42e1dae81ba01564f64d8b7c824cc2287d0ac71988a3b1263d72ae48a475997"
-        command: ["/usr/bin/device_plugins"]
+      initContainers:
+      - image: "gcr.io/google-containers/cos-nvidia-driver-install@sha256:d9c3fea134fcc8850c110ea0bc0e9ff1cca6b474352712d2d8f2762a29d95327"
+        command: ["/bin/sh", "-c"]
+        args: ["usr/bin/nvidia-installer.sh"]
         name: nvidia-driver-installer
         resources:
           requests:
@@ -64,8 +65,6 @@ spec:
           - name: DEVICE_PLUGIN_ENABLED
             value: "true"
         volumeMounts:
-        - name: device-plugin
-          mountPath: /device-plugin
         - name: nvidia-overlay
           mountPath: /rootfs/nvidia
         - name: dev
@@ -74,4 +73,17 @@ spec:
           mountPath: /rootfs/etc/os-release
         - name: sysrq
           mountPath: /sysrq
-
+      containers:
+      - image: "gcr.io/google_containers/device-plugin-gpu@sha256:TODO_AFTER_CREATION"
+        command: ["/usr/bin/device_plugins"]
+        name: nvidia-device-plugin
+        resources:
+          requests:
+            cpu: 0.15
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /device-plugin
+        - name: dev
+          mountPath: /dev
