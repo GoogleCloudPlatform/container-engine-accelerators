@@ -20,7 +20,6 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"path"
 	"regexp"
 	"sync"
@@ -60,10 +59,10 @@ type nvidiaGPUManager struct {
 	grpcServer     *grpc.Server
 }
 
-func NewNvidiaGPUManager() (*nvidiaGPUManager, error) {
+func NewNvidiaGPUManager() *nvidiaGPUManager {
 	return &nvidiaGPUManager{
 		devices: make(map[string]pluginapi.Device),
-	}, nil
+	}
 }
 
 // Discovers all NVIDIA GPU devices available on the local node by walking `/dev` directory.
@@ -94,16 +93,6 @@ func (ngm *nvidiaGPUManager) GetDeviceState(DeviceName string) string {
 // Discovers Nvidia GPU devices, installs device drivers, and sets up device
 // access environment.
 func (ngm *nvidiaGPUManager) Start() error {
-	// Install Nvidia device drivers.
-	// TODO: this part may be run as an init container outside device plugin.
-	fmt.Printf("Run installer script\n")
-	cmd := exec.Command("/bin/sh", "-c", "/usr/bin/nvidia-installer.sh")
-	stdoutStderr, err := cmd.CombinedOutput()
-	fmt.Printf("%s\n", stdoutStderr)
-	if err != nil {
-		return err
-	}
-
 	if _, err := os.Stat(nvidiaCtlDevice); err != nil {
 		return err
 	}
@@ -111,9 +100,10 @@ func (ngm *nvidiaGPUManager) Start() error {
 	if _, err := os.Stat(nvidiaUVMDevice); err != nil {
 		return err
 	}
+
 	ngm.defaultDevices = []string{nvidiaCtlDevice, nvidiaUVMDevice}
-	_, err = os.Stat(nvidiaUVMToolsDevice)
-	if !os.IsNotExist(err) {
+
+	if _, err := os.Stat(nvidiaUVMToolsDevice); !os.IsNotExist(err) {
 		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaUVMToolsDevice)
 	}
 
@@ -274,16 +264,8 @@ func (ngm *nvidiaGPUManager) Serve(dpMountPath, kEndpoint, pEndpointPrefix strin
 func main() {
 	flag.Parse()
 	fmt.Printf("device-plugin started\n")
-	ngm, err := NewNvidiaGPUManager()
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Sleep forever.
-			select {}
-		}
-		glog.Fatal(err)
-		os.Exit(1)
-	}
-	err = ngm.Start()
+	ngm := NewNvidiaGPUManager()
+	err := ngm.Start()
 	if err != nil {
 		glog.Fatal(err)
 		os.Exit(1)
