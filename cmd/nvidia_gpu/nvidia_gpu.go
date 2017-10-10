@@ -155,7 +155,7 @@ func (ngm *nvidiaGPUManager) ListAndWatch(emtpy *pluginapi.Empty, stream plugina
 			for _, dev := range ngm.devices {
 				resp.Devices = append(resp.Devices, &pluginapi.Device{dev.ID, dev.Health})
 			}
-			fmt.Printf("ListAndWatch: send devices %v", resp)
+			fmt.Printf("ListAndWatch: send devices %v\n", resp)
 			if err := stream.Send(resp); err != nil {
 				fmt.Printf("device-plugin: cannot update device states: %v\n", err)
 				ngm.grpcServer.Stop()
@@ -265,11 +265,12 @@ func main() {
 	flag.Parse()
 	fmt.Printf("device-plugin started\n")
 	ngm := NewNvidiaGPUManager()
-	err := ngm.Start()
-	if err != nil {
-		glog.Fatal(err)
-		os.Exit(1)
+	for {
+		err := ngm.Start()
+		if err == nil {
+			break
+		}
+		time.Sleep(5 * time.Second)
 	}
 	ngm.Serve(devicePluginMountPath, kubeletEndpoint, pluginEndpointPrefix)
-
 }
