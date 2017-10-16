@@ -28,7 +28,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha1"
+	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha"
 )
 
 type KubeletStub struct {
@@ -85,6 +85,7 @@ func TestNvidiaGPUManager(t *testing.T) {
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
+	testGpuManager.defaultDevices = []string{nvidiaCtlDevice, nvidiaUVMDevice, nvidiaUVMToolsDevice}
 	// Tests discoverGPUs()
 	if _, err := os.Stat(nvidiaCtlDevice); err == nil {
 		err = testGpuManager.discoverGPUs()
@@ -134,12 +135,21 @@ func TestNvidiaGPUManager(t *testing.T) {
 		DevicesIDs: []string{"dev1"},
 	})
 	as.Nil(err)
-	as.Len(resp.Spec, 1)
+	as.Len(resp.Devices, 4)
+	as.Len(resp.Mounts, 2)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		DevicesIDs: []string{"dev1", "dev2"},
 	})
 	as.Nil(err)
-	as.Len(resp.Spec, 2)
+	var retDevices []string
+	for _, dev := range resp.Devices {
+		retDevices = append(retDevices, dev.HostPath)
+	}
+	as.Contains(retDevices, "/dev/dev1")
+	as.Contains(retDevices, "/dev/dev2")
+	as.Contains(retDevices, "/dev/nvidiactl")
+	as.Contains(retDevices, "/dev/nvidia-uvm")
+	as.Contains(retDevices, "/dev/nvidia-uvm-tools")
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		DevicesIDs: []string{"dev1", "dev3"},
 	})
