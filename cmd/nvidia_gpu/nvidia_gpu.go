@@ -29,7 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha1"
+	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha"
 )
 
 const (
@@ -169,6 +169,7 @@ func (ngm *nvidiaGPUManager) ListAndWatch(emtpy *pluginapi.Empty, stream plugina
 
 func (ngm *nvidiaGPUManager) Allocate(ctx context.Context, rqt *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	resp := new(pluginapi.AllocateResponse)
+	// Add all requested devices to Allocate Response
 	for _, id := range rqt.DevicesIDs {
 		dev, ok := ngm.devices[id]
 		if !ok {
@@ -177,31 +178,31 @@ func (ngm *nvidiaGPUManager) Allocate(ctx context.Context, rqt *pluginapi.Alloca
 		if dev.Health != pluginapi.Healthy {
 			return nil, fmt.Errorf("Invalid allocation request with unhealthy device %s", id)
 		}
-		devRuntime := new(pluginapi.DeviceRuntimeSpec)
-		devRuntime.Devices = append(devRuntime.Devices, &pluginapi.DeviceSpec{
+		resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
 			HostPath:      "/dev/" + id,
 			ContainerPath: "/dev/" + id,
 			Permissions:   "mrw",
 		})
-		for _, d := range ngm.defaultDevices {
-			devRuntime.Devices = append(devRuntime.Devices, &pluginapi.DeviceSpec{
-				HostPath:      d,
-				ContainerPath: d,
-				Permissions:   "mrw",
-			})
-		}
-		devRuntime.Mounts = append(devRuntime.Mounts, &pluginapi.Mount{
-			ContainerPath: path.Join(ContainerPathPrefix, "lib64"),
-			HostPath:      path.Join(HostPathPrefix, "lib"),
-			ReadOnly:      true,
-		})
-		devRuntime.Mounts = append(devRuntime.Mounts, &pluginapi.Mount{
-			ContainerPath: path.Join(ContainerPathPrefix, "bin"),
-			HostPath:      path.Join(HostPathPrefix, "bin"),
-			ReadOnly:      true,
-		})
-		resp.Spec = append(resp.Spec, devRuntime)
 	}
+	// Add all default devices to Allocate Response
+	for _, d := range ngm.defaultDevices {
+		resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
+			HostPath:      d,
+			ContainerPath: d,
+			Permissions:   "mrw",
+		})
+	}
+
+	resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
+		ContainerPath: path.Join(ContainerPathPrefix, "lib64"),
+		HostPath:      path.Join(HostPathPrefix, "lib"),
+		ReadOnly:      true,
+	})
+	resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
+		ContainerPath: path.Join(ContainerPathPrefix, "bin"),
+		HostPath:      path.Join(HostPathPrefix, "bin"),
+		ReadOnly:      true,
+	})
 	return resp, nil
 }
 

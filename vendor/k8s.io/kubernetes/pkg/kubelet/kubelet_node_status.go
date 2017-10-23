@@ -30,7 +30,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/conversion"
 	"k8s.io/apimachinery/pkg/types"
 	utilnet "k8s.io/apimachinery/pkg/util/net"
 	utilfeature "k8s.io/apiserver/pkg/util/feature"
@@ -118,15 +117,9 @@ func (kl *Kubelet) tryRegisterWithAPIServer(node *v1.Node) bool {
 		return false
 	}
 
-	clonedNode, err := conversion.NewCloner().DeepCopy(existingNode)
-	if err != nil {
-		glog.Errorf("Unable to clone %q node object %#v: %v", kl.nodeName, existingNode, err)
-		return false
-	}
-
-	originalNode, ok := clonedNode.(*v1.Node)
-	if !ok || originalNode == nil {
-		glog.Errorf("Unable to cast %q node object %#v to v1.Node", kl.nodeName, clonedNode)
+	originalNode := existingNode.DeepCopy()
+	if originalNode == nil {
+		glog.Errorf("Nil %q node object", kl.nodeName)
 		return false
 	}
 
@@ -137,8 +130,9 @@ func (kl *Kubelet) tryRegisterWithAPIServer(node *v1.Node) bool {
 		// the value of the controller-managed attach-detach
 		// annotation.
 		requiresUpdate := kl.reconcileCMADAnnotationWithExistingNode(node, existingNode)
+		requiresUpdate = kl.updateDefaultLabels(node, existingNode) || requiresUpdate
 		if requiresUpdate {
-			if _, err := nodeutil.PatchNodeStatus(kl.kubeClient, types.NodeName(kl.nodeName),
+			if _, err := nodeutil.PatchNodeStatus(kl.kubeClient.CoreV1(), types.NodeName(kl.nodeName),
 				originalNode, existingNode); err != nil {
 				glog.Errorf("Unable to reconcile node %q with API server: error updating node: %v", kl.nodeName, err)
 				return false
@@ -159,6 +153,37 @@ func (kl *Kubelet) tryRegisterWithAPIServer(node *v1.Node) bool {
 	}
 
 	return false
+}
+
+// updateDefaultLabels will set the default labels on the node
+func (kl *Kubelet) updateDefaultLabels(initialNode, existingNode *v1.Node) bool {
+	defaultLabels := []string{
+		kubeletapis.LabelHostname,
+		kubeletapis.LabelZoneFailureDomain,
+		kubeletapis.LabelZoneRegion,
+		kubeletapis.LabelInstanceType,
+		kubeletapis.LabelOS,
+		kubeletapis.LabelArch,
+	}
+
+	var needsUpdate bool = false
+	//Set default labels but make sure to not set labels with empty values
+	for _, label := range defaultLabels {
+		if _, hasInitialValue := initialNode.Labels[label]; !hasInitialValue {
+			continue
+		}
+
+		if existingNode.Labels[label] != initialNode.Labels[label] {
+			existingNode.Labels[label] = initialNode.Labels[label]
+			needsUpdate = true
+		}
+
+		if existingNode.Labels[label] == "" {
+			delete(existingNode.Labels, label)
+		}
+	}
+
+	return needsUpdate
 }
 
 // reconcileCMADAnnotationWithExistingNode reconciles the controller-managed
@@ -251,7 +276,7 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 		glog.Infof("Controller attach/detach is disabled for this node; Kubelet will attach and detach volumes")
 	}
 
-	if kl.kubeletConfiguration.KeepTerminatedPodVolumes {
+	if kl.keepTerminatedPodVolumes {
 		if node.Annotations == nil {
 			node.Annotations = make(map[string]string)
 		}
@@ -339,7 +364,7 @@ func (kl *Kubelet) initialNode() (*v1.Node, error) {
 // It synchronizes node status to master, registering the kubelet first if
 // necessary.
 func (kl *Kubelet) syncNodeStatus() {
-	if kl.kubeClient == nil {
+	if kl.kubeClient == nil || kl.heartbeatClient == nil {
 		return
 	}
 	if kl.registerNode {
@@ -376,26 +401,21 @@ func (kl *Kubelet) tryUpdateNodeStatus(tryNumber int) error {
 	if tryNumber == 0 {
 		util.FromApiserverCache(&opts)
 	}
-	node, err := kl.kubeClient.Core().Nodes().Get(string(kl.nodeName), opts)
+	node, err := kl.heartbeatClient.Nodes().Get(string(kl.nodeName), opts)
 	if err != nil {
 		return fmt.Errorf("error getting node %q: %v", kl.nodeName, err)
 	}
 
-	clonedNode, err := conversion.NewCloner().DeepCopy(node)
-	if err != nil {
-		return fmt.Errorf("error clone node %q: %v", kl.nodeName, err)
-	}
-
-	originalNode, ok := clonedNode.(*v1.Node)
-	if !ok || originalNode == nil {
-		return fmt.Errorf("failed to cast %q node object %#v to v1.Node", kl.nodeName, clonedNode)
+	originalNode := node.DeepCopy()
+	if originalNode == nil {
+		return fmt.Errorf("nil %q node object", kl.nodeName)
 	}
 
 	kl.updatePodCIDR(node.Spec.PodCIDR)
 
 	kl.setNodeStatus(node)
 	// Patch the current status on the API server
-	updatedNode, err := nodeutil.PatchNodeStatus(kl.kubeClient, types.NodeName(kl.nodeName), originalNode, node)
+	updatedNode, err := nodeutil.PatchNodeStatus(kl.heartbeatClient, types.NodeName(kl.nodeName), originalNode, node)
 	if err != nil {
 		return err
 	}
@@ -424,6 +444,9 @@ func (kl *Kubelet) setNodeAddress(node *v1.Node) error {
 	}
 
 	if kl.externalCloudProvider {
+		if kl.nodeIP != nil {
+			node.ObjectMeta.Annotations[kubeletapis.AnnotationProvidedIPAddr] = kl.nodeIP.String()
+		}
 		// We rely on the external cloud provider to supply the addresses.
 		return nil
 	}
@@ -441,14 +464,16 @@ func (kl *Kubelet) setNodeAddress(node *v1.Node) error {
 			return fmt.Errorf("failed to get node address from cloud provider: %v", err)
 		}
 		if kl.nodeIP != nil {
+			enforcedNodeAddresses := []v1.NodeAddress{}
 			for _, nodeAddress := range nodeAddresses {
 				if nodeAddress.Address == kl.nodeIP.String() {
-					node.Status.Addresses = []v1.NodeAddress{
-						{Type: nodeAddress.Type, Address: nodeAddress.Address},
-						{Type: v1.NodeHostName, Address: kl.GetHostname()},
-					}
-					return nil
+					enforcedNodeAddresses = append(enforcedNodeAddresses, v1.NodeAddress{Type: nodeAddress.Type, Address: nodeAddress.Address})
 				}
+			}
+			if len(enforcedNodeAddresses) > 0 {
+				enforcedNodeAddresses = append(enforcedNodeAddresses, v1.NodeAddress{Type: v1.NodeHostName, Address: kl.GetHostname()})
+				node.Status.Addresses = enforcedNodeAddresses
+				return nil
 			}
 			return fmt.Errorf("failed to get node address from cloud provider that matches ip: %v", kl.nodeIP)
 		}
@@ -479,7 +504,6 @@ func (kl *Kubelet) setNodeAddress(node *v1.Node) error {
 		// 4) Try to get the IP from the network interface used as default gateway
 		if kl.nodeIP != nil {
 			ipAddr = kl.nodeIP
-			node.ObjectMeta.Annotations[kubeletapis.AnnotationProvidedIPAddr] = kl.nodeIP.String()
 		} else if addr := net.ParseIP(kl.hostname); addr != nil {
 			ipAddr = addr
 		} else {
@@ -564,10 +588,16 @@ func (kl *Kubelet) setNodeStatusMachineInfo(node *v1.Node) {
 			// capacity for every node status request
 			initialCapacity := kl.containerManager.GetCapacity()
 			if initialCapacity != nil {
-				node.Status.Capacity[v1.ResourceStorageScratch] = initialCapacity[v1.ResourceStorageScratch]
-				imageCapacity, ok := initialCapacity[v1.ResourceStorageOverlay]
-				if ok {
-					node.Status.Capacity[v1.ResourceStorageOverlay] = imageCapacity
+				node.Status.Capacity[v1.ResourceEphemeralStorage] = initialCapacity[v1.ResourceEphemeralStorage]
+			}
+		}
+
+		currentCapacity := kl.containerManager.GetCapacity()
+		if currentCapacity != nil {
+			for k, v := range currentCapacity {
+				if v1helper.IsExtendedResourceName(k) {
+					glog.V(2).Infof("Update capacity for %s to %d", k, v.Value())
+					node.Status.Capacity[k] = v
 				}
 			}
 		}
@@ -596,6 +626,19 @@ func (kl *Kubelet) setNodeStatusMachineInfo(node *v1.Node) {
 			value.Set(0)
 		}
 		node.Status.Allocatable[k] = value
+	}
+	// for every huge page reservation, we need to remove it from allocatable memory
+	for k, v := range node.Status.Capacity {
+		if v1helper.IsHugePageResourceName(k) {
+			allocatableMemory := node.Status.Allocatable[v1.ResourceMemory]
+			value := *(v.Copy())
+			allocatableMemory.Sub(value)
+			if allocatableMemory.Sign() < 0 {
+				// Negative Allocatable resources don't make sense.
+				allocatableMemory.Set(0)
+			}
+			node.Status.Allocatable[v1.ResourceMemory] = allocatableMemory
+		}
 	}
 }
 
