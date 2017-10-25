@@ -53,7 +53,6 @@ const (
 
 // nvidiaGPUManager manages nvidia gpu devices.
 type nvidiaGPUManager struct {
-	sync.Mutex
 	defaultDevices []string
 	devices        map[string]pluginapi.Device
 	grpcServer     *grpc.Server
@@ -117,19 +116,19 @@ func Register(kubeletEndpoint, pluginEndpoint, resourceName string) error {
 		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
 		}))
-	defer conn.Close()
 	if err != nil {
 		return fmt.Errorf("device-plugin: cannot connect to kubelet service: %v", err)
 	}
+	defer conn.Close()
 	client := pluginapi.NewRegistrationClient(conn)
-	reqt := &pluginapi.RegisterRequest{
+
+	request := &pluginapi.RegisterRequest{
 		Version:      pluginapi.Version,
 		Endpoint:     pluginEndpoint,
 		ResourceName: resourceName,
 	}
 
-	_, err = client.Register(context.Background(), reqt)
-	if err != nil {
+	if _, err = client.Register(context.Background(), request); err != nil {
 		return fmt.Errorf("device-plugin: cannot register to kubelet service: %v", err)
 	}
 	return nil
@@ -208,48 +207,42 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pEndpointPrefix string
 	for {
 		pluginEndpoint := fmt.Sprintf("%s-%d.sock", pEndpointPrefix, time.Now().Unix())
 		pluginEndpointPath := path.Join(pMountPath, pluginEndpoint)
+		glog.Infof("starting device-plugin server at: %s\n", pluginEndpointPath)
+		lis, err := net.Listen("unix", pluginEndpointPath)
+		if err != nil {
+			glog.Fatalf("starting device-plugin server failed: %v", err)
+		}
+		ngm.grpcServer = grpc.NewServer()
+		pluginapi.RegisterDevicePluginServer(ngm.grpcServer, ngm)
+
 		var wg sync.WaitGroup
 		wg.Add(1)
 		// Starts device plugin service.
 		go func() {
 			defer wg.Done()
-			glog.Infof("starting device-plugin server at: %s\n", pluginEndpointPath)
-			lis, err := net.Listen("unix", pluginEndpointPath)
-			if err != nil {
-				glog.Fatalf("starting device-plugin server failed: %v", err)
-			}
-			grpcServer := grpc.NewServer()
-			pluginapi.RegisterDevicePluginServer(grpcServer, ngm)
-			ngm.Lock()
-			ngm.grpcServer = grpcServer
-			ngm.Unlock()
-			ngm.grpcServer.Serve(lis)
+			// Blocking call to accept incoming connections.
+			err := ngm.grpcServer.Serve(lis)
+			glog.Errorf("device-plugin server stopped serving: %v", err)
 		}()
 
 		// Wait till the grpcServer is ready to serve services.
-		for {
-			ngm.Lock()
-			server := ngm.grpcServer
-			ngm.Unlock()
-			if server != nil {
-				services := server.GetServiceInfo()
-				if len(services) > 0 {
-					break
-				}
-			}
+		for len(ngm.grpcServer.GetServiceInfo()) <= 0 {
 			time.Sleep(1 * time.Second)
 		}
 		glog.Infoln("device-plugin server started serving")
 
 		// Registers with Kubelet.
-		err := Register(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
+		err = Register(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
 		if err != nil {
 			glog.Fatal(err)
 		}
 		glog.Infoln("device-plugin registered with the kubelet")
 
+		// This is checking if the plugin socket was deleted. If so,
+		// stop the grpc server and start the whole thing again.
 		for {
 			if _, err := os.Lstat(pluginEndpointPath); err != nil {
+				glog.Errorln(err)
 				ngm.grpcServer.Stop()
 				break
 			}
