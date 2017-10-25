@@ -34,21 +34,21 @@ import (
 
 const (
 	// All NVIDIA GPUs cards should be mounted with nvidiactl and nvidia-uvm
-	// If the driver installed correctly, the 2 devices will be there.
-	nvidiaCtlDevice string = "/dev/nvidiactl"
-	nvidiaUVMDevice string = "/dev/nvidia-uvm"
+	// If the driver installed correctly, these two devices will be there.
+	nvidiaCtlDevice = "/dev/nvidiactl"
+	nvidiaUVMDevice = "/dev/nvidia-uvm"
 	// Optional device.
-	nvidiaUVMToolsDevice string = "/dev/nvidia-uvm-tools"
-	devDirectory                = "/dev"
-	nvidiaDeviceRE              = `^nvidia[0-9]*$`
+	nvidiaUVMToolsDevice = "/dev/nvidia-uvm-tools"
+	devDirectory         = "/dev"
+	nvidiaDeviceRE       = `^nvidia[0-9]*$`
 
 	// Device plugin settings.
-	devicePluginMountPath = "/device-plugin"
-	kubeletEndpoint       = "kubelet.sock"
-	pluginEndpointPrefix  = "nvidiaGPU"
-	resourceName          = "nvidia.com/gpu"
-	ContainerPathPrefix   = "/usr/local/nvidia"
-	HostPathPrefix        = "/home/kubernetes/bin/nvidia"
+	pluginMountPath      = "/device-plugin"
+	kubeletEndpoint      = "kubelet.sock"
+	pluginEndpointPrefix = "nvidiaGPU"
+	resourceName         = "nvidia.com/gpu"
+	ContainerPathPrefix  = "/usr/local/nvidia"
+	HostPathPrefix       = "/home/kubernetes/bin/nvidia"
 )
 
 // nvidiaGPUManager manages nvidia gpu devices.
@@ -77,11 +77,10 @@ func (ngm *nvidiaGPUManager) discoverGPUs() error {
 			continue
 		}
 		if reg.MatchString(f.Name()) {
-			fmt.Printf("Found Nvidia GPU %q\n", f.Name())
+			glog.Infof("Found Nvidia GPU %q\n", f.Name())
 			ngm.devices[f.Name()] = pluginapi.Device{f.Name(), pluginapi.Healthy}
 		}
 	}
-
 	return nil
 }
 
@@ -90,8 +89,7 @@ func (ngm *nvidiaGPUManager) GetDeviceState(DeviceName string) string {
 	return pluginapi.Healthy
 }
 
-// Discovers Nvidia GPU devices, installs device drivers, and sets up device
-// access environment.
+// Discovers Nvidia GPU devices and sets up device access environment.
 func (ngm *nvidiaGPUManager) Start() error {
 	if _, err := os.Stat(nvidiaCtlDevice); err != nil {
 		return err
@@ -103,7 +101,7 @@ func (ngm *nvidiaGPUManager) Start() error {
 
 	ngm.defaultDevices = []string{nvidiaCtlDevice, nvidiaUVMDevice}
 
-	if _, err := os.Stat(nvidiaUVMToolsDevice); !os.IsNotExist(err) {
+	if _, err := os.Stat(nvidiaUVMToolsDevice); err != nil {
 		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaUVMToolsDevice)
 	}
 
@@ -139,7 +137,7 @@ func Register(kubeletEndpoint, pluginEndpoint, resourceName string) error {
 
 // Implements DevicePlugin service functions
 func (ngm *nvidiaGPUManager) ListAndWatch(emtpy *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
-	fmt.Printf("device-plugin: ListAndWatch start\n")
+	glog.Infoln("device-plugin: ListAndWatch start")
 	changed := true
 	for {
 		for id, dev := range ngm.devices {
@@ -155,9 +153,9 @@ func (ngm *nvidiaGPUManager) ListAndWatch(emtpy *pluginapi.Empty, stream plugina
 			for _, dev := range ngm.devices {
 				resp.Devices = append(resp.Devices, &pluginapi.Device{dev.ID, dev.Health})
 			}
-			fmt.Printf("ListAndWatch: send devices %v\n", resp)
+			glog.Infof("ListAndWatch: send devices %v\n", resp)
 			if err := stream.Send(resp); err != nil {
-				fmt.Printf("device-plugin: cannot update device states: %v\n", err)
+				glog.Warningf("device-plugin: cannot update device states: %v\n", err)
 				ngm.grpcServer.Stop()
 				return err
 			}
@@ -173,10 +171,10 @@ func (ngm *nvidiaGPUManager) Allocate(ctx context.Context, rqt *pluginapi.Alloca
 	for _, id := range rqt.DevicesIDs {
 		dev, ok := ngm.devices[id]
 		if !ok {
-			return nil, fmt.Errorf("Invalid allocation request with non-existing device %s", id)
+			return nil, fmt.Errorf("invalid allocation request with non-existing device %s", id)
 		}
 		if dev.Health != pluginapi.Healthy {
-			return nil, fmt.Errorf("Invalid allocation request with unhealthy device %s", id)
+			return nil, fmt.Errorf("invalid allocation request with unhealthy device %s", id)
 		}
 		resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
 			HostPath:      "/dev/" + id,
@@ -206,20 +204,19 @@ func (ngm *nvidiaGPUManager) Allocate(ctx context.Context, rqt *pluginapi.Alloca
 	return resp, nil
 }
 
-func (ngm *nvidiaGPUManager) Serve(dpMountPath, kEndpoint, pEndpointPrefix string) {
+func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pEndpointPrefix string) {
 	for {
 		pluginEndpoint := fmt.Sprintf("%s-%d.sock", pEndpointPrefix, time.Now().Unix())
-		pluginEndpointPath := path.Join(dpMountPath, pluginEndpoint)
+		pluginEndpointPath := path.Join(pMountPath, pluginEndpoint)
 		var wg sync.WaitGroup
 		wg.Add(1)
 		// Starts device plugin service.
 		go func() {
 			defer wg.Done()
-			fmt.Printf("device-plugin start server at: %s\n", pluginEndpointPath)
+			glog.Infof("starting device-plugin server at: %s\n", pluginEndpointPath)
 			lis, err := net.Listen("unix", pluginEndpointPath)
 			if err != nil {
-				glog.Fatal(err)
-				return
+				glog.Fatalf("starting device-plugin server failed: %v", err)
 			}
 			grpcServer := grpc.NewServer()
 			pluginapi.RegisterDevicePluginServer(grpcServer, ngm)
@@ -242,14 +239,14 @@ func (ngm *nvidiaGPUManager) Serve(dpMountPath, kEndpoint, pEndpointPrefix strin
 			}
 			time.Sleep(1 * time.Second)
 		}
+		glog.Infoln("device-plugin server started serving")
 
 		// Registers with Kubelet.
-		err := Register(path.Join(dpMountPath, kEndpoint), pluginEndpoint, resourceName)
+		err := Register(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
 		if err != nil {
 			glog.Fatal(err)
-			os.Exit(1)
 		}
-		fmt.Printf("device-plugin registered\n")
+		glog.Infoln("device-plugin registered with the kubelet")
 
 		for {
 			if _, err := os.Lstat(pluginEndpointPath); err != nil {
@@ -264,14 +261,18 @@ func (ngm *nvidiaGPUManager) Serve(dpMountPath, kEndpoint, pEndpointPrefix strin
 
 func main() {
 	flag.Parse()
-	fmt.Printf("device-plugin started\n")
+	glog.Infoln("device-plugin started")
 	ngm := NewNvidiaGPUManager()
+	// Keep on trying until success. This is required
+	// because Nvidia drivers may not be installed initially.
 	for {
 		err := ngm.Start()
 		if err == nil {
 			break
 		}
+		// Use non-default level to avoid log spam.
+		glog.V(3).Infof("nvidiaGPUManager.Start() failed: %v", err)
 		time.Sleep(5 * time.Second)
 	}
-	ngm.Serve(devicePluginMountPath, kubeletEndpoint, pluginEndpointPrefix)
+	ngm.Serve(pluginMountPath, kubeletEndpoint, pluginEndpointPrefix)
 }
