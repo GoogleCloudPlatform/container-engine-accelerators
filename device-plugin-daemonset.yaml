@@ -74,8 +74,8 @@ spec:
         - name: sysrq
           mountPath: /sysrq
       containers:
-      - image: "gcr.io/google-containers/device-plugin-gpu@sha256:9bc0eb7f36be0abb62b5a3cce18e7d9475d5fc097553e78b577c6973dfeb3750"
-        command: ["/usr/bin/device_plugins"]
+      - image: "gcr.io/google-containers/device-plugin-gpu@sha256:d33a7ce0a9f37c44711298a8cc5e0952b2fb0bf5ec09c9de7c2a6242ce4ae6a4"
+        command: ["/usr/bin/device_plugins", "-logtostderr"]
         name: nvidia-device-plugin
         resources:
           requests:
