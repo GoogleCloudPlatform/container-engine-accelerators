@@ -111,6 +111,7 @@ func (ngm *nvidiaGPUManager) Start() error {
 	return nil
 }
 
+// Act as a grpc client and register with the kubelet.
 func Register(kubeletEndpoint, pluginEndpoint, resourceName string) error {
 	conn, err := grpc.Dial(kubeletEndpoint, grpc.WithInsecure(),
 		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
@@ -154,7 +155,7 @@ func (ngm *nvidiaGPUManager) ListAndWatch(emtpy *pluginapi.Empty, stream plugina
 			}
 			glog.Infof("ListAndWatch: send devices %v\n", resp)
 			if err := stream.Send(resp); err != nil {
-				glog.Warningf("device-plugin: cannot update device states: %v\n", err)
+				glog.Errorf("device-plugin: cannot update device states: %v\n", err)
 				ngm.grpcServer.Stop()
 				return err
 			}
@@ -234,6 +235,8 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pEndpointPrefix string
 		// Registers with Kubelet.
 		err = Register(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
 		if err != nil {
+			ngm.grpcServer.Stop()
+			wg.Wait()
 			glog.Fatal(err)
 		}
 		glog.Infoln("device-plugin registered with the kubelet")
