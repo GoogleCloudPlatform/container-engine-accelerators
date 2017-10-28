@@ -19,5 +19,5 @@ RUN go build cmd/nvidia_gpu/nvidia_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu
 
 FROM alpine
-COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/device_plugins
-CMD ["/usr/bin/device_plugins"]
+COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/nvidia-gpu-device-plugin
+CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr"]
