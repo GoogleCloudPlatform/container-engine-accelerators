@@ -23,13 +23,13 @@
 apiVersion: extensions/v1beta1
 kind: DaemonSet
 metadata:
-    name: nvidia-device-plugin
-    namespace: kube-system
+  name: nvidia-gpu-device-plugin
+  namespace: kube-system
 spec:
   template:
     metadata:
       labels:
-        name: nvidia-device-plugin
+        name: nvidia-gpu-device-plugin
     spec:
       hostNetwork: true
       hostPID: true
@@ -76,10 +76,11 @@ spec:
       containers:
       - image: "gcr.io/google-containers/device-plugin-gpu@sha256:d33a7ce0a9f37c44711298a8cc5e0952b2fb0bf5ec09c9de7c2a6242ce4ae6a4"
         command: ["/usr/bin/device_plugins", "-logtostderr"]
-        name: nvidia-device-plugin
+        name: nvidia-gpu-device-plugin
         resources:
           requests:
-            cpu: 0.15
+            cpu: 10m
+            memory: 10Mi
         securityContext:
           privileged: true
         volumeMounts:

@@ -36,7 +36,7 @@ presubmit: vet
 
 TAG?=$(shell git rev-parse HEAD)
 REGISTRY?=gcr.io/google-containers
-IMAGE=device-plugin-gpu
+IMAGE=nvidia-gpu-device-plugin
 
 build:
 	cd cmd/nvidia_gpu; go build nvidia_gpu.go
