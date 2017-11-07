@@ -112,8 +112,9 @@ func TestNvidiaGPUManager(t *testing.T) {
 		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
 		}))
-	defer conn.Close()
 	as.Nil(err)
+	defer conn.Close()
+
 	client := pluginapi.NewDevicePluginClient(conn)
 
 	// Tests ListAndWatch
