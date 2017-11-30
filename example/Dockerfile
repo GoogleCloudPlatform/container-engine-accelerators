@@ -171,9 +171,8 @@ RUN jupyter nbextension enable --py widgetsnbextension --sys-prefix
 
 RUN chown -R $NB_USER /home/$NB_USER/
 
+RUN curl -L -o bazel.sh https://github.com/bazelbuild/bazel/releases/download/0.8.0/bazel-0.8.0-installer-linux-x86_64.sh && chmod a+x ./bazel.sh && ./bazel.sh && rm ./bazel.sh
 USER $NB_USER
-
-RUN curl -L -o bazel.sh https://github.com/bazelbuild/bazel/releases/download/0.8.0/bazel-0.8.0-installer-linux-x86_64.sh && chmod a+x ./bazel.sh && ./bazel.sh --user && rm ./bazel.sh
 RUN git clone https://github.com/tensorflow/models.git /home/$NB_USER/tensorflow-models
 RUN conda create -n ipykernel_py2 python=2 ipykernel && python -m ipykernel install --user
 # Import matplotlib the first time to build the font cache.
