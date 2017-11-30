@@ -21,6 +21,10 @@ node Kubernetes cluster inside a VM on your laptop for users looking to try out 
 The below steps apply to a minikube cluster - the latest version as of writing this documetation is 0.23.0. You must also have 
 kubectl configured to access minikube.
 
+## Google Kubernetes Engine
+
+[Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/) is a managed environment for deploying Kubernetes applications powered by Google Cloud.
+
 ### Bringing up a Notebook
 
 Once you create all the manifests needed for JupyterHub, a load balancer service is created. You can check its existence using the kubectl commandline.
@@ -28,60 +32,30 @@ Once you create all the manifests needed for JupyterHub, a load balancer service
 ```commandline
 kubectl get svc
 
-kubernetes   ClusterIP      10.43.240.1     <none>        443/TCP        16h
-tf-hub-0     ClusterIP      None            <none>        8000/TCP       2s
-tf-hub-lb    LoadBalancer   10.43.252.191   <pending>     80:31975/TCP   0s
+NAME         TYPE           CLUSTER-IP     EXTERNAL-IP    PORT(S)        AGE
+kubernetes   ClusterIP      10.11.240.1    <none>         443/TCP        1h
+tf-hub-0     ClusterIP      None           <none>         8000/TCP       1m
+tf-hub-lb    LoadBalancer   10.11.245.94   xx.yy.zz.ww    80:32481/TCP   1m
 ```
 
-If you see output similar to the above, you're ready to proceed to the next step. Now, you can find the URL on which the service is
-being exposed.
+If you're using minikube, you can run the following to get the URL for the notebook.
 
 ```
 minikube service tf-hub-lb --url
 
-http://x.y.z.w:31942
+http://xx.yy.zz.ww:31942
 ``` 
 
-Once you've found the URL, you can visit that in your browser, and get access to your Hub. The hub by default is configured to take any username/password combination. After entering the username and password, you can start a single-notebook server,
+If you're on Google Kubernetes engine, the LoadBalancer service should get an external IP address associated with 
+it automatically in a minute. `kubectl get svc` should have the external IP field populated after that. 
+Once you have an external IP, you can proceed to visit that in your browser. The hub by default is configured to take any username/password combination. After entering the username and password, you can start a single-notebook server,
 request any resources (memory/CPU/GPU), and then proceed to perform single node training.
+
+Note that when running on Google Kubernetes Engine, the public IP address will be exposed to the internet and is an 
+unsecured endpoint. For a production deployment, refer to the [detailed documentation](jupyterhub/README.md) on 
+how to set up SSL and authentication for your Hub. 
 
 ###  Single node Training
-
-TODO(vish)
-
-### Distributed Training
-
-TODO(jlewi)
-
-### Serve Model
-
-TODO(owensk)
-
-## Google Kubernetes Engine
-
-[Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/) is a managed environment for deploying 
-Kubernetes applications powered by Google Cloud.
-
-### Bringing up a Notebook
-
-Once you create all the manifests needed for JupyterHub, a load balancer service is created. You can check its existence using the kubectl commandline.
-
-```commandline
-kubectl get svc
-
-kubernetes   ClusterIP      10.43.240.1     <none>        443/TCP        16h
-tf-hub-0     ClusterIP      None            <none>        8000/TCP       2s
-tf-hub-lb    LoadBalancer   10.43.252.191   <pending>     80:31975/TCP   0s
-```
-
-In a minute or so, the LoadBalancer service should get an external IP address associated with it. Once you have an external IP, 
-you can proceed to visit that in your browser. The hub by default is configured to take any username/password combination. After entering the username and password, you can start a single-notebook server,
-request any resources (memory/CPU/GPU), and then proceed to perform single node training.
-
-Note that the public IP address is exposed to the internet and is an unsecured endpoint. For a production deployment, 
-refer to the [detailed documentation](jupyterhub/README.md) on how to set up SSL and authentication for your JupyterHub. 
-
-### Single node Training
 
 TODO(vish)
 
