@@ -14,16 +14,21 @@ The above command sets up JupyterHub, an API for training using Tensorflow, and 
 Used together, these serve as configuration that can help a user go from training to serving using Tensorflow with minimal
 effort in a portable fashion between different environments. You can refer Instructions for using each of these components below. 
 
-## Minikube
+## Setup
+
+### Minikube
 
 [Minikube](https://github.com/kubernetes/minikube) is a tool that makes it easy to run Kubernetes locally. Minikube runs a single-
 node Kubernetes cluster inside a VM on your laptop for users looking to try out Kubernetes or develop with it day-to-day. 
 The below steps apply to a minikube cluster - the latest version as of writing this documetation is 0.23.0. You must also have 
 kubectl configured to access minikube.
 
-## Google Kubernetes Engine
+### Google Kubernetes Engine
 
 [Google Kubernetes Engine](https://cloud.google.com/kubernetes-engine/) is a managed environment for deploying Kubernetes applications powered by Google Cloud.
+TODO(foxish): rbac role binding goes here.
+
+## Tutorial
 
 ### Bringing up a Notebook
 
