@@ -14,8 +14,8 @@
 all: container
 
 TAG?=$(shell git rev-parse HEAD)
-REGISTRY?=gcr.io/google-containers
-IMAGE=tensorflow-gpu-notebook
+REGISTRY?=gcr.io/kubeflow
+IMAGE=tensorflow-notebook
 
 container:
 	docker build --pull -t ${REGISTRY}/${IMAGE}:${TAG} .
