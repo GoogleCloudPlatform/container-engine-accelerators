@@ -137,7 +137,7 @@ func TestNvidiaGPUManager(t *testing.T) {
 	})
 	as.Nil(err)
 	as.Len(resp.Devices, 4)
-	as.Len(resp.Mounts, 2)
+	as.Len(resp.Mounts, 1)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		DevicesIDs: []string{"dev1", "dev2"},
 	})
