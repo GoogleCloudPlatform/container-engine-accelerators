@@ -47,8 +47,11 @@ const (
 	kubeletEndpoint      = "kubelet.sock"
 	pluginEndpointPrefix = "nvidiaGPU"
 	resourceName         = "nvidia.com/gpu"
-	ContainerPathPrefix  = "/usr/local/nvidia"
-	HostPathPrefix       = "/home/kubernetes/bin/nvidia"
+)
+
+var (
+	hostPathPrefix      = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
+	containerPathPrefix = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts '-host-path'")
 )
 
 // nvidiaGPUManager manages nvidia gpu devices.
@@ -192,13 +195,8 @@ func (ngm *nvidiaGPUManager) Allocate(ctx context.Context, rqt *pluginapi.Alloca
 	}
 
 	resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
-		ContainerPath: path.Join(ContainerPathPrefix, "lib64"),
-		HostPath:      path.Join(HostPathPrefix, "lib"),
-		ReadOnly:      true,
-	})
-	resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
-		ContainerPath: path.Join(ContainerPathPrefix, "bin"),
-		HostPath:      path.Join(HostPathPrefix, "bin"),
+		ContainerPath: *containerPathPrefix,
+		HostPath:      *hostPathPrefix,
 		ReadOnly:      true,
 	})
 	return resp, nil
