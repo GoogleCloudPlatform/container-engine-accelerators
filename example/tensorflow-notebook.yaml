@@ -47,10 +47,10 @@ spec:
         fsGroup: 0
       containers:
       - name: tf-notebook
-        image: gcr.io/kubeflow/tensorflow-notebook
+        image: gcr.io/kubeflow/tensorflow-notebook-cpu:v1
         resources:
-          limits:
-            nvidia.com/gpu: 1 # Number of GPUs
+#          limits:
+ #           nvidia.com/gpu: 1 # Number of GPUs
           requests:
             cpu: 1
             memory: 1Gi
