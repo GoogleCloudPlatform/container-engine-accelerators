@@ -18,9 +18,11 @@ REGISTRY?=gcr.io/kubeflow
 IMAGE=tensorflow-notebook
 
 container:
-	docker build --pull -t ${REGISTRY}/${IMAGE}:${TAG} .
+	docker build --pull -t ${REGISTRY}/${IMAGE}-cpu:${TAG} -f Dockerfile.cpu .
+	docker build --pull -t ${REGISTRY}/${IMAGE}-gpu:${TAG} -f Dockerfile.gpu .
 
 push:
-	gcloud docker -- push ${REGISTRY}/${IMAGE}:${TAG}
+	gcloud docker -- push ${REGISTRY}/${IMAGE}-cpu:${TAG}
+	gcloud docker -- push ${REGISTRY}/${IMAGE}-gpu:${TAG}
 
 .PHONY: all container push

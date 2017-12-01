@@ -44,12 +44,10 @@ spec:
       - key: nvidia.com/gpu
         effect: NoSchedule
       securityContext:
-        supplementalGroups:
-        - 0
+        fsGroup: 0
       containers:
       - name: tf-notebook
-        # TODO: Update to a build from CI
-        image: gcr.io/google-containers/tensorflow-gpu-notebook@sha256:1d0f28981ad08197b1d21af32381d42b512a2fdf9288bfc586a7b1fe209fb1d0
+        image: gcr.io/kubeflow/tensorflow-notebook
         resources:
           limits:
             nvidia.com/gpu: 1 # Number of GPUs
