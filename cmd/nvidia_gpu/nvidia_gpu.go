@@ -103,7 +103,7 @@ func (ngm *nvidiaGPUManager) Start() error {
 
 	ngm.defaultDevices = []string{nvidiaCtlDevice, nvidiaUVMDevice}
 
-	if _, err := os.Stat(nvidiaUVMToolsDevice); err != nil {
+	if _, err := os.Stat(nvidiaUVMToolsDevice); err == nil {
 		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaUVMToolsDevice)
 	}
 
