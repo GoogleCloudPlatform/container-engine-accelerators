@@ -11,14 +11,9 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-#
-# Yaml file to install a DaemonSet that contains a device plugin for
-# managing nvidia gpu devices. Expected to be deployed in Kubernetes
-# clusters with nvidia gpu devices. On each node, the DaemonSet detects
-# whether there are nvidia gpu devices, and if so, sets up the devices
-# in ready state and report them to Kubelet through the device plugin
-# interface. The device plugin simply sleeps if there is no nvidia
-# gpu device on the node.
+
+# The Dockerfile and other source for this daemonset are in
+# https://github.com/GoogleCloudPlatform/cos-gpu-installer
 
 apiVersion: extensions/v1beta1
 kind: DaemonSet
@@ -44,19 +39,14 @@ spec:
       - name: dev
         hostPath:
           path: /dev
-      - name: nvidia-overlay
+      - name: nvidia-install-dir-host
         hostPath:
           path: /home/kubernetes/bin/nvidia
-      - name: os-release
+      - name: root-mount
         hostPath:
-          path: /etc/os-release
-      - name: sysrq
-        hostPath:
-          path: /proc/sysrq-trigger
+          path: /
       initContainers:
-      - image: "gcr.io/google-containers/cos-nvidia-driver-install@sha256:de2d9098df423b064bb2579c4fb114022b2a6b7cc39c677d7ac720c9b75d9eb5"
-        command: ["/bin/sh", "-c"]
-        args: ["usr/bin/nvidia-installer.sh"]
+      - image: gcr.io/cos-cloud/cos-gpu-installer@sha256:aca0c1c39fe966a1b13100bed3f5e0460a4c2694d615bcb83194a5681b879d08
         name: nvidia-driver-installer
         resources:
           requests:
@@ -64,19 +54,21 @@ spec:
         securityContext:
           privileged: true
         env:
-          - name: BASE_DIR
-            value: "/rootfs/nvidia"
-          - name: DEVICE_PLUGIN_ENABLED
-            value: "true"
+          - name: NVIDIA_DRIVER_VERSION
+            value: "384.81"
+          - name: NVIDIA_INSTALL_DIR_HOST
+            value: /home/kubernetes/bin/nvidia
+          - name: NVIDIA_INSTALL_DIR_CONTAINER
+            value: /usr/local/nvidia
+          - name: ROOT_MOUNT_DIR
+            value: /root
         volumeMounts:
-        - name: nvidia-overlay
-          mountPath: /rootfs/nvidia
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
         - name: dev
           mountPath: /dev
-        - name: os-release
-          mountPath: /rootfs/etc/os-release
-        - name: sysrq
-          mountPath: /sysrq
+        - name: root-mount
+          mountPath: /root
       containers:
       - image: "gcr.io/google-containers/pause:2.0"
         name: pause
