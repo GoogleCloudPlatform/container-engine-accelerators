@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-TAG?=v0.1
+TAG?=latest
 REGISTRY?=gcr.io/google-containers
 IMAGE=ubuntu-nvidia-driver-installer
 
