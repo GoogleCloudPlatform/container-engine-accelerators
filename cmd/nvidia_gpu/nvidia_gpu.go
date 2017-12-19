@@ -43,7 +43,7 @@ const (
 	nvidiaDeviceRE       = `^nvidia[0-9]*$`
 
 	// Device plugin settings.
-	pluginMountPath      = "/device-plugin"
+	pluginMountPath      = pluginapi.DevicePluginPath
 	kubeletEndpoint      = "kubelet.sock"
 	pluginEndpointPrefix = "nvidiaGPU"
 	resourceName         = "nvidia.com/gpu"
