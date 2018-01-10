@@ -51,8 +51,6 @@ spec:
         securityContext:
           privileged: true
         env:
-          - name: NVIDIA_DRIVER_VERSION
-            value: "384.81"
           - name: NVIDIA_INSTALL_DIR_HOST
             value: /home/kubernetes/bin/nvidia
           - name: NVIDIA_INSTALL_DIR_CONTAINER
