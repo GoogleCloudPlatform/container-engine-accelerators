@@ -17,15 +17,17 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
 	"regexp"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/mindprince/gonvml"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
@@ -69,26 +71,61 @@ func NewNvidiaGPUManager() *nvidiaGPUManager {
 
 // Discovers all NVIDIA GPU devices available on the local node by walking `/dev` directory.
 func (ngm *nvidiaGPUManager) discoverGPUs() error {
-	reg := regexp.MustCompile(nvidiaDeviceRE)
-	files, err := ioutil.ReadDir(devDirectory)
+
+	err := gonvml.Initialize()
 	if err != nil {
 		return err
 	}
-	for _, f := range files {
-		if f.IsDir() {
-			continue
+	deviceCount, err := gonvml.DeviceCount()
+	if err != nil {
+		return err
+	}
+	for i := 0; i < int(deviceCount); i++ {
+		dev, err := gonvml.DeviceHandleByIndex(uint(i))
+		if err != nil {
+			glog.Errorf("\tDeviceHandleByIndex() error: %v\n", err)
+			return err
 		}
-		if reg.MatchString(f.Name()) {
-			glog.Infof("Found Nvidia GPU %q\n", f.Name())
-			ngm.devices[f.Name()] = pluginapi.Device{f.Name(), pluginapi.Healthy}
+
+		minorNumber, err := dev.MinorNumber()
+		if err != nil {
+			glog.Errorf("\tdev.MinorNumber() error: %v\n", err)
+			return err
 		}
+		devName := fmt.Sprintf("nvidia%d", uint(minorNumber))
+		glog.Infof("Found Nvidia GPU %q\n", devName)
+		ngm.devices[devName] = pluginapi.Device{devName, pluginapi.Healthy}
 	}
 	return nil
 }
 
-func (ngm *nvidiaGPUManager) GetDeviceState(DeviceName string) string {
-	// TODO: calling Nvidia tools to figure out actual device state
-	return pluginapi.Healthy
+// TODO: This would not be necessary if we could store this value in a deviceplugin
+// field like actualDevice
+func convertToMinorNumber(DeviceName string) (uint, error) {
+	devString := strings.TrimPrefix(DeviceName, "nvidia")
+	minorNumber, err := strconv.ParseUint(devString, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(minorNumber), nil
+}
+
+// TODO: Consider modifying ListandWatch to concurrently check state
+func (ngm *nvidiaGPUManager) GetDeviceState(DeviceName string) (string, error) {
+	reg := regexp.MustCompile(nvidiaDeviceRE)
+	if reg.MatchString(DeviceName) {
+		minorNumber, err := convertToMinorNumber(DeviceName)
+		if err != nil {
+			return pluginapi.Unhealthy, err
+		}
+		_, err = gonvml.DeviceHandleByIndex(minorNumber)
+		if err != nil {
+			glog.Errorf("\tCould not find GPU device %v\n", DeviceName)
+			return pluginapi.Unhealthy, err
+		}
+		return pluginapi.Healthy, nil
+	}
+	return pluginapi.Healthy, nil
 }
 
 // Discovers Nvidia GPU devices and sets up device access environment.
@@ -144,7 +181,10 @@ func (ngm *nvidiaGPUManager) ListAndWatch(emtpy *pluginapi.Empty, stream plugina
 	changed := true
 	for {
 		for id, dev := range ngm.devices {
-			state := ngm.GetDeviceState(id)
+			state, err := ngm.GetDeviceState(id)
+			if err != nil {
+				return err
+			}
 			if dev.Health != state {
 				changed = true
 				dev.Health = state
