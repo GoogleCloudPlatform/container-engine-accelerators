@@ -18,4 +18,9 @@ Examples of how driver installation needs to be done can be found at:
   - Installer code: https://github.com/GoogleCloudPlatform/container-engine-accelerators/blob/master/nvidia-driver-installer/ubuntu/entrypoint.sh
   - Installer daemonset: https://github.com/GoogleCloudPlatform/container-engine-accelerators/blob/master/nvidia-driver-installer/ubuntu/daemonset.yaml
 
+- For [Debian](https://cloud.google.com/kubernetes-engine/docs/concepts/node-images#debian) (experimental):
+  - Installer code: https://github.com/GoogleCloudPlatform/container-engine-accelerators/blob/master/nvidia-driver-installer/debian/entrypoint.sh
+  - Installer daemonset: https://github.com/GoogleCloudPlatform/container-engine-accelerators/blob/master/nvidia-driver-installer/debian/daemonset.yaml
+
+
 In short, this device plugins expects that all the nvidia libraries needed by the containers are present under a single directory on the host. You can specify the directory on the host containing nvidia libraries using `-host-path`. You can specify the location to mount that directory in all the containers using `-container-path`. For example, let's say on the host all nvidia libraries are present under `/var/lib/nvidia/lib64` and you want to make these libraries available to containers under `/usr/local/nvidia/lib64`, then you would use `-host-path=/var/lib/nvidia/lib64` and `-container-path=/usr/local/nvidia/lib64`.
