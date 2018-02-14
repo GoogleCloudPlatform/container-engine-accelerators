@@ -157,3 +157,31 @@ func TestNvidiaGPUManager(t *testing.T) {
 	as.Nil(resp)
 	as.NotNil(err)
 }
+
+func TestConvertToMinorNumber(t *testing.T) {
+	as := assert.New(t)
+	validUint, err := convertToMinorNumber("nvidia1")
+	as.Equal(uint(1), validUint)
+	as.Nil(err)
+	invalidUint, err := convertToMinorNumber("dev")
+	as.NotEqual(uint(1), invalidUint)
+	as.NotNil(err)
+}
+
+func TestGetDeviceState(t *testing.T) {
+	// Expects a valid GPUManager to be created.
+	testGpuManager := NewNvidiaGPUManager()
+	as := assert.New(t)
+	as.NotNil(testGpuManager)
+	healthyDevice := "nvidia0"
+	devStatus, err := testGpuManager.GetDeviceState(healthyDevice)
+	as.Equal(devStatus, pluginapi.Healthy)
+	as.Nil(err)
+	// This isn't technically an unhealthy device, but the testing system
+	// will most likely not have 10 GPUs
+	unhealthyDevice := "nvidia9"
+	devStatus, err = testGpuManager.GetDeviceState(unhealthyDevice)
+	as.Equal(devStatus, pluginapi.Unhealthy)
+	as.NotNil(err)
+
+}
