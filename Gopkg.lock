@@ -64,12 +64,12 @@
 [[projects]]
   branch = "master"
   name = "k8s.io/kubernetes"
-  packages = ["pkg/kubelet/apis/deviceplugin/v1alpha"]
-  revision = "067f2db355db264e5b58cb5f166ba88cb07b2ed6"
+  packages = ["pkg/kubelet/apis/deviceplugin/v1alpha","pkg/kubelet/apis/deviceplugin/v1beta1"]
+  revision = "9df102b4e2ab5af2cbc354b028358e983b342fed"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a663ab2530487379de1cb3038aa666a8e81cff6b6d89ac27409c1a3a65baf8fe"
+  inputs-digest = "c4e01bbbc7f1f238bfb0b43677faf885697774ba623a72cc905cc6c4cd80c5db"
   solver-name = "gps-cdcl"
   solver-version = 1
