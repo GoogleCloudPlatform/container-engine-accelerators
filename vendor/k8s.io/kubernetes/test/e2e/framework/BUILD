@@ -50,7 +50,6 @@ go_library(
         "//pkg/apis/apps:go_default_library",
         "//pkg/apis/batch:go_default_library",
         "//pkg/apis/core:go_default_library",
-        "//pkg/apis/core/v1/helper:go_default_library",
         "//pkg/apis/extensions:go_default_library",
         "//pkg/client/clientset_generated/internalclientset:go_default_library",
         "//pkg/client/conditions:go_default_library",
@@ -145,6 +144,7 @@ go_library(
         "//vendor/k8s.io/client-go/kubernetes:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes/typed/authorization/v1beta1:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes/typed/core/v1:go_default_library",
+        "//vendor/k8s.io/client-go/kubernetes/typed/extensions/v1beta1:go_default_library",
         "//vendor/k8s.io/client-go/kubernetes/typed/rbac/v1beta1:go_default_library",
         "//vendor/k8s.io/client-go/rest:go_default_library",
         "//vendor/k8s.io/client-go/scale:go_default_library",
@@ -179,5 +179,4 @@ go_test(
     name = "go_default_test",
     srcs = ["firewall_util_test.go"],
     embed = [":go_default_library"],
-    importpath = "k8s.io/kubernetes/test/e2e/framework",
 )

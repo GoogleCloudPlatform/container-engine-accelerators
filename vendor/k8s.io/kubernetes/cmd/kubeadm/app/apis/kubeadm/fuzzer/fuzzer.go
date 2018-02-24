@@ -44,6 +44,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.CertificatesDir = "foo"
 			obj.APIServerCertSANs = []string{"foo"}
 			obj.Token = "foo"
+			obj.CRISocket = "foo"
 			obj.Etcd.Image = "foo"
 			obj.Etcd.DataDir = "foo"
 			obj.ImageRepository = "foo"
@@ -77,7 +78,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			kubeletconfigv1beta1.SetDefaults_KubeletConfiguration(obj.KubeletConfiguration.BaseConfig)
 			obj.KubeProxy = kubeadm.KubeProxy{
 				Config: &kubeproxyconfigv1alpha1.KubeProxyConfiguration{
-					FeatureGates:       "foo",
+					FeatureGates:       map[string]bool{"foo": true},
 					BindAddress:        "foo",
 					HealthzBindAddress: "foo:10256",
 					MetricsBindAddress: "foo:",
@@ -124,6 +125,7 @@ func Funcs(codecs runtimeserializer.CodecFactory) []interface{} {
 			obj.DiscoveryTokenAPIServers = []string{"foo"}
 			obj.TLSBootstrapToken = "foo"
 			obj.Token = "foo"
+			obj.CRISocket = "foo"
 		},
 	}
 }

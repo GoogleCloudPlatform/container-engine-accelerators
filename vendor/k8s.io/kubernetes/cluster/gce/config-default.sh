@@ -158,7 +158,7 @@ ENABLE_METRICS_SERVER="${KUBE_ENABLE_METRICS_SERVER:-true}"
 ENABLE_METADATA_AGENT="${KUBE_ENABLE_METADATA_AGENT:-none}"
 
 # Version tag of metadata agent
-METADATA_AGENT_VERSION="${KUBE_METADATA_AGENT_VERSION:-0.2-0.0.13-5-watch}"
+METADATA_AGENT_VERSION="${KUBE_METADATA_AGENT_VERSION:-0.2-0.0.16-1}"
 
 # One special node out of NUM_NODES would be created of this type if specified.
 # Useful for scheduling heapster in large clusters with nodes of small size.
@@ -295,11 +295,16 @@ if [[ -n "${GCE_GLBC_IMAGE:-}" ]]; then
 fi
 
 # Admission Controllers to invoke prior to persisting objects in cluster
-ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,PersistentVolumeClaimResize,DefaultTolerationSeconds,NodeRestriction,Priority,StorageProtection
+ADMISSION_CONTROL=Initializers,NamespaceLifecycle,LimitRanger,ServiceAccount,PersistentVolumeLabel,DefaultStorageClass,PersistentVolumeClaimResize,DefaultTolerationSeconds,NodeRestriction,Priority,StorageObjectInUseProtection
 
 if [[ "${ENABLE_POD_SECURITY_POLICY:-}" == "true" ]]; then
   ADMISSION_CONTROL="${ADMISSION_CONTROL},PodSecurityPolicy"
 fi
+
+# MutatingAdmissionWebhook should be the last controller that modifies the
+# request object, otherwise users will be confused if the mutating webhooks'
+# modification is overwritten.
+ADMISSION_CONTROL="${ADMISSION_CONTROL},MutatingAdmissionWebhook,ValidatingAdmissionWebhook"
 
 # ResourceQuota must come last, or a creation is recorded, but the pod was forbidden.
 ADMISSION_CONTROL="${ADMISSION_CONTROL},ResourceQuota"

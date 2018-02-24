@@ -3284,6 +3284,7 @@ func describeStorageClass(sc *storage.StorageClass, events *api.EventList) (stri
 		w.Write(LEVEL_0, "Annotations:\t%s\n", labels.FormatLabels(sc.Annotations))
 		w.Write(LEVEL_0, "Provisioner:\t%s\n", sc.Provisioner)
 		w.Write(LEVEL_0, "Parameters:\t%s\n", labels.FormatLabels(sc.Parameters))
+		w.Write(LEVEL_0, "AllowVolumeExpansion:\t%s\n", printBoolPtr(sc.AllowVolumeExpansion))
 		if sc.ReclaimPolicy != nil {
 			w.Write(LEVEL_0, "ReclaimPolicy:\t%s\n", *sc.ReclaimPolicy)
 		}
@@ -3369,8 +3370,8 @@ func describePriorityClass(pc *scheduling.PriorityClass, events *api.EventList) 
 	return tabbedString(func(out io.Writer) error {
 		w := NewPrefixWriter(out)
 		w.Write(LEVEL_0, "Name:\t%s\n", pc.Name)
-		w.Write(LEVEL_0, "Value:\t%s\n", pc.Value)
-		w.Write(LEVEL_0, "GlobalDefault:\t%s\n", pc.GlobalDefault)
+		w.Write(LEVEL_0, "Value:\t%v\n", pc.Value)
+		w.Write(LEVEL_0, "GlobalDefault:\t%v\n", pc.GlobalDefault)
 		w.Write(LEVEL_0, "Description:\t%s\n", pc.Description)
 
 		w.Write(LEVEL_0, "Annotations:\t%s\n", labels.FormatLabels(pc.Annotations))

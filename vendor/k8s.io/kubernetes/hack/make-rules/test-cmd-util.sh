@@ -106,7 +106,7 @@ function record_command() {
     juLog -output="${output}" -class="test-cmd" -name="${name}" "$@"
     if [[ $? -ne 0 ]]; then
       echo "Error when running ${name}"
-      foundError="True"
+      foundError="${foundError}""${name}"", "
     fi
 
     set -o nounset
@@ -3804,7 +3804,7 @@ run_cmd_with_img_tests() {
 
   # Test that a valid image reference value is provided as the value of --image in `kubectl run <name> --image`
   output_message=$(kubectl run test1 --image=validname)
-  kube::test::if_has_string "${output_message}" 'deployments "test1" created'
+  kube::test::if_has_string "${output_message}" 'deployment.apps "test1" created'
   kubectl delete deployments test1
   # test invalid image name
   output_message=$(! kubectl run test2 --image=InvalidImageName 2>&1)
@@ -4482,7 +4482,7 @@ __EOF__
   kube::test::if_has_string "${response}" 'must provide one or more resources'
   # test=label matches our node
   response=$(kubectl cordon --selector test=label)
-  kube::test::if_has_string "${response}" 'nodes "127.0.0.1" cordoned'
+  kube::test::if_has_string "${response}" 'node "127.0.0.1" cordoned'
   # invalid=label does not match any nodes
   response=$(kubectl cordon --selector invalid=label)
   kube::test::if_has_not_string "${response}" 'cordoned'
@@ -4609,7 +4609,7 @@ run_impersonation_tests() {
 # Requires an env var SUPPORTED_RESOURCES which is a comma separated list of
 # resources for which tests should be run.
 runTests() {
-  foundError="False"
+  foundError=""
 
   if [ -z "${SUPPORTED_RESOURCES:-}" ]; then
     echo "Need to set SUPPORTED_RESOURCES env var. It is a list of resources that are supported and hence should be tested. Set it to (*) to test all resources"
@@ -5108,8 +5108,8 @@ runTests() {
 
   kube::test::clear_all
 
-  if [ "$foundError" == "True" ]; then
-    echo "TEST FAILED"
+  if [[ -n "${foundError}" ]]; then
+    echo "FAILED TESTS: ""${foundError}"
     exit 1
   fi
 }

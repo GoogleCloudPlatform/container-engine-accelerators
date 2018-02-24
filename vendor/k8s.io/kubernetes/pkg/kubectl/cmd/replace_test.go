@@ -23,15 +23,18 @@ import (
 	"testing"
 
 	"k8s.io/client-go/rest/fake"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
+	"k8s.io/kubernetes/pkg/kubectl/scheme"
 )
 
 func TestReplaceObject(t *testing.T) {
 	_, _, rc := testData()
 
-	f, tf, codec, _ := cmdtesting.NewAPIFactory()
-	tf.Printer = &testPrinter{}
+	tf := cmdtesting.NewTestFactory()
+	codec := legacyscheme.Codecs.LegacyCodec(scheme.Versions...)
+
 	deleted := false
 	tf.UnstructuredClient = &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
@@ -61,13 +64,13 @@ func TestReplaceObject(t *testing.T) {
 	tf.Namespace = "test"
 	buf := bytes.NewBuffer([]byte{})
 
-	cmd := NewCmdReplace(f, buf)
+	cmd := NewCmdReplace(tf, buf)
 	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy/redis-master-controller.yaml")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
 
 	// uses the name from the file, not the response
-	if buf.String() != "replicationcontrollers/rc1\n" {
+	if buf.String() != "replicationcontroller/rc1\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 
@@ -77,7 +80,7 @@ func TestReplaceObject(t *testing.T) {
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
 
-	if buf.String() != "replicationcontrollers/redis-master\nreplicationcontrollers/rc1\n" {
+	if buf.String() != "replicationcontroller/redis-master\nreplicationcontroller/rc1\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 }
@@ -85,8 +88,9 @@ func TestReplaceObject(t *testing.T) {
 func TestReplaceMultipleObject(t *testing.T) {
 	_, svc, rc := testData()
 
-	f, tf, codec, _ := cmdtesting.NewAPIFactory()
-	tf.Printer = &testPrinter{}
+	tf := cmdtesting.NewTestFactory()
+	codec := legacyscheme.Codecs.LegacyCodec(scheme.Versions...)
+
 	redisMasterDeleted := false
 	frontendDeleted := false
 	tf.UnstructuredClient = &fake.RESTClient{
@@ -130,13 +134,13 @@ func TestReplaceMultipleObject(t *testing.T) {
 	tf.Namespace = "test"
 	buf := bytes.NewBuffer([]byte{})
 
-	cmd := NewCmdReplace(f, buf)
+	cmd := NewCmdReplace(tf, buf)
 	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy/redis-master-controller.yaml")
 	cmd.Flags().Set("filename", "../../../examples/guestbook/frontend-service.yaml")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
 
-	if buf.String() != "replicationcontrollers/rc1\nservices/baz\n" {
+	if buf.String() != "replicationcontroller/rc1\nservice/baz\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 
@@ -146,7 +150,7 @@ func TestReplaceMultipleObject(t *testing.T) {
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
 
-	if buf.String() != "replicationcontrollers/redis-master\nservices/frontend\nreplicationcontrollers/rc1\nservices/baz\n" {
+	if buf.String() != "replicationcontroller/redis-master\nservice/frontend\nreplicationcontroller/rc1\nservice/baz\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 }
@@ -154,8 +158,9 @@ func TestReplaceMultipleObject(t *testing.T) {
 func TestReplaceDirectory(t *testing.T) {
 	_, _, rc := testData()
 
-	f, tf, codec, _ := cmdtesting.NewAPIFactory()
-	tf.Printer = &testPrinter{}
+	tf := cmdtesting.NewTestFactory()
+	codec := legacyscheme.Codecs.LegacyCodec(scheme.Versions...)
+
 	created := map[string]bool{}
 	tf.UnstructuredClient = &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
@@ -186,13 +191,13 @@ func TestReplaceDirectory(t *testing.T) {
 	tf.Namespace = "test"
 	buf := bytes.NewBuffer([]byte{})
 
-	cmd := NewCmdReplace(f, buf)
+	cmd := NewCmdReplace(tf, buf)
 	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy")
 	cmd.Flags().Set("namespace", "test")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
 
-	if buf.String() != "replicationcontrollers/rc1\nreplicationcontrollers/rc1\nreplicationcontrollers/rc1\n" {
+	if buf.String() != "replicationcontroller/rc1\nreplicationcontroller/rc1\nreplicationcontroller/rc1\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 
@@ -201,8 +206,8 @@ func TestReplaceDirectory(t *testing.T) {
 	cmd.Flags().Set("cascade", "false")
 	cmd.Run(cmd, []string{})
 
-	if buf.String() != "replicationcontrollers/frontend\nreplicationcontrollers/redis-master\nreplicationcontrollers/redis-slave\n"+
-		"replicationcontrollers/rc1\nreplicationcontrollers/rc1\nreplicationcontrollers/rc1\n" {
+	if buf.String() != "replicationcontroller/frontend\nreplicationcontroller/redis-master\nreplicationcontroller/redis-slave\n"+
+		"replicationcontroller/rc1\nreplicationcontroller/rc1\nreplicationcontroller/rc1\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 }
@@ -210,8 +215,9 @@ func TestReplaceDirectory(t *testing.T) {
 func TestForceReplaceObjectNotFound(t *testing.T) {
 	_, _, rc := testData()
 
-	f, tf, codec, _ := cmdtesting.NewAPIFactory()
-	tf.Printer = &testPrinter{}
+	tf := cmdtesting.NewTestFactory()
+	codec := legacyscheme.Codecs.LegacyCodec(scheme.Versions...)
+
 	tf.UnstructuredClient = &fake.RESTClient{
 		NegotiatedSerializer: unstructuredSerializer,
 		Client: fake.CreateHTTPClient(func(req *http.Request) (*http.Response, error) {
@@ -231,14 +237,14 @@ func TestForceReplaceObjectNotFound(t *testing.T) {
 	tf.Namespace = "test"
 	buf := bytes.NewBuffer([]byte{})
 
-	cmd := NewCmdReplace(f, buf)
+	cmd := NewCmdReplace(tf, buf)
 	cmd.Flags().Set("filename", "../../../examples/guestbook/legacy/redis-master-controller.yaml")
 	cmd.Flags().Set("force", "true")
 	cmd.Flags().Set("cascade", "false")
 	cmd.Flags().Set("output", "name")
 	cmd.Run(cmd, []string{})
 
-	if buf.String() != "replicationcontrollers/rc1\n" {
+	if buf.String() != "replicationcontroller/rc1\n" {
 		t.Errorf("unexpected output: %s", buf.String())
 	}
 }

@@ -74,6 +74,7 @@ import (
 	"k8s.io/kubernetes/pkg/kubelet/kubeletconfig"
 	"k8s.io/kubernetes/pkg/kubelet/kuberuntime"
 	"k8s.io/kubernetes/pkg/kubelet/lifecycle"
+	"k8s.io/kubernetes/pkg/kubelet/logs"
 	"k8s.io/kubernetes/pkg/kubelet/metrics"
 	"k8s.io/kubernetes/pkg/kubelet/metrics/collectors"
 	"k8s.io/kubernetes/pkg/kubelet/network"
@@ -695,7 +696,8 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 				klet.podManager,
 				klet.runtimeCache,
 				runtimeService,
-				imageService)
+				imageService,
+				stats.NewLogMetricsService())
 		}
 	} else {
 		// rkt uses the legacy, non-CRI, integration. Configure it the old way.
@@ -756,6 +758,21 @@ func NewMainKubelet(kubeCfg *kubeletconfiginternal.KubeletConfiguration,
 		return nil, fmt.Errorf("failed to initialize image manager: %v", err)
 	}
 	klet.imageManager = imageManager
+
+	if containerRuntime == kubetypes.RemoteContainerRuntime && utilfeature.DefaultFeatureGate.Enabled(features.CRIContainerLogRotation) {
+		// setup containerLogManager for CRI container runtime
+		containerLogManager, err := logs.NewContainerLogManager(
+			klet.runtimeService,
+			kubeCfg.ContainerLogMaxSize,
+			int(kubeCfg.ContainerLogMaxFiles),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize container log manager: %v", err)
+		}
+		klet.containerLogManager = containerLogManager
+	} else {
+		klet.containerLogManager = logs.NewStubContainerLogManager()
+	}
 
 	klet.statusManager = status.NewManager(klet.kubeClient, klet.podManager, klet)
 
@@ -991,6 +1008,9 @@ type Kubelet struct {
 
 	// Manager for image garbage collection.
 	imageManager images.ImageGCManager
+
+	// Manager for container logs.
+	containerLogManager logs.ContainerLogManager
 
 	// Secret manager.
 	secretManager secret.Manager
@@ -1318,7 +1338,7 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		glog.Fatalf("Failed to start cAdvisor %v", err)
 	}
 	// eviction manager must start after cadvisor because it needs to know if the container runtime has a dedicated imagefs
-	kl.evictionManager.Start(kl.StatsProvider, kl.GetActivePods, kl.podResourcesAreReclaimed, kl.containerManager, evictionMonitoringPeriod)
+	kl.evictionManager.Start(kl.StatsProvider, kl.GetActivePods, kl.podResourcesAreReclaimed, evictionMonitoringPeriod)
 
 	// trigger on-demand stats collection once so that we have capacity information for ephemeral storage.
 	// ignore any errors, since if stats collection is not successful, the container manager will fail to start below.
@@ -1334,6 +1354,9 @@ func (kl *Kubelet) initializeRuntimeDependentModules() {
 		// Fail kubelet and rely on the babysitter to retry starting kubelet.
 		glog.Fatalf("Failed to start ContainerManager %v", err)
 	}
+	// container log manager must start after container runtime is up to retrieve information from container runtime
+	// and inform container to reopen log file after log rotation.
+	kl.containerLogManager.Start()
 }
 
 // Run starts the kubelet reacting to config updates

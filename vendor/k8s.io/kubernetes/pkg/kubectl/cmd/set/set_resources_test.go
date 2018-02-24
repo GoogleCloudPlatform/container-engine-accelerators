@@ -37,16 +37,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/rest/fake"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	"k8s.io/kubernetes/pkg/api/testapi"
-	"k8s.io/kubernetes/pkg/kubectl/categories"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
 	"k8s.io/kubernetes/pkg/kubectl/resource"
 	"k8s.io/kubernetes/pkg/kubectl/scheme"
-	"k8s.io/kubernetes/pkg/printers"
 )
 
 func TestResourcesLocal(t *testing.T) {
-	f, tf, codec, ns := cmdtesting.NewAPIFactory()
+	tf := cmdtesting.NewTestFactory()
+	ns := legacyscheme.Codecs
+
 	tf.Client = &fake.RESTClient{
 		GroupVersion:         schema.GroupVersion{Version: ""},
 		NegotiatedSerializer: ns,
@@ -56,15 +57,13 @@ func TestResourcesLocal(t *testing.T) {
 		}),
 	}
 	tf.Namespace = "test"
-	tf.ClientConfig = &restclient.Config{ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Version: ""}}}
+	tf.ClientConfigVal = &restclient.Config{ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Version: ""}}}
 
 	buf := bytes.NewBuffer([]byte{})
-	cmd := NewCmdResources(f, buf, buf)
+	cmd := NewCmdResources(tf, buf, buf)
 	cmd.SetOutput(buf)
 	cmd.Flags().Set("output", "name")
 	cmd.Flags().Set("local", "true")
-	_, typer := f.Object()
-	tf.Printer = &printers.NamePrinter{Decoders: []runtime.Decoder{codec}, Typer: typer}
 
 	opts := ResourcesOptions{FilenameOptions: resource.FilenameOptions{
 		Filenames: []string{"../../../../examples/storage/cassandra/cassandra-controller.yaml"}},
@@ -74,7 +73,7 @@ func TestResourcesLocal(t *testing.T) {
 		Requests:          "cpu=200m,memory=512Mi",
 		ContainerSelector: "*"}
 
-	err := opts.Complete(f, cmd, []string{})
+	err := opts.Complete(tf, cmd, []string{})
 	if err == nil {
 		err = opts.Validate()
 	}
@@ -90,7 +89,9 @@ func TestResourcesLocal(t *testing.T) {
 }
 
 func TestSetMultiResourcesLimitsLocal(t *testing.T) {
-	f, tf, codec, ns := cmdtesting.NewAPIFactory()
+	tf := cmdtesting.NewTestFactory()
+	ns := legacyscheme.Codecs
+
 	tf.Client = &fake.RESTClient{
 		GroupVersion:         schema.GroupVersion{Version: ""},
 		NegotiatedSerializer: ns,
@@ -100,15 +101,13 @@ func TestSetMultiResourcesLimitsLocal(t *testing.T) {
 		}),
 	}
 	tf.Namespace = "test"
-	tf.ClientConfig = &restclient.Config{ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Version: ""}}}
+	tf.ClientConfigVal = &restclient.Config{ContentConfig: restclient.ContentConfig{GroupVersion: &schema.GroupVersion{Version: ""}}}
 
 	buf := bytes.NewBuffer([]byte{})
-	cmd := NewCmdResources(f, buf, buf)
+	cmd := NewCmdResources(tf, buf, buf)
 	cmd.SetOutput(buf)
 	cmd.Flags().Set("output", "name")
 	cmd.Flags().Set("local", "true")
-	_, typer := f.Object()
-	tf.Printer = &printers.NamePrinter{Decoders: []runtime.Decoder{codec}, Typer: typer}
 
 	opts := ResourcesOptions{FilenameOptions: resource.FilenameOptions{
 		Filenames: []string{"../../../../test/fixtures/pkg/kubectl/cmd/set/multi-resource-yaml.yaml"}},
@@ -118,7 +117,7 @@ func TestSetMultiResourcesLimitsLocal(t *testing.T) {
 		Requests:          "cpu=200m,memory=512Mi",
 		ContainerSelector: "*"}
 
-	err := opts.Complete(f, cmd, []string{})
+	err := opts.Complete(tf, cmd, []string{})
 	if err == nil {
 		err = opts.Validate()
 	}
@@ -446,12 +445,10 @@ func TestSetResourcesRemote(t *testing.T) {
 		t.Run(fmt.Sprintf("%d", i), func(t *testing.T) {
 			groupVersion := schema.GroupVersion{Group: input.apiGroup, Version: input.apiVersion}
 			testapi.Default = testapi.Groups[input.testAPIGroup]
-			f, tf, _, ns := cmdtesting.NewAPIFactory()
+			tf := cmdtesting.NewTestFactory()
 			codec := scheme.Codecs.CodecForVersions(scheme.Codecs.LegacyCodec(groupVersion), scheme.Codecs.UniversalDecoder(groupVersion), groupVersion, groupVersion)
-			_, typer := f.Object()
-			tf.Printer = &printers.NamePrinter{Decoders: []runtime.Decoder{testapi.Default.Codec()}, Typer: typer}
+			ns := legacyscheme.Codecs
 			tf.Namespace = "test"
-			tf.CategoryExpander = categories.LegacyCategoryExpander
 			tf.Client = &fake.RESTClient{
 				GroupVersion:         groupVersion,
 				NegotiatedSerializer: ns,
@@ -479,14 +476,14 @@ func TestSetResourcesRemote(t *testing.T) {
 				VersionedAPIPath: path.Join(input.apiPrefix, testapi.Default.GroupVersion().String()),
 			}
 			buf := new(bytes.Buffer)
-			cmd := NewCmdResources(f, buf, buf)
+			cmd := NewCmdResources(tf, buf, buf)
 			cmd.SetOutput(buf)
 			cmd.Flags().Set("output", "yaml")
 			opts := ResourcesOptions{
 				Out:               buf,
 				Limits:            "cpu=200m,memory=512Mi",
 				ContainerSelector: "*"}
-			err := opts.Complete(f, cmd, input.args)
+			err := opts.Complete(tf, cmd, input.args)
 			if err == nil {
 				err = opts.Validate()
 			}

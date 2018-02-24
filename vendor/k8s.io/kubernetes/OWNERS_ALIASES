@@ -14,6 +14,7 @@ aliases:
     - timothysc
     - wojtek-t
     - aveshagarwal
+    - ravisantoshgudimetla
   sig-cli-maintainers:
     - adohe
     - brendandburns
@@ -224,7 +225,9 @@ aliases:
     - piosz
     - jsafrane
     - jbeda
-  vendor-reviewers:
+  dep-reviewers:
+    - cblecker
     - thockin
-  vendor-approvers:
+  dep-approvers:
+    - cblecker
     - thockin

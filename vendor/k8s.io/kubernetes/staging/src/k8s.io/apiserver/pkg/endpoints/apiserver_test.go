@@ -594,26 +594,6 @@ func (storage *SimpleRESTStorage) Watcher() *watch.FakeWatcher {
 	return storage.fakeWatch
 }
 
-// Implement Redirector.
-var _ = rest.Redirector(&SimpleRESTStorage{})
-
-// Implement Redirector.
-func (storage *SimpleRESTStorage) ResourceLocation(ctx request.Context, id string) (*url.URL, http.RoundTripper, error) {
-	storage.checkContext(ctx)
-	// validate that the namespace context on the request matches the expected input
-	storage.requestedResourceNamespace = request.NamespaceValue(ctx)
-	if storage.expectedResourceNamespace != storage.requestedResourceNamespace {
-		return nil, nil, fmt.Errorf("Expected request namespace %s, but got namespace %s", storage.expectedResourceNamespace, storage.requestedResourceNamespace)
-	}
-	storage.requestedResourceLocationID = id
-	if err := storage.errors["resourceLocation"]; err != nil {
-		return nil, nil, err
-	}
-	// Make a copy so the internal URL never gets mutated
-	locationCopy := *storage.resourceLocation
-	return &locationCopy, storage.resourceLocationTransport, nil
-}
-
 // Implement Connecter
 type ConnecterRESTStorage struct {
 	connectHandler http.Handler
@@ -1526,18 +1506,30 @@ func TestMetadata(t *testing.T) {
 	matches := map[string]int{}
 	for _, w := range ws {
 		for _, r := range w.Routes() {
+			t.Logf("%v %v %#v", r.Method, r.Path, r.Produces)
 			s := strings.Join(r.Produces, ",")
 			i := matches[s]
 			matches[s] = i + 1
 		}
 	}
-
-	if matches["text/plain,application/json,application/yaml,application/vnd.kubernetes.protobuf"] == 0 ||
-		matches["application/json,application/yaml,application/vnd.kubernetes.protobuf,application/json;stream=watch,application/vnd.kubernetes.protobuf;stream=watch"] == 0 ||
-		matches["application/json,application/yaml,application/vnd.kubernetes.protobuf"] == 0 ||
-		matches["*/*"] == 0 ||
-		len(matches) != 5 {
-		t.Errorf("unexpected mime types: %v", matches)
+	cs := []func() bool{
+		func() bool {
+			return matches["text/plain,application/json,application/yaml,application/vnd.kubernetes.protobuf"] == 0
+		},
+		func() bool {
+			return matches["application/json,application/yaml,application/vnd.kubernetes.protobuf,application/json;stream=watch,application/vnd.kubernetes.protobuf;stream=watch"] == 0
+		},
+		func() bool {
+			return matches["application/json,application/yaml,application/vnd.kubernetes.protobuf"] == 0
+		},
+		func() bool {
+			return len(matches) != 4
+		},
+	}
+	for i, c := range cs {
+		if c() {
+			t.Errorf("[%d]unexpected mime types: %#v", i, matches)
+		}
 	}
 }
 
@@ -2844,65 +2836,6 @@ func TestDeleteWithOptionsQueryAndBody(t *testing.T) {
 	simpleStorage.deleteOptions.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{})
 	if !apiequality.Semantic.DeepEqual(simpleStorage.deleteOptions, item) {
 		t.Errorf("unexpected delete options: %s", diff.ObjectDiff(simpleStorage.deleteOptions, item))
-	}
-}
-
-func TestLegacyDelete(t *testing.T) {
-	storage := map[string]rest.Storage{}
-	simpleStorage := SimpleRESTStorage{}
-	ID := "id"
-	storage["simple"] = LegacyRESTStorage{&simpleStorage}
-	var _ rest.Deleter = storage["simple"].(LegacyRESTStorage)
-	handler := handle(storage)
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	client := http.Client{}
-	request, err := http.NewRequest("DELETE", server.URL+"/"+prefix+"/"+testGroupVersion.Group+"/"+testGroupVersion.Version+"/namespaces/default/simple/"+ID, nil)
-	res, err := client.Do(request)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("unexpected response: %#v", res)
-	}
-	if simpleStorage.deleted != ID {
-		t.Errorf("Unexpected delete: %s, expected %s", simpleStorage.deleted, ID)
-	}
-	if simpleStorage.deleteOptions != nil {
-		t.Errorf("unexpected delete options: %#v", simpleStorage.deleteOptions)
-	}
-}
-
-func TestLegacyDeleteIgnoresOptions(t *testing.T) {
-	storage := map[string]rest.Storage{}
-	simpleStorage := SimpleRESTStorage{}
-	ID := "id"
-	storage["simple"] = LegacyRESTStorage{&simpleStorage}
-	handler := handle(storage)
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	item := metav1.NewDeleteOptions(300)
-	body, err := runtime.Encode(codec, item)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	client := http.Client{}
-	request, err := http.NewRequest("DELETE", server.URL+"/"+prefix+"/"+testGroupVersion.Group+"/"+testGroupVersion.Version+"/namespaces/default/simple/"+ID, bytes.NewReader(body))
-	res, err := client.Do(request)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if res.StatusCode != http.StatusOK {
-		t.Errorf("unexpected response: %#v", res)
-	}
-	if simpleStorage.deleted != ID {
-		t.Errorf("Unexpected delete: %s, expected %s", simpleStorage.deleted, ID)
-	}
-	if simpleStorage.deleteOptions != nil {
-		t.Errorf("unexpected delete options: %#v", simpleStorage.deleteOptions)
 	}
 }
 
