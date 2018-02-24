@@ -83,17 +83,18 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 
 	// Tests Allocate
 	resp, err := client.Allocate(context.Background(), &pluginapi.AllocateRequest{
-		DevicesIDs: []string{"dev1"},
-	})
+		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+			{DevicesIDs: []string{"dev1"}}}})
 	as.Nil(err)
-	as.Len(resp.Devices, 4)
-	as.Len(resp.Mounts, 1)
+	as.Len(resp.ContainerResponses, 1)
+	as.Len(resp.ContainerResponses[0].Devices, 4)
+	as.Len(resp.ContainerResponses[0].Mounts, 1)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
-		DevicesIDs: []string{"dev1", "dev2"},
-	})
+		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+			{DevicesIDs: []string{"dev1", "dev2"}}}})
 	as.Nil(err)
 	var retDevices []string
-	for _, dev := range resp.Devices {
+	for _, dev := range resp.ContainerResponses[0].Devices {
 		retDevices = append(retDevices, dev.HostPath)
 	}
 	as.Contains(retDevices, "/dev/dev1")
@@ -102,8 +103,8 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	as.Contains(retDevices, "/dev/nvidia-uvm")
 	as.Contains(retDevices, "/dev/nvidia-uvm-tools")
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
-		DevicesIDs: []string{"dev1", "dev3"},
-	})
+		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
+			{DevicesIDs: []string{"dev1", "dev3"}}}})
 	as.Nil(resp)
 	as.NotNil(err)
 }

@@ -30,6 +30,10 @@ type pluginServiceV1Beta1 struct {
 	ngm *nvidiaGPUManager
 }
 
+func (s *pluginServiceV1Beta1) GetDevicePluginOptions(ctx context.Context, e *pluginapi.Empty) (*pluginapi.DevicePluginOptions, error) {
+	return &pluginapi.DevicePluginOptions{}, nil
+}
+
 func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	glog.Infoln("device-plugin: ListAndWatch start")
 	changed := true
@@ -51,38 +55,42 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 	}
 }
 
-func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, rqt *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
-	resp := new(pluginapi.AllocateResponse)
-	// Add all requested devices to Allocate Response
-	for _, id := range rqt.DevicesIDs {
-		dev, ok := s.ngm.devices[id]
-		if !ok {
-			return nil, fmt.Errorf("invalid allocation request with non-existing device %s", id)
+func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
+	resps := new(pluginapi.AllocateResponse)
+	for _, rqt := range requests.ContainerRequests {
+		resp := new(pluginapi.ContainerAllocateResponse)
+		// Add all requested devices to Allocate Response
+		for _, id := range rqt.DevicesIDs {
+			dev, ok := s.ngm.devices[id]
+			if !ok {
+				return nil, fmt.Errorf("invalid allocation request with non-existing device %s", id)
+			}
+			if dev.Health != pluginapi.Healthy {
+				return nil, fmt.Errorf("invalid allocation request with unhealthy device %s", id)
+			}
+			resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
+				HostPath:      "/dev/" + id,
+				ContainerPath: "/dev/" + id,
+				Permissions:   "mrw",
+			})
 		}
-		if dev.Health != pluginapi.Healthy {
-			return nil, fmt.Errorf("invalid allocation request with unhealthy device %s", id)
+		// Add all default devices to Allocate Response
+		for _, d := range s.ngm.defaultDevices {
+			resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
+				HostPath:      d,
+				ContainerPath: d,
+				Permissions:   "mrw",
+			})
 		}
-		resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
-			HostPath:      "/dev/" + id,
-			ContainerPath: "/dev/" + id,
-			Permissions:   "mrw",
-		})
-	}
-	// Add all default devices to Allocate Response
-	for _, d := range s.ngm.defaultDevices {
-		resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
-			HostPath:      d,
-			ContainerPath: d,
-			Permissions:   "mrw",
-		})
-	}
 
-	resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
-		ContainerPath: s.ngm.containerPathPrefix,
-		HostPath:      s.ngm.hostPathPrefix,
-		ReadOnly:      true,
-	})
-	return resp, nil
+		resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
+			ContainerPath: s.ngm.containerPathPrefix,
+			HostPath:      s.ngm.hostPathPrefix,
+			ReadOnly:      true,
+		})
+		resps.ContainerResponses = append(resps.ContainerResponses, resp)
+	}
+	return resps, nil
 }
 
 func (s *pluginServiceV1Beta1) PreStartContainer(ctx context.Context, r *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
