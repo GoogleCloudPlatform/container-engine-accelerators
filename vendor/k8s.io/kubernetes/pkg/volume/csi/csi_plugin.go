@@ -31,8 +31,7 @@ import (
 )
 
 const (
-	csiPluginName              = "kubernetes.io/csi"
-	csiVolAttribsAnnotationKey = "csi.volume.kubernetes.io/volume-attributes"
+	csiPluginName = "kubernetes.io/csi"
 
 	// TODO (vladimirvivien) implement a more dynamic way to discover
 	// the unix domain socket path for each installed csi driver.
@@ -46,7 +45,7 @@ const (
 
 var (
 	// csiVersion supported csi version
-	csiVersion = &csipb.Version{Major: 0, Minor: 1, Patch: 0}
+	csiVersion = &csipb.Version{Major: 0, Minor: 2, Patch: 0}
 )
 
 type csiPlugin struct {

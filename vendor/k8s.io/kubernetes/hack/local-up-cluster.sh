@@ -122,7 +122,14 @@ fi
 
 # set feature gates if using ipvs mode
 if [ "${KUBE_PROXY_MODE}" == "ipvs" ]; then
-    FEATURE_GATES="$FEATURE_GATES,SupportIPVSProxyMode=true"
+    # If required kernel modules are not available, fall back to iptables.
+    sudo modprobe -a ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack_ipv4
+    if [[ $? -eq 0 ]]; then
+      FEATURE_GATES="${FEATURE_GATES},SupportIPVSProxyMode=true"
+    else
+      echo "Required kernel modules for ipvs not found. Falling back to iptables mode."
+      KUBE_PROXY_MODE=iptables
+    fi
 fi
 
 # set feature gates if enable Pod priority and preemption
@@ -434,12 +441,12 @@ function start_apiserver {
       fi
       RUNTIME_CONFIG+="scheduling.k8s.io/v1alpha1=true"
     fi
-    
+
 
     # Admission Controllers to invoke prior to persisting objects in cluster
     #
     # The order defined here dose not matter.
-    ENABLE_ADMISSION_PLUGINS=Initializers,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,PodPreset
+    ENABLE_ADMISSION_PLUGINS=Initializers,LimitRanger,ServiceAccount${security_admission},DefaultStorageClass,DefaultTolerationSeconds,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,PodPreset,StorageObjectInUseProtection
 
     audit_arg=""
     APISERVER_BASIC_AUDIT_LOG=""
@@ -813,10 +820,6 @@ hostnameOverride: ${HOSTNAME_OVERRIDE}
 featureGates: ${FEATURE_GATES}
 mode: ${KUBE_PROXY_MODE}
 EOF
-    if [ "${KUBE_PROXY_MODE}" == "ipvs" ]; then
-	# Load kernel modules required by IPVS proxier
-        sudo modprobe -a ip_vs ip_vs_rr ip_vs_wrr ip_vs_sh nf_conntrack_ipv4
-    fi
 
     sudo "${GO_OUT}/hyperkube" proxy \
       --config=/tmp/kube-proxy.yaml \

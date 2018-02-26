@@ -120,7 +120,7 @@ function get-local-disk-num() {
 function safe-block-symlink(){
   local device="${1}"
   local symdir="${2}"
-  
+
   mkdir -p "${symdir}"
 
   get-or-generate-uuid "${device}"
@@ -194,11 +194,11 @@ function unique-uuid-bind-mount(){
   # Trigger udev refresh so that newly formatted devices are propagated in by-uuid
   udevadm control --reload-rules
   udevadm trigger
-  udevadm settle 
+  udevadm settle
 
   # grep the exact match of actual device, prevents substring matching
   local myuuid=$(ls -l /dev/disk/by-uuid/ | grep "/${actual_device}$" | tr -s ' ' | cut -d ' ' -f 9)
-  # myuuid should be the uuid of the device as found in /dev/disk/by-uuid/ 
+  # myuuid should be the uuid of the device as found in /dev/disk/by-uuid/
   if [[ -z "${myuuid}" ]]; then
     echo "Failed to get a uuid for device ${actual_device} when mounting." >&2
     exit 2
@@ -230,7 +230,7 @@ function mount-ext(){
   local devicenum="${2}"
   local interface="${3}"
   local format="${4}"
-  
+
 
   if [[ -z "${devicenum}" ]]; then
     echo "Failed to get the local disk number for device ${ssd}" >&2
@@ -1954,6 +1954,33 @@ function setup-addon-manifests {
   fi
 }
 
+# A function that downloads extra addons from a URL and puts them in the GCI
+# manifests directory.
+function download-extra-addons {
+  local -r out_dir="${KUBE_HOME}/kube-manifests/kubernetes/gci-trusty/gce-extras"
+
+  mkdir -p "${out_dir}"
+
+  local curl_cmd=(
+    "curl"
+    "--fail"
+    "--retry" "5"
+    "--retry-delay" "3"
+    "--silent"
+    "--show-error"
+  )
+  if [[ -n "${CURL_RETRY_CONNREFUSED:-}" ]]; then
+    curl_cmd+=("${CURL_RETRY_CONNREFUSED}")
+  fi
+  if [[ -n "${EXTRA_ADDONS_HEADER:-}" ]]; then
+    curl_cmd+=("-H" "${EXTRA_ADDONS_HEADER}")
+  fi
+  curl_cmd+=("-o" "${out_dir}/extras.json")
+  curl_cmd+=("${EXTRA_ADDONS_URL}")
+
+  "${curl_cmd[@]}"
+}
+
 # A helper function for copying manifests and setting dir/files
 # permissions.
 #
@@ -2238,6 +2265,17 @@ EOF
     local -r metadata_proxy_yaml="${dst_dir}/metadata-proxy/gce/metadata-proxy.yaml"
     update-prometheus-to-sd-parameters ${metadata_proxy_yaml}
   fi
+  if [[ "${ENABLE_ISTIO:-}" == "true" ]]; then
+    if [[ "${ISTIO_AUTH_TYPE:-}" == "MUTUAL_TLS" ]]; then
+      setup-addon-manifests "addons" "istio/auth"
+    else
+      setup-addon-manifests "addons" "istio/noauth"
+    fi
+  fi
+  if [[ -n "${EXTRA_ADDONS_URL:-}" ]]; then
+    download-extra-addons
+    setup-addon-manifests "addons" "gce-extras"
+  fi
 
   # Place addon manager pod manifest.
   cp "${src_dir}/kube-addon-manager.yaml" /etc/kubernetes/manifests
@@ -2250,8 +2288,11 @@ function start-image-puller {
     /etc/kubernetes/manifests/
 }
 
-# Starts a l7 loadbalancing controller for ingress.
+# Setups manifests for ingress controller and gce-specific policies for service controller.
 function start-lb-controller {
+  setup-addon-manifests "addons" "loadbalancing"
+
+  # Starts a l7 loadbalancing controller for ingress.
   if [[ "${ENABLE_L7_LOADBALANCING:-}" == "glbc" ]]; then
     echo "Start GCE L7 pod"
     prepare-log-file /var/log/glbc.log

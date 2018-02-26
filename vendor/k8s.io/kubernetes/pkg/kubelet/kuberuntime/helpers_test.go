@@ -25,6 +25,9 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	utilfeature "k8s.io/apiserver/pkg/util/feature"
+	utilfeaturetesting "k8s.io/apiserver/pkg/util/feature/testing"
+	"k8s.io/kubernetes/pkg/features"
 	runtimeapi "k8s.io/kubernetes/pkg/kubelet/apis/cri/runtime/v1alpha2"
 	runtimetesting "k8s.io/kubernetes/pkg/kubelet/apis/cri/testing"
 	kubecontainer "k8s.io/kubernetes/pkg/kubelet/container"
@@ -307,6 +310,8 @@ func TestGetSeccompProfileFromAnnotations(t *testing.T) {
 }
 
 func TestNamespacesForPod(t *testing.T) {
+	defer utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.PodShareProcessNamespace, true)()
+
 	for desc, test := range map[string]struct {
 		input    *v1.Pod
 		expected *runtimeapi.NamespaceOption
@@ -339,6 +344,75 @@ func TestNamespacesForPod(t *testing.T) {
 				Ipc:     runtimeapi.NamespaceMode_NODE,
 				Network: runtimeapi.NamespaceMode_NODE,
 				Pid:     runtimeapi.NamespaceMode_NODE,
+			},
+		},
+		"Shared Process Namespace (feature enabled)": {
+			&v1.Pod{
+				Spec: v1.PodSpec{
+					ShareProcessNamespace: &[]bool{true}[0],
+				},
+			},
+			&runtimeapi.NamespaceOption{
+				Ipc:     runtimeapi.NamespaceMode_POD,
+				Network: runtimeapi.NamespaceMode_POD,
+				Pid:     runtimeapi.NamespaceMode_POD,
+			},
+		},
+		"Shared Process Namespace, redundant flag (feature enabled)": {
+			&v1.Pod{
+				Spec: v1.PodSpec{
+					ShareProcessNamespace: &[]bool{false}[0],
+				},
+			},
+			&runtimeapi.NamespaceOption{
+				Ipc:     runtimeapi.NamespaceMode_POD,
+				Network: runtimeapi.NamespaceMode_POD,
+				Pid:     runtimeapi.NamespaceMode_CONTAINER,
+			},
+		},
+	} {
+		t.Logf("TestCase: %s", desc)
+		actual := namespacesForPod(test.input)
+		assert.Equal(t, test.expected, actual)
+	}
+
+	// Test ShareProcessNamespace feature disabled, feature gate restored by previous defer
+	utilfeaturetesting.SetFeatureGateDuringTest(t, utilfeature.DefaultFeatureGate, features.PodShareProcessNamespace, false)
+
+	for desc, test := range map[string]struct {
+		input    *v1.Pod
+		expected *runtimeapi.NamespaceOption
+	}{
+		"v1.Pod default namespaces": {
+			&v1.Pod{},
+			&runtimeapi.NamespaceOption{
+				Ipc:     runtimeapi.NamespaceMode_POD,
+				Network: runtimeapi.NamespaceMode_POD,
+				Pid:     runtimeapi.NamespaceMode_CONTAINER,
+			},
+		},
+		"Shared Process Namespace (feature disabled)": {
+			&v1.Pod{
+				Spec: v1.PodSpec{
+					ShareProcessNamespace: &[]bool{true}[0],
+				},
+			},
+			&runtimeapi.NamespaceOption{
+				Ipc:     runtimeapi.NamespaceMode_POD,
+				Network: runtimeapi.NamespaceMode_POD,
+				Pid:     runtimeapi.NamespaceMode_CONTAINER,
+			},
+		},
+		"Shared Process Namespace, redundant flag (feature disabled)": {
+			&v1.Pod{
+				Spec: v1.PodSpec{
+					ShareProcessNamespace: &[]bool{false}[0],
+				},
+			},
+			&runtimeapi.NamespaceOption{
+				Ipc:     runtimeapi.NamespaceMode_POD,
+				Network: runtimeapi.NamespaceMode_POD,
+				Pid:     runtimeapi.NamespaceMode_CONTAINER,
 			},
 		},
 	} {

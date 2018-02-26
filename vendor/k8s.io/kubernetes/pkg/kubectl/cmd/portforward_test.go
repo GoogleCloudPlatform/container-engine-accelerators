@@ -29,8 +29,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/rest/fake"
+	"k8s.io/kubernetes/pkg/api/legacyscheme"
 	api "k8s.io/kubernetes/pkg/apis/core"
 	cmdtesting "k8s.io/kubernetes/pkg/kubectl/cmd/testing"
+	"k8s.io/kubernetes/pkg/kubectl/scheme"
 )
 
 type fakePortForwarder struct {
@@ -70,7 +72,10 @@ func testPortForward(t *testing.T, flags map[string]string, args []string) {
 	}
 	for _, test := range tests {
 		var err error
-		f, tf, codec, ns := cmdtesting.NewAPIFactory()
+		tf := cmdtesting.NewTestFactory()
+		codec := legacyscheme.Codecs.LegacyCodec(scheme.Versions...)
+		ns := legacyscheme.Codecs
+
 		tf.Client = &fake.RESTClient{
 			VersionedAPIPath:     "/api/v1",
 			GroupVersion:         schema.GroupVersion{Group: ""},
@@ -88,16 +93,16 @@ func testPortForward(t *testing.T, flags map[string]string, args []string) {
 			}),
 		}
 		tf.Namespace = "test"
-		tf.ClientConfig = defaultClientConfig()
+		tf.ClientConfigVal = defaultClientConfig()
 		ff := &fakePortForwarder{}
 		if test.pfErr {
 			ff.pfErr = fmt.Errorf("pf error")
 		}
 
 		opts := &PortForwardOptions{}
-		cmd := NewCmdPortForward(f, os.Stdout, os.Stderr)
+		cmd := NewCmdPortForward(tf, os.Stdout, os.Stderr)
 		cmd.Run = func(cmd *cobra.Command, args []string) {
-			if err = opts.Complete(f, cmd, args); err != nil {
+			if err = opts.Complete(tf, cmd, args); err != nil {
 				return
 			}
 			opts.PortForwarder = ff

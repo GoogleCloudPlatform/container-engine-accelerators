@@ -37,7 +37,6 @@ go_test(
         "sorting_printer_test.go",
     ],
     embed = [":go_default_library"],
-    importpath = "k8s.io/kubernetes/pkg/kubectl",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
         "//pkg/api/testapi:go_default_library",
@@ -99,6 +98,7 @@ go_library(
         "autoscale.go",
         "bash_comp_utils.go",
         "clusterrolebinding.go",
+        "conditions.go",
         "configmap.go",
         "delete.go",
         "deployment.go",
@@ -130,6 +130,7 @@ go_library(
     importpath = "k8s.io/kubernetes/pkg/kubectl",
     deps = [
         "//pkg/api/legacyscheme:go_default_library",
+        "//pkg/api/pod:go_default_library",
         "//pkg/api/v1/pod:go_default_library",
         "//pkg/apis/apps:go_default_library",
         "//pkg/apis/batch:go_default_library",
@@ -141,7 +142,6 @@ go_library(
         "//pkg/client/clientset_generated/internalclientset/typed/batch/internalversion:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/core/internalversion:go_default_library",
         "//pkg/client/clientset_generated/internalclientset/typed/extensions/internalversion:go_default_library",
-        "//pkg/client/unversioned:go_default_library",
         "//pkg/controller/daemon:go_default_library",
         "//pkg/controller/deployment/util:go_default_library",
         "//pkg/controller/statefulset:go_default_library",
