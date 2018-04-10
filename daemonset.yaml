@@ -20,11 +20,14 @@ kind: DaemonSet
 metadata:
   name: nvidia-driver-installer
   namespace: kube-system
+  labels:
+    k8s-app: nvidia-driver-installer
 spec:
   template:
     metadata:
       labels:
         name: nvidia-driver-installer
+        k8s-app: nvidia-driver-installer
     spec:
       affinity:
         nodeAffinity:
