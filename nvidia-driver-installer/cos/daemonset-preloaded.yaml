@@ -20,7 +20,7 @@
 # allows easier upgrades because GKE can preload the correct image on the
 # node and the daemonset can just use that image.
 
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: nvidia-driver-installer
@@ -28,6 +28,11 @@ metadata:
   labels:
     k8s-app: nvidia-driver-installer
 spec:
+  selector:
+    matchLabels:
+      k8s-app: nvidia-driver-installer
+  updateStrategy:
+    type: RollingUpdate
   template:
     metadata:
       labels:
