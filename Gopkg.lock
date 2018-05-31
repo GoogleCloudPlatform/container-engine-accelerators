@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  branch = "master"
+  name = "github.com/GoogleCloudPlatform/container-engine-accelerators"
+  packages = ["pkg/gpu/nvidia"]
+  revision = "93cddbb9baf81534f84380f706c2cb7a5aadc2b5"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "346938d642f2ec3594ed81d874461961cd0faa76"
@@ -125,6 +131,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "c4e01bbbc7f1f238bfb0b43677faf885697774ba623a72cc905cc6c4cd80c5db"
+  inputs-digest = "0ad3d2ea727126d1e018f4ba4f4785483bc6774c8b6820833aefbf32dcdf0df1"
   solver-name = "gps-cdcl"
   solver-version = 1
