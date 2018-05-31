@@ -38,5 +38,5 @@
   version = "1.7.0"
 
 [[constraint]]
-  branch = "master"
   name = "k8s.io/kubernetes"
+  revision = "6a7656b69364337749133f97d7dcb78f63f36b60"
