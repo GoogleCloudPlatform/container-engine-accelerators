@@ -4,6 +4,7 @@ go:
   - 1.9
 
 script:
+  - make deps
   - make presubmit
   - make test
 
