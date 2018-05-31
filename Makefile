@@ -38,6 +38,9 @@ TAG?=$(shell git rev-parse HEAD)
 REGISTRY?=gcr.io/google-containers
 IMAGE=nvidia-gpu-device-plugin
 
+deps:
+	dep ensure -v
+
 build:
 	cd cmd/nvidia_gpu; go build nvidia_gpu.go
 
@@ -47,4 +50,4 @@ container:
 push:
 	gcloud docker -- push ${REGISTRY}/${IMAGE}:${TAG}
 
-.PHONY: all format test vet presubmit build container push
+.PHONY: deps all format test vet presubmit build container push
