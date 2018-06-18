@@ -31,6 +31,15 @@ RETCODE_SUCCESS=0
 RETCODE_ERROR=1
 RETRY_COUNT=5
 
+remove_nouveau_kernel_module() {
+	# if nouveau kernel module is loaded install will fail
+	# so this will check if the module is loaded and and remove if needed
+  echo "Checking if nouveau kernel module is loaded"
+	lsmod=$(lsmod | grep nouveau |grep -v grep | wc -l)
+	echo "Removing nouveau if needed"
+  if [ "$lsmod" != "0" ] ; then rmmod nouveau ; fi
+}
+
 update_container_ld_cache() {
   echo "Updating container's ld cache..."
   echo "${NVIDIA_INSTALL_DIR_CONTAINER}/lib64" > /etc/ld.so.conf.d/nvidia.conf
@@ -122,7 +131,8 @@ update_host_ld_cache() {
 }
 
 main() {
-  download_kernel_src
+  remove_nouveau_kernel_module
+	download_kernel_src
   configure_nvidia_installation_dirs
   download_nvidia_installer
   run_nvidia_installer
