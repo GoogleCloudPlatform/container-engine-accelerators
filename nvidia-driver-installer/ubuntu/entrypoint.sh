@@ -32,51 +32,51 @@ RETCODE_ERROR=1
 RETRY_COUNT=5
 
 remove_nouveau_kernel_module() {
-	# if nouveau kernel module is loaded install will fail
-	# so this will check if the module is loaded and and remove if needed
+  # if nouveau kernel module is loaded install will fail
+  # so this will check if the module is loaded and and remove if needed
   echo "Checking if nouveau kernel module is loaded"
-	lsmod=$(lsmod | { grep nouveau || true ; }  | wc -l)
-	echo "Removing nouveau if needed"
+  lsmod=$(lsmod | { grep nouveau || true ; }  | wc -l)
+  echo "Removing nouveau if needed"
   if [ "$lsmod" != "0" ] ; then rmmod nouveau ; fi
 }
 
 
 check_if_nvidia_module_is_installed() {
   # use modinfo to check if module is installed
-	modinfo=$(modinfo nvidia | { grep ERROR || true ; }  | wc -l)
+  modinfo=$(modinfo nvidia | { grep ERROR || true ; }  | wc -l)
   if [ "$modinfo" == "0" ] ;
-	then
-		echo "Nvidia module found"
-		return 0
-	else
-		echo "Nvidia module not found"
-		return 1
-	fi
+  then
+    echo "Nvidia module found"
+    return 0
+  else
+    echo "Nvidia module not found"
+    return 1
+  fi
 }
 
 load_nvidia_module() {
-	# load nvidia_module
+  # load nvidia_module
   # do lsmod of nvidia module
-	echo "Checking if module is already loaded"
-	lsmod=$(lsmod | { grep nvidia || true ; }  | wc -l)
+  echo "Checking if module is already loaded"
+  lsmod=$(lsmod | { grep nvidia || true ; }  | wc -l)
   if [ "$lsmod" == "0" ] ;
-	then
-		echo "Loading nvida module"
-		modprobe nvidia
-	fi
+  then
+    echo "Loading nvida module"
+    modprobe nvidia
+  fi
 }
 
 report_if_module_version_is_correct() {
   # get version of module. Automatic update of version could be implemented
-	# but removing module can be trouble to automate
-	version=$(modinfo nvidia | grep ^version | cut -d ' ' -f 9)
+  # but removing module can be trouble to automate
+  version=$(modinfo nvidia | grep ^version | cut -d ' ' -f 9)
   if [ "$version" == "$NVIDIA_DRIVER_VERSION" ]
-	then
-		echo "Nvidia driver version is correct and is: $version"
-	else
-		echo "Nvidia driver version should be $NVIDIA_DRIVER_VERSION but is $version"
-		echo "Manual update needed"
-	fi
+  then
+    echo "Nvidia driver version is correct and is: $version"
+  else
+    echo "Nvidia driver version should be $NVIDIA_DRIVER_VERSION but is $version"
+    echo "Manual update needed"
+  fi
 }
 
 update_container_ld_cache() {
@@ -171,18 +171,18 @@ update_host_ld_cache() {
 
 main() {
   remove_nouveau_kernel_module
-	if check_if_nvidia_module_is_installed
-	then
+  if check_if_nvidia_module_is_installed
+  then
     load_nvidia_module
     report_if_module_version_is_correct
-	else
+  else
     download_kernel_src
     configure_nvidia_installation_dirs
     download_nvidia_installer
     run_nvidia_installer
     verify_nvidia_installation
     update_host_ld_cache
-	fi
+  fi
 }
 
 main "$@"
