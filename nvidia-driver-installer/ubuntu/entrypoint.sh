@@ -43,7 +43,7 @@ remove_nouveau_kernel_module() {
 
 check_if_nvidia_module_is_installed() {
   # use modinfo to check if module is installed
-  modinfo=$(modinfo nvidia | { grep ERROR || true ; }  | wc -l)
+  modinfo=$(modinfo nvidia 2>&1 | { grep ERROR || true ; }  | wc -l)
   if [ "$modinfo" == "0" ] ;
   then
     echo "Nvidia module found"
