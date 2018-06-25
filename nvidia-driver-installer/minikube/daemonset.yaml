@@ -46,7 +46,7 @@ spec:
         hostPath:
           path: /
       initContainers:
-      - image: gcr.io/k8s-image-staging/minikube-nvidia-driver-installer:latest
+      - image: k8s.gcr.io/minikube-nvidia-driver-installer@sha256:85cbeadb8bee62a96079823e81915955af0959063ff522ec01522e4edda28f33
         name: nvidia-driver-installer
         resources:
           requests:
