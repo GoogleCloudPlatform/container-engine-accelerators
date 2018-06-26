@@ -25,11 +25,39 @@ NVIDIA_INSTALL_DIR_HOST="${NVIDIA_INSTALL_DIR_HOST:-/var/lib/nvidia}"
 NVIDIA_INSTALL_DIR_CONTAINER="${NVIDIA_INSTALL_DIR_CONTAINER:-/usr/local/nvidia}"
 NVIDIA_INSTALLER_RUNFILE="$(basename "${NVIDIA_DRIVER_DOWNLOAD_URL}")"
 ROOT_MOUNT_DIR="${ROOT_MOUNT_DIR:-/root}"
+CACHE_FILE="${NVIDIA_INSTALL_DIR_CONTAINER}/.cache"
+KERNEL_VERSION="$(uname -r)"
 set +x
 
-RETCODE_SUCCESS=0
-RETCODE_ERROR=1
-RETRY_COUNT=5
+check_cached_version() {
+  echo "Checking cached version"
+  if [[ ! -f "${CACHE_FILE}" ]]; then
+    echo "Cache file ${CACHE_FILE} not found."
+    return 1
+  fi
+
+  # Source the cache file and check if the cached driver matches
+  # currently running kernel version and requested driver versions.
+  . "${CACHE_FILE}"
+  if [[ "${KERNEL_VERSION}" == "${CACHE_KERNEL_VERSION}" ]]; then
+    if [[ "${NVIDIA_DRIVER_VERSION}" == "${CACHE_NVIDIA_DRIVER_VERSION}" ]]; then
+      echo "Found existing driver installation for kernel version ${KERNEL_VERSION} and driver version ${NVIDIA_DRIVER_VERSION}."
+      return 0
+    fi
+  fi
+  echo "Cache file ${CACHE_FILE} found but existing versions didn't match."
+  return 1
+}
+
+update_cached_version() {
+  cat >"${CACHE_FILE}"<<__EOF__
+CACHE_KERNEL_VERSION=${KERNEL_VERSION}
+CACHE_NVIDIA_DRIVER_VERSION=${NVIDIA_DRIVER_VERSION}
+__EOF__
+
+  echo "Updated cached version as:"
+  cat "${CACHE_FILE}"
+}
 
 update_container_ld_cache() {
   echo "Updating container's ld cache..."
@@ -40,7 +68,7 @@ update_container_ld_cache() {
 
 download_kernel_src() {
   echo "Downloading kernel sources..."
-  apt-get update && apt-get install -y linux-headers-$(uname -r)
+  apt-get update && apt-get install -y linux-headers-${KERNEL_VERSION}
   echo "Downloading kernel sources... DONE."
 }
 
@@ -70,14 +98,14 @@ configure_nvidia_installation_dirs() {
   # workaround ensures that the modules are accessible from outside the
   # installer container filesystem.
   mkdir -p drivers drivers-workdir
-  mkdir -p /lib/modules/"$(uname -r)"/video
-  mount -t overlay -o lowerdir=/lib/modules/"$(uname -r)"/video,upperdir=drivers,workdir=drivers-workdir none /lib/modules/"$(uname -r)"/video
+  mkdir -p /lib/modules/${KERNEL_VERSION}/video
+  mount -t overlay -o lowerdir=/lib/modules/${KERNEL_VERSION}/video,upperdir=drivers,workdir=drivers-workdir none /lib/modules/${KERNEL_VERSION}/video
 
   # Populate ld.so.conf to avoid warning messages in nvidia-installer logs.
   update_container_ld_cache
 
   # Install an exit handler to cleanup the overlayfs mount points.
-  trap "{ umount /lib/modules/\"$(uname -r)\"/video; umount /usr/lib/x86_64-linux-gnu ; umount /usr/bin; }" EXIT
+  trap "{ umount /lib/modules/${KERNEL_VERSION}/video; umount /usr/lib/x86_64-linux-gnu ; umount /usr/bin; }" EXIT
   popd
   echo "Configuring installation directories... DONE."
 }
@@ -105,6 +133,18 @@ run_nvidia_installer() {
   echo "Running Nvidia installer... DONE."
 }
 
+configure_cached_installation() {
+  echo "Configuring cached driver installation..."
+  update_container_ld_cache
+  if ! lsmod | grep -q -w 'nvidia'; then
+    insmod "${NVIDIA_INSTALL_DIR_CONTAINER}/drivers/nvidia.ko"
+  fi
+  if ! lsmod | grep -q -w 'nvidia_uvm'; then
+    insmod "${NVIDIA_INSTALL_DIR_CONTAINER}/drivers/nvidia-uvm.ko"
+  fi
+  echo "Configuring cached driver installation... DONE"
+}
+
 verify_nvidia_installation() {
   echo "Verifying Nvidia installation..."
   export PATH="${NVIDIA_INSTALL_DIR_CONTAINER}/bin:${PATH}"
@@ -122,11 +162,17 @@ update_host_ld_cache() {
 }
 
 main() {
-  download_kernel_src
-  configure_nvidia_installation_dirs
-  download_nvidia_installer
-  run_nvidia_installer
-  verify_nvidia_installation
+  if check_cached_version; then
+    configure_cached_installation
+    verify_nvidia_installation
+  else
+    download_kernel_src
+    configure_nvidia_installation_dirs
+    download_nvidia_installer
+    run_nvidia_installer
+    update_cached_version
+    verify_nvidia_installation
+  fi
   update_host_ld_cache
 }
 
