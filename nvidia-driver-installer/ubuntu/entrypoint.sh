@@ -31,6 +31,54 @@ RETCODE_SUCCESS=0
 RETCODE_ERROR=1
 RETRY_COUNT=5
 
+remove_nouveau_kernel_module() {
+  # if nouveau kernel module is loaded install will fail
+  # so this will check if the module is loaded and and remove if needed
+  echo "Checking if nouveau kernel module is loaded"
+  lsmod=$(lsmod | { grep nouveau || true ; }  | wc -l)
+  echo "Removing nouveau if needed"
+  if [ "$lsmod" != "0" ] ; then rmmod nouveau ; fi
+}
+
+
+check_if_nvidia_module_is_installed() {
+  # use modinfo to check if module is installed
+  modinfo=$(modinfo nvidia 2>&1 | { grep ERROR || true ; }  | wc -l)
+  if [ "$modinfo" == "0" ] ;
+  then
+    echo "Nvidia module found"
+    return 0
+  else
+    echo "Nvidia module not found"
+    return 1
+  fi
+}
+
+load_nvidia_module() {
+  # load nvidia_module
+  # do lsmod of nvidia module
+  echo "Checking if module is already loaded"
+  lsmod=$(lsmod | { grep nvidia || true ; }  | wc -l)
+  if [ "$lsmod" == "0" ] ;
+  then
+    echo "Loading nvida module"
+    modprobe nvidia
+  fi
+}
+
+report_if_module_version_is_correct() {
+  # get version of module. Automatic update of version could be implemented
+  # but removing module can be trouble to automate
+  version=$(modinfo nvidia | grep ^version | cut -d ' ' -f 9)
+  if [ "$version" == "$NVIDIA_DRIVER_VERSION" ]
+  then
+    echo "Nvidia driver version is correct and is: $version"
+  else
+    echo "Nvidia driver version should be $NVIDIA_DRIVER_VERSION but is $version"
+    echo "Manual update needed"
+  fi
+}
+
 update_container_ld_cache() {
   echo "Updating container's ld cache..."
   echo "${NVIDIA_INSTALL_DIR_CONTAINER}/lib64" > /etc/ld.so.conf.d/nvidia.conf
@@ -122,12 +170,19 @@ update_host_ld_cache() {
 }
 
 main() {
-  download_kernel_src
-  configure_nvidia_installation_dirs
-  download_nvidia_installer
-  run_nvidia_installer
-  verify_nvidia_installation
-  update_host_ld_cache
+  remove_nouveau_kernel_module
+  if check_if_nvidia_module_is_installed
+  then
+    load_nvidia_module
+    report_if_module_version_is_correct
+  else
+    download_kernel_src
+    configure_nvidia_installation_dirs
+    download_nvidia_installer
+    run_nvidia_installer
+    verify_nvidia_installation
+    update_host_ld_cache
+  fi
 }
 
 main "$@"
