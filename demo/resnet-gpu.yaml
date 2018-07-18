@@ -22,17 +22,30 @@ spec:
       restartPolicy: Never
       containers:
       - name: resnet-gpu
-        image: gcr.io/k8s-image-staging/tf-models-gpu:1.0
+        image: gcr.io/vishnuk-cloud/tf-models-gpu:1.0
         command:
           - python
           - /tensorflow_models/models/official/resnet/resnet_main.py
           - --use_tpu=False
           - --tpu=
           - --precision=float32
-          - --data_dir=gs://cloud-tpu-test-datasets/fake_imagenet
-          - --model_dir=gs://<my-bucket>/resnet/model
-          - --train_batch_size=<train_batch_size>
-          - --train_steps=<train_steps>
+          - --data_dir=$(DATA_BUCKET)
+          - --model_dir=$(MODEL_BUCKET)
+          - --train_batch_size=$(TRAIN_BATCH_SIZE)
+          - --train_steps=$(TRAIN_STEPS)
+        env:
+          # The Google Cloud Storage location where the fake ImageNet dataset is
+          # stored.
+        - name: DATA_BUCKET
+          value: "gs://cloud-tpu-test-datasets/fake_imagenet"
+          # [REQUIRED] Must specify the Google Cloud Storage location where your
+          # output model will be stored.
+        - name: MODEL_BUCKET
+          value: "gs://<my-bucket>/resnet"
+        - name: TRAIN_BATCH_SIZE
+          value: "64"
+        - name: TRAIN_STEPS
+          value: "100"
         resources:
           limits:
             nvidia.com/gpu: 1
