@@ -12,6 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# An example k8s batch job that generates prediction requests to a tensorflow
+# serving instance serving inception v3 model.
+
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -21,8 +24,8 @@ spec:
     spec:
       containers:
       - name: inception-client
-        image: gcr.io/vishnuk-cloud/tf-inception-client
-        args: ["resnet_profiler.py", "--server=tensorflow-service", "--port=9000", "-n", "10000", "./cat_sample.jpg"]
+        image: gcr.io/vishnuk-cloud/tf-inception-client@sha256:0f7f5fede9a836b8ddd1a7e9c65262de27502acc6088c746a1b035eee5da7cfa
+        args: ["inception_profiler.py", "--server=tensorflow-service", "--port=9000", "-n", "10000", "./cat_sample.jpg"]
       restartPolicy: OnFailure
   backoffLimit: 4
   completions: 100
