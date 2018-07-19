@@ -17,7 +17,7 @@ FROM tensorflow/tensorflow:1.9.0
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git libsm6 libxext6 libxrender1
 
-RUN git clone https://github.com/vishh/tf-serving-k8s-tutorial.git /serving-client && pip install tensorflow-serving-api opencv-python opencv-contrib-python grpcio
+RUN git clone https://github.com/vishh/tf-serving-k8s-tutorial.git /serving-client && pip install tensorflow-serving-api opencv-python opencv-contrib-python grpcio requests
 
 WORKDIR /serving-client/client
 ENTRYPOINT ["python"]
