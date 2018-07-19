@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: image-prepull
+spec:
+  selector:
+    matchLabels:
+      app: image-prepull
+  template:
+    metadata:
+      labels:
+        app: image-prepull
+    spec:
+      tolerations:
+      - operator: "Exists"
+        effect: "NoExecute"
+      - operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+      - args:
+        - -mode
+        - sleep
+        command:
+        - /drop/sleeper
+        image: gcr.io/vishnuk-cloud/tf-models-gpu:1.0
+        imagePullPolicy: Always
+        name: gpu-image
+        resources:
+          limits:
+            cpu: 1m
+            memory: 10M
+        volumeMounts:
+        - mountPath: /drop/
+          name: the-sleeper
+      - args:
+        - -mode
+        - sleep
+        command:
+        - /drop/sleeper
+        image: gcr.io/tensorflow/tpu-models:r1.9
+        imagePullPolicy: Always
+        name: tpu-image
+        resources:
+          limits:
+            cpu: 1m
+            memory: 10M
+        volumeMounts:
+        - mountPath: /drop/
+          name: the-sleeper
+      - args:
+        - -mode
+        - sleep
+        command:
+        - /drop/sleeper
+        image: gcr.io/vishnuk-cloud/tf-serving:1.9-gpu-minimal
+        imagePullPolicy: Always
+        name: tf-serving-image
+        resources:
+          limits:
+            cpu: 1m
+            memory: 10M
+        volumeMounts:
+        - mountPath: /drop/
+          name: the-sleeper
+
+      initContainers:
+      - args:
+        - -mode
+        - copy
+        - -to
+        - /drop/sleeper
+        image: gcr.io/mattmoor-public/sleeper@sha256:d431f1c78bb16fbb0c9831a610bc9580379a4f9ab0a339efd2ffb36ea5ffeca2
+        imagePullPolicy: Always
+        name: the-sleeper
+        resources:
+          limits:
+            cpu: 1m
+            memory: 10M
+        volumeMounts:
+        - mountPath: /drop/
+          name: the-sleeper
+      volumes:
+      - emptyDir: {}
+        name: the-sleeper
+  updateStrategy:
+    type: OnDelete
