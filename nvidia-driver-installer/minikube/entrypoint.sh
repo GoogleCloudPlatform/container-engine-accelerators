@@ -141,6 +141,7 @@ run_nvidia_installer() {
     --opengl-prefix="${NVIDIA_INSTALL_DIR_CONTAINER}" \
     --no-install-compat32-libs \
     --log-file-name="${NVIDIA_INSTALL_DIR_CONTAINER}/nvidia-installer.log" \
+    --kernel-source-path=/usr/src/linux-${KERNEL_VERSION} \
     --silent \
     --accept-license
   popd
