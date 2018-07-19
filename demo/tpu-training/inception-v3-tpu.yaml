@@ -64,7 +64,7 @@ spec:
           # [REQUIRED] Must specify the Google Cloud Storage location where your
           # output model will be stored.
         - name: MODEL_BUCKET
-          value: "gs://<my-model-bucket>/inception_v3"
+          value: "gs://vishh/tf-models/inception_v3"
         resources:
           limits:
             # Request a single v2-8 Cloud TPU device to train the model.
