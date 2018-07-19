@@ -36,10 +36,26 @@ spec:
         args:
           - --port=9000
           - --model_name=inception
-          - --model_base_path=gs://kubeflow-models/inception/
+          - --model_base_path=gs://vishh/tensorflow/inception/
         resources:
           limits:
             nvidia.com/gpu: 1
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - |
+              from grpc.beta import implementations
+              from tensorflow_serving.apis import model_pb2
+              from tensorflow_serving.apis import prediction_service_pb2
+              from tensorflow_serving.apis import get_model_metadata_pb2
+              mreq = get_model_metadata_pb2.GetModelMetadataRequest()
+              mreq.model_spec.name = 'inception'
+              mreq.metadata_field.append('signature_def')
+              channel = implementations.insecure_channel('localhost', int(9000))
+              stub = prediction_service_pb2.beta_create_PredictionService_stub(channel)
+              print(stub.GetModelMetadata(mreq, 10.0))
         ports:
         - containerPort: 9000
 ---
