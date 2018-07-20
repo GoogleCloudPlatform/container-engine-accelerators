@@ -31,6 +31,29 @@ KERNEL_VERSION="$(uname -r)"
 MAJOR_KERNEL_VERSION=$(echo $(uname -r) | cut -d "." -f 1)
 set +x
 
+fix_kernel_version() {
+  PATTERN="^([0-9]+)\.([0-9]+)\.(.+)"
+  PATCH_PATTERN="^[0-9]+$"
+
+  if [[ ${KERNEL_VERSION} =~ ${PATTERN} ]]; then
+    FALLBACK_VERSION=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}
+
+    # On cdn.kernel.org, the versions are like x.y when z is 0 and x.y.z when z
+    # is non-zero. Fix the version returned by 'uname -r' to reflect this
+    # reality.
+    if [[ ${BASH_REMATCH[3]} == 0 ]]; then
+      KERNEL_VERSION=${FALLBACK_VERSION}
+
+    # For a non-standard version like x.y.z-something
+    # Try best effort driver installation with headers from version x.y
+    elif ! [[ ${BASH_REMATCH[3]} =~ ${PATCH_PATTERN} ]]; then
+      KERNEL_VERSION=${FALLBACK_VERSION}
+    fi
+  fi
+  echo "KERNEL_VERSION: ${KERNEL_VERSION}"
+}
+
+
 check_cached_version() {
   echo "Checking cached version"
   if [[ ! -f "${CACHE_FILE}" ]]; then
@@ -141,6 +164,7 @@ run_nvidia_installer() {
     --opengl-prefix="${NVIDIA_INSTALL_DIR_CONTAINER}" \
     --no-install-compat32-libs \
     --log-file-name="${NVIDIA_INSTALL_DIR_CONTAINER}/nvidia-installer.log" \
+    --kernel-source-path=/usr/src/linux-${KERNEL_VERSION} \
     --silent \
     --accept-license
   popd
@@ -179,6 +203,7 @@ update_host_ld_cache() {
 }
 
 main() {
+  fix_kernel_version
   if check_cached_version; then
     configure_cached_installation
     verify_nvidia_installation
