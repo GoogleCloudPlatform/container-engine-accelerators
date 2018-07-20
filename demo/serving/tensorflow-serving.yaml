@@ -19,7 +19,7 @@ metadata:
     app: tensorflow-serving
   name: tensorflow-serving-deployment
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: tensorflow-serving
@@ -59,6 +59,27 @@ spec:
         ports:
         - containerPort: 9000
 ---
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tf-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: tensorflow-serving-deployment
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+  - external:  
+      metricName: container.googleapis.com|container|accelerator|duty_cycle
+      targetAverageValue: 20
+      metricSelector:
+        matchLabels:
+          metadata.user_labels.app: tensorflow-serving
+          resource.labels.container_name: tensorflow-serving-container
+    type: External
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -71,4 +92,4 @@ spec:
     targetPort: 9000
   selector:
     app: tensorflow-serving
-  type: LoadBalancer  # Used to distribute traffic to pods
+

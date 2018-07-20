@@ -51,16 +51,20 @@ spec:
         - python
         - /tensorflow_tpu_models/models/official/resnet/resnet_main.py
         - --data_dir=$(DATA_BUCKET)
-        - --model_dir=$(MODEL_BUCKET)
+        - --model_dir=$(MODEL_BUCKET)/$(POD_UID)
         env:
           # The Google Cloud Storage location where the fake ImageNet dataset is
           # stored.
         - name: DATA_BUCKET
-          value: "gs://cloud-tpu-test-datasets/fake_imagenet"
+          value: "gs://cloudtpu-imagenet-data/train"
           # [REQUIRED] Must specify the Google Cloud Storage location where your
           # output model will be stored.
         - name: MODEL_BUCKET
-          value: "gs://<my-model-bucket>/resnet"
+          value: "gs://vishh/tensorflow/models/resnet-train"
+        - name: POD_UID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.uid
         resources:
           limits:
             # Request a single v2-8 Cloud TPU device to train the model.
