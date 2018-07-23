@@ -18,16 +18,20 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: inception-client
+  name: tensorflow-serving-load-generator
 spec:
   template:
     spec:
       containers:
       - name: inception-client
-        image: gcr.io/vishnuk-cloud/tf-inception-client@sha256:0f7f5fede9a836b8ddd1a7e9c65262de27502acc6088c746a1b035eee5da7cfa
-        args: ["inception_profiler.py", "--server=tensorflow-service", "--port=9000", "-n", "10000", "./cat_sample.jpg"]
+        image: gcr.io/vishnuk-cloud/tf-serving-client@sha256:869467cd5d22c14a024493327e323c69887f71476790a0e5762f2884b8e5773a
+        args: ["inception_profiler.py", "--server=tensorflow-service", "--port=9000", "-n", "1000000", "./cat_sample.jpg"]
+        resources:
+          requests:
+            cpu: 0.2
+            memory: 100Mi
       restartPolicy: OnFailure
   backoffLimit: 4
   completions: 100
-  parallelism: 10
+  parallelism: 30
 

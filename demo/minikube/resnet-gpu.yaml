@@ -20,9 +20,13 @@ spec:
   template:
     spec:
       restartPolicy: Never
+      volumes:
+      - name: nfs-pvc
+        persistentVolumeClaim:
+          claimName: nfs
       containers:
       - name: resnet-gpu
-        image: gcr.io/vishnuk-cloud/tf-models-gpu:1.0
+        image: gcr.io/vishnuk-cloud/tensorflow@sha256:c5655a73205a447e1552fc833d14ab66eee2304dbf64846edd88c41434c6f5f2
         command:
           - python
           - /tensorflow_models/models/official/resnet/resnet_main.py
@@ -33,19 +37,22 @@ spec:
           - --model_dir=$(MODEL_BUCKET)
           - --train_batch_size=$(TRAIN_BATCH_SIZE)
           - --train_steps=$(TRAIN_STEPS)
+        volumeMounts:
+        - name: nfs-pvc
+          mountPath: /home/vishnuk
         env:
           # The Google Cloud Storage location where the fake ImageNet dataset is
           # stored.
         - name: DATA_BUCKET
-          value: "gs://cloud-tpu-test-datasets/fake_imagenet"
+          value: "/home/vishnuk/tf-demo/fake_imagenet/"
           # [REQUIRED] Must specify the Google Cloud Storage location where your
           # output model will be stored.
         - name: MODEL_BUCKET
-          value: "gs://<my-bucket>/resnet"
+          value: "/home/vishnuk/tf-demo/train/resnet-train" # "/home/vishnuk/tf-demo/resnet-train/"
         - name: TRAIN_BATCH_SIZE
-          value: "64"
+          value: "32"
         - name: TRAIN_STEPS
-          value: "100"
+          value: "400365"
         resources:
           limits:
             nvidia.com/gpu: 1

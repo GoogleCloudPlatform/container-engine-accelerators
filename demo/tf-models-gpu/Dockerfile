@@ -12,10 +12,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM tensorflow/tensorflow:1.9.0-gpu
+FROM nvidia/cuda:9.0-cudnn7-runtime-ubuntu16.04
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python-pip \
+    python-dev \
+    git \
+    libgomp1 \
+    && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install setuptools
+RUN pip install tensorflow-gpu==1.8.0
 
 # Checkout TensorFlow 1.9 TPU models.
-RUN git clone -b r1.9 https://github.com/tensorflow/tpu.git /tensorflow_models/
+RUN git clone -b r1.8 https://github.com/tensorflow/tpu.git /tensorflow_models/

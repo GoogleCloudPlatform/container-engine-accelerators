@@ -62,6 +62,21 @@ spec:
         volumeMounts:
         - mountPath: /drop/
           name: the-sleeper
+      - args:
+        - -mode
+        - sleep
+        command:
+        - /drop/sleeper
+        image: gcr.io/vishnuk-cloud/tf-serving-client@sha256:74dd15862f736ddc2eaa1c49605a516eb39c113aa4ea0eee625bf7a38df560fc
+        imagePullPolicy: Always
+        name: tf-serving-client
+        resources:
+          limits:
+            cpu: 1m
+            memory: 10M
+        volumeMounts:
+        - mountPath: /drop/
+          name: the-sleeper
 
       initContainers:
       - args:
