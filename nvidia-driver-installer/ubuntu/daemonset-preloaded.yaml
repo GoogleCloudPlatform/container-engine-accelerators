@@ -53,7 +53,7 @@ spec:
         hostPath:
           path: /
       initContainers:
-      - image: ubuntu-nvidia-installer:fixed
+      - image: gke-nvidia-installer:fixed
         name: nvidia-driver-installer
         resources:
           requests:
