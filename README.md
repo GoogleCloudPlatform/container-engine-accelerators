@@ -5,3 +5,6 @@ This repository is a collection of installation recipes and integration utilitie
 This is not an official Google product.
 
 More details on the nvidia-gpu-device-plugin are [here](cmd/nvidia_gpu/README.md).
+
+The official instructions for using GPUs on GKE are
+[here](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus).
