@@ -88,6 +88,11 @@ func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi
 			HostPath:      s.ngm.hostPathPrefix,
 			ReadOnly:      true,
 		})
+		// Add LD_LIBRARY_PATH env to work around the compatibility issue
+		// in cuda10 docker ubuntu base images.
+		resp.Envs = make(map[string]string)
+		resp.Envs["LD_LIBRARY_PATH"] = "/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
+
 		resps.ContainerResponses = append(resps.ContainerResponses, resp)
 	}
 	return resps, nil
