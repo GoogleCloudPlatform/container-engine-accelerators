@@ -91,6 +91,7 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	as.Len(resp.ContainerResponses, 1)
 	as.Len(resp.ContainerResponses[0].Devices, 4)
 	as.Len(resp.ContainerResponses[0].Mounts, 1)
+	as.Len(resp.ContainerResponses[0].Envs, 1)
 	resp, err = clientBeta.Allocate(context.Background(), &pluginbeta.AllocateRequest{
 		ContainerRequests: []*pluginbeta.ContainerAllocateRequest{
 			{DevicesIDs: []string{"dev1", "dev2"}}}})
@@ -104,6 +105,7 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	as.Contains(retDevices, "/dev/nvidiactl")
 	as.Contains(retDevices, "/dev/nvidia-uvm")
 	as.Contains(retDevices, "/dev/nvidia-uvm-tools")
+	as.Equal(resp.ContainerResponses[0].Envs["LD_LIBRARY_PATH"], "/usr/local/nvidia/lib:/usr/local/nvidia/lib64")
 	resp, err = clientBeta.Allocate(context.Background(), &pluginbeta.AllocateRequest{
 		ContainerRequests: []*pluginbeta.ContainerAllocateRequest{
 			{DevicesIDs: []string{"dev1", "dev3"}}}})
