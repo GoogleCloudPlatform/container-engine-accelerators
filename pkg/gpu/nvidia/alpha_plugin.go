@@ -86,6 +86,7 @@ func (s *pluginServiceV1Alpha) Allocate(ctx context.Context, rqt *pluginapi.Allo
 	// in cuda10 docker ubuntu base images.
 	resp.Envs = make(map[string]string)
 	resp.Envs["LD_LIBRARY_PATH"] = "/usr/local/nvidia/lib:/usr/local/nvidia/lib64"
+	resp.Envs["PATH"] = "/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 	return resp, nil
 }
 
