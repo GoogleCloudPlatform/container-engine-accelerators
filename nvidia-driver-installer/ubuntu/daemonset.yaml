@@ -51,7 +51,7 @@ spec:
         hostPath:
           path: /
       initContainers:
-      - image: gcr.io/google-containers/ubuntu-nvidia-driver-installer@sha256:eea7309dc4fa4a5c9d716157e74b90826e0a853aa26c7219db4710ddcd1ad8bc
+      - image: gcr.io/google-containers/ubuntu-nvidia-driver-installer@sha256:70a572cf27316a7eac168107f5da823effe49a8d69e38d3292cf1a9d52c4c1d7
         name: nvidia-driver-installer
         resources:
           requests:
