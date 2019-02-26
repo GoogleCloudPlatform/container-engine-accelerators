@@ -18,7 +18,7 @@ set -o pipefail
 set -u
 
 set -x
-NVIDIA_DRIVER_VERSION="${NVIDIA_DRIVER_VERSION:-384.111}"
+NVIDIA_DRIVER_VERSION="${NVIDIA_DRIVER_VERSION:-410.79}"
 NVIDIA_DRIVER_DOWNLOAD_URL_DEFAULT="https://us.download.nvidia.com/tesla/${NVIDIA_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run"
 NVIDIA_DRIVER_DOWNLOAD_URL="${NVIDIA_DRIVER_DOWNLOAD_URL:-$NVIDIA_DRIVER_DOWNLOAD_URL_DEFAULT}"
 NVIDIA_INSTALL_DIR_HOST="${NVIDIA_INSTALL_DIR_HOST:-/var/lib/nvidia}"
@@ -119,6 +119,13 @@ download_nvidia_installer() {
 }
 
 run_nvidia_installer() {
+  # Load deps
+  if ! grep -q -w ipmi_msghandler /proc/modules; then
+    insmod `find ${ROOT_MOUNT_DIR}/lib/modules -iname ipmi_msghandler.ko`
+  fi
+  if ! grep -q -w ipmi_devintf /proc/modules; then
+    insmod `find ${ROOT_MOUNT_DIR}/lib/modules -iname ipmi_devintf.ko`
+  fi
   echo "Running Nvidia installer..."
   pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
   sh "${NVIDIA_INSTALLER_RUNFILE}" \
