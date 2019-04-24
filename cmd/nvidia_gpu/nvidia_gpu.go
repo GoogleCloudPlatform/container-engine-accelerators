@@ -27,6 +27,7 @@ const (
 	// Device plugin settings.
 	kubeletEndpoint      = "kubelet.sock"
 	pluginEndpointPrefix = "nvidiaGPU"
+	devDirectory         = "/dev"
 )
 
 var (
@@ -38,7 +39,7 @@ var (
 func main() {
 	flag.Parse()
 	glog.Infoln("device-plugin started")
-	ngm := gpumanager.NewNvidiaGPUManager(*hostPathPrefix, *containerPathPrefix)
+	ngm := gpumanager.NewNvidiaGPUManager(*hostPathPrefix, *containerPathPrefix, devDirectory)
 	// Keep on trying until success. This is required
 	// because Nvidia drivers may not be installed initially.
 	for {

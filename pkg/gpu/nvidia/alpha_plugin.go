@@ -17,6 +17,7 @@ package nvidia
 import (
 	"fmt"
 	"net"
+	"path"
 	"time"
 
 	"github.com/golang/glog"
@@ -63,8 +64,8 @@ func (s *pluginServiceV1Alpha) Allocate(ctx context.Context, rqt *pluginapi.Allo
 			return nil, fmt.Errorf("invalid allocation request with unhealthy device %s", id)
 		}
 		resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
-			HostPath:      "/dev/" + id,
-			ContainerPath: "/dev/" + id,
+			HostPath:      path.Join(s.ngm.devDirectory, id),
+			ContainerPath: path.Join(s.ngm.devDirectory, id),
 			Permissions:   "mrw",
 		})
 	}

@@ -32,14 +32,34 @@ import (
 )
 
 func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
+	testDevDir, err := ioutil.TempDir("", "dev")
+	defer os.RemoveAll(testDevDir)
+
 	// Expects a valid GPUManager to be created.
-	testGpuManager := NewNvidiaGPUManager("/home/kubernetes/bin/nvidia", "/usr/local/nvidia")
+	testGpuManager := NewNvidiaGPUManager("/home/kubernetes/bin/nvidia", "/usr/local/nvidia", testDevDir)
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
-	testGpuManager.defaultDevices = []string{nvidiaCtlDevice, nvidiaUVMDevice, nvidiaUVMToolsDevice}
+	testNvidiaCtlDevice := path.Join(testDevDir, nvidiaCtlDevice)
+	testNvidiaUVMDevice := path.Join(testDevDir, nvidiaUVMDevice)
+	testNvidiaUVMToolsDevice := path.Join(testDevDir, nvidiaUVMToolsDevice)
+	os.Create(testNvidiaCtlDevice)
+	os.Create(testNvidiaUVMDevice)
+	os.Create(testNvidiaUVMToolsDevice)
+	testGpuManager.defaultDevices = []string{testNvidiaCtlDevice, testNvidiaUVMDevice, testNvidiaUVMToolsDevice}
+	defer os.Remove(testNvidiaCtlDevice)
+	defer os.Remove(testNvidiaUVMDevice)
+	defer os.Remove(testNvidiaUVMToolsDevice)
+
+	gpu1 := path.Join(testDevDir, "nvidia1")
+	gpu2 := path.Join(testDevDir, "nvidia2")
+	os.Create(gpu1)
+	os.Create(gpu2)
+	defer os.Remove(gpu1)
+	defer os.Remove(gpu2)
+
 	// Tests discoverGPUs()
-	if _, err := os.Stat(nvidiaCtlDevice); err == nil {
+	if _, err := os.Stat(testNvidiaCtlDevice); err == nil {
 		err = testGpuManager.discoverGPUs()
 		as.Nil(err)
 		gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()
@@ -70,8 +90,6 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	clientBeta := pluginbeta.NewDevicePluginClient(conn)
 
 	// Tests Beta ListAndWatch
-	testGpuManager.devices["dev1"] = pluginbeta.Device{ID: "dev1", Health: pluginbeta.Healthy}
-	testGpuManager.devices["dev2"] = pluginbeta.Device{ID: "dev2", Health: pluginbeta.Healthy}
 	stream, err := clientBeta.ListAndWatch(context.Background(), &pluginbeta.Empty{})
 	as.Nil(err)
 	devs, err := stream.Recv()
@@ -80,39 +98,37 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	for _, d := range devs.Devices {
 		devices[d.ID] = d
 	}
-	as.NotNil(devices["dev1"])
-	as.NotNil(devices["dev2"])
+	as.NotNil(devices["nvidia1"])
+	as.NotNil(devices["nvidia2"])
 
 	// Tests Beta Allocate
 	resp, err := clientBeta.Allocate(context.Background(), &pluginbeta.AllocateRequest{
 		ContainerRequests: []*pluginbeta.ContainerAllocateRequest{
-			{DevicesIDs: []string{"dev1"}}}})
+			{DevicesIDs: []string{"nvidia1"}}}})
 	as.Nil(err)
 	as.Len(resp.ContainerResponses, 1)
 	as.Len(resp.ContainerResponses[0].Devices, 4)
 	as.Len(resp.ContainerResponses[0].Mounts, 1)
 	resp, err = clientBeta.Allocate(context.Background(), &pluginbeta.AllocateRequest{
 		ContainerRequests: []*pluginbeta.ContainerAllocateRequest{
-			{DevicesIDs: []string{"dev1", "dev2"}}}})
+			{DevicesIDs: []string{"nvidia1", "nvidia2"}}}})
 	as.Nil(err)
 	var retDevices []string
 	for _, dev := range resp.ContainerResponses[0].Devices {
 		retDevices = append(retDevices, dev.HostPath)
 	}
-	as.Contains(retDevices, "/dev/dev1")
-	as.Contains(retDevices, "/dev/dev2")
-	as.Contains(retDevices, "/dev/nvidiactl")
-	as.Contains(retDevices, "/dev/nvidia-uvm")
-	as.Contains(retDevices, "/dev/nvidia-uvm-tools")
+	as.Contains(retDevices, gpu1)
+	as.Contains(retDevices, gpu2)
+	as.Contains(retDevices, testNvidiaCtlDevice)
+	as.Contains(retDevices, testNvidiaUVMDevice)
+	as.Contains(retDevices, testNvidiaUVMToolsDevice)
 	resp, err = clientBeta.Allocate(context.Background(), &pluginbeta.AllocateRequest{
 		ContainerRequests: []*pluginbeta.ContainerAllocateRequest{
-			{DevicesIDs: []string{"dev1", "dev3"}}}})
+			{DevicesIDs: []string{"nvidia1", "nvidia3"}}}})
 	as.Nil(resp)
 	as.NotNil(err)
 
 	// Tests Alpha ListAndWatch
-	testGpuManager.devices["dev1"] = pluginbeta.Device{ID: "dev1", Health: pluginalpha.Healthy}
-	testGpuManager.devices["dev2"] = pluginbeta.Device{ID: "dev2", Health: pluginalpha.Healthy}
 	stream2, err := clientAlpha.ListAndWatch(context.Background(), &pluginalpha.Empty{})
 	as.Nil(err)
 	devs2, err := stream2.Recv()
@@ -121,6 +137,6 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	for _, d := range devs2.Devices {
 		devices2[d.ID] = d
 	}
-	as.NotNil(devices2["dev1"])
-	as.NotNil(devices2["dev2"])
+	as.NotNil(devices2["nvidia1"])
+	as.NotNil(devices2["nvidia2"])
 }

@@ -30,7 +30,6 @@ import (
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha"
-	pluginbeta "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
 )
 
 type KubeletStub struct {
@@ -85,14 +84,35 @@ func TestRegister(t *testing.T) {
 }
 
 func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
+	testDevDir, err := ioutil.TempDir("", "dev")
+	defer os.RemoveAll(testDevDir)
+
 	// Expects a valid GPUManager to be created.
-	testGpuManager := NewNvidiaGPUManager("/home/kubernetes/bin/nvidia", "/usr/local/nvidia")
+	testGpuManager := NewNvidiaGPUManager("/home/kubernetes/bin/nvidia", "/usr/local/nvidia", testDevDir)
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
-	testGpuManager.defaultDevices = []string{nvidiaCtlDevice, nvidiaUVMDevice, nvidiaUVMToolsDevice}
+	testNvidiaCtlDevice := path.Join(testDevDir, nvidiaCtlDevice)
+	testNvidiaUVMDevice := path.Join(testDevDir, nvidiaUVMDevice)
+	testNvidiaUVMToolsDevice := path.Join(testDevDir, nvidiaUVMToolsDevice)
+	os.Create(testNvidiaCtlDevice)
+	os.Create(testNvidiaUVMDevice)
+	os.Create(testNvidiaUVMToolsDevice)
+	testGpuManager.defaultDevices = []string{testNvidiaCtlDevice, testNvidiaUVMDevice, testNvidiaUVMToolsDevice}
+	defer os.Remove(testNvidiaCtlDevice)
+	defer os.Remove(testNvidiaUVMDevice)
+	defer os.Remove(testNvidiaUVMToolsDevice)
+
+	gpu1 := path.Join(testDevDir, "nvidia1")
+	gpu2 := path.Join(testDevDir, "nvidia2")
+
+	os.Create(gpu1)
+	os.Create(gpu2)
+	defer os.Remove(gpu1)
+	defer os.Remove(gpu2)
+
 	// Tests discoverGPUs()
-	if _, err := os.Stat(nvidiaCtlDevice); err == nil {
+	if _, err := os.Stat(testNvidiaCtlDevice); err == nil {
 		err = testGpuManager.discoverGPUs()
 		as.Nil(err)
 		gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()
@@ -127,8 +147,6 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 	client := pluginapi.NewDevicePluginClient(conn)
 
 	// Tests ListAndWatch
-	testGpuManager.devices["dev1"] = pluginbeta.Device{ID: "dev1", Health: pluginapi.Healthy}
-	testGpuManager.devices["dev2"] = pluginbeta.Device{ID: "dev2", Health: pluginapi.Healthy}
 	stream, err := client.ListAndWatch(context.Background(), &pluginapi.Empty{})
 	as.Nil(err)
 	devs, err := stream.Recv()
@@ -137,32 +155,46 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 	for _, d := range devs.Devices {
 		devices[d.ID] = d
 	}
-	as.NotNil(devices["dev1"])
-	as.NotNil(devices["dev2"])
 
 	// Tests Allocate
 	resp, err := client.Allocate(context.Background(), &pluginapi.AllocateRequest{
-		DevicesIDs: []string{"dev1"},
+		DevicesIDs: []string{"nvidia1"},
 	})
 	as.Nil(err)
 	as.Len(resp.Devices, 4)
 	as.Len(resp.Mounts, 1)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
-		DevicesIDs: []string{"dev1", "dev2"},
+		DevicesIDs: []string{"nvidia1", "nvidia2"},
 	})
 	as.Nil(err)
 	var retDevices []string
 	for _, dev := range resp.Devices {
 		retDevices = append(retDevices, dev.HostPath)
 	}
-	as.Contains(retDevices, "/dev/dev1")
-	as.Contains(retDevices, "/dev/dev2")
-	as.Contains(retDevices, "/dev/nvidiactl")
-	as.Contains(retDevices, "/dev/nvidia-uvm")
-	as.Contains(retDevices, "/dev/nvidia-uvm-tools")
+	as.Contains(retDevices, path.Join(gpu1))
+	as.Contains(retDevices, path.Join(gpu2))
+	as.Contains(retDevices, testNvidiaCtlDevice)
+	as.Contains(retDevices, testNvidiaUVMDevice)
+	as.Contains(retDevices, testNvidiaUVMToolsDevice)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
-		DevicesIDs: []string{"dev1", "dev3"},
+		DevicesIDs: []string{"nvidia1", "nvidia3"},
 	})
 	as.Nil(resp)
 	as.NotNil(err)
+
+	// Tests detecting new GPU
+	gpu3 := path.Join(testDevDir, "nvidia3")
+	os.Create(gpu3)
+	defer os.Remove(gpu3)
+	// The GPU device check is every 10s
+	time.Sleep(gpuCheckInterval + 1*time.Second)
+
+	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
+		DevicesIDs: []string{"nvidia3"},
+	})
+	as.Nil(err)
+	for _, dev := range resp.Devices {
+		retDevices = append(retDevices, dev.HostPath)
+	}
+	as.Contains(retDevices, gpu3)
 }
