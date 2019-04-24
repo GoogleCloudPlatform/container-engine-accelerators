@@ -147,7 +147,6 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 	as.Nil(err)
 	as.Len(resp.Devices, 4)
 	as.Len(resp.Mounts, 1)
-	as.Len(resp.Envs, 1)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		DevicesIDs: []string{"dev1", "dev2"},
 	})
@@ -161,7 +160,6 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 	as.Contains(retDevices, "/dev/nvidiactl")
 	as.Contains(retDevices, "/dev/nvidia-uvm")
 	as.Contains(retDevices, "/dev/nvidia-uvm-tools")
-	as.Equal(resp.Envs["LD_LIBRARY_PATH"], "/usr/local/nvidia/lib:/usr/local/nvidia/lib64")
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		DevicesIDs: []string{"dev1", "dev3"},
 	})
