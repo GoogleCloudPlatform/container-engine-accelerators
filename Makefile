@@ -34,7 +34,7 @@ presubmit: vet
 	@echo ">> checking file boilerplate"
 	@./build/check_boilerplate.sh
 
-TAG?=$(shell git rev-parse HEAD)
+TAG=$(shell cat VERSION)
 REGISTRY?=gcr.io/google-containers
 IMAGE=nvidia-gpu-device-plugin
 
