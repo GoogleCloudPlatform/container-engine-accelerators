@@ -31,15 +31,20 @@ const (
 )
 
 var (
-	hostPathPrefix      = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
-	containerPathPrefix = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts '-host-path'")
-	pluginMountPath     = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
+	hostPathPrefix               = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
+	containerPathPrefix          = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts '-host-path'")
+	hostVulkanICDPathPrefix      = flag.String("host-vulkan-icd-path", "/home/kubernetes/bin/nvidia/vulkan/icd.d", "Path on the host that contains the Nvidia Vulkan installable client driver. This will be mounted inside the container as '-container-vulkan-icd-path'")
+	containerVulkanICDPathPrefix = flag.String("container-vulkan-icd-path", "/etc/vulkan/icd.d", "Path on the container that mounts '-host-vulkan-icd-path'")
+	pluginMountPath              = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 )
 
 func main() {
 	flag.Parse()
 	glog.Infoln("device-plugin started")
-	ngm := gpumanager.NewNvidiaGPUManager(*hostPathPrefix, *containerPathPrefix, devDirectory)
+	mountPaths := []gpumanager.MountPath{
+		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix},
+		{HostPath: *hostVulkanICDPathPrefix, ContainerPath: *containerVulkanICDPathPrefix}}
+	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths)
 	// Keep on trying until success. This is required
 	// because Nvidia drivers may not be installed initially.
 	for {

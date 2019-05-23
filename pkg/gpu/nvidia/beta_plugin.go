@@ -84,11 +84,13 @@ func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi
 			})
 		}
 
-		resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
-			ContainerPath: s.ngm.containerPathPrefix,
-			HostPath:      s.ngm.hostPathPrefix,
-			ReadOnly:      true,
-		})
+		for _, mountPath := range s.ngm.mountPaths {
+			resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
+				HostPath:      mountPath.HostPath,
+				ContainerPath: mountPath.ContainerPath,
+				ReadOnly:      true,
+			})
+		}
 		resps.ContainerResponses = append(resps.ContainerResponses, resp)
 	}
 	return resps, nil

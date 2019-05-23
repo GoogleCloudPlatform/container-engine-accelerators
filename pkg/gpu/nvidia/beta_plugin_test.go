@@ -35,7 +35,10 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	defer os.RemoveAll(testDevDir)
 
 	// Expects a valid GPUManager to be created.
-	testGpuManager := NewNvidiaGPUManager("/home/kubernetes/bin/nvidia", "/usr/local/nvidia", testDevDir)
+	mountPaths := []MountPath{
+		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
+		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
+	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths)
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
@@ -106,7 +109,7 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	as.Nil(err)
 	as.Len(resp.ContainerResponses, 1)
 	as.Len(resp.ContainerResponses[0].Devices, 4)
-	as.Len(resp.ContainerResponses[0].Mounts, 1)
+	as.Len(resp.ContainerResponses[0].Mounts, 2)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
 			{DevicesIDs: []string{"nvidia1", "nvidia2"}}}})
