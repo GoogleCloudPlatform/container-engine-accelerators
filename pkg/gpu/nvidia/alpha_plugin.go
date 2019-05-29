@@ -78,11 +78,13 @@ func (s *pluginServiceV1Alpha) Allocate(ctx context.Context, rqt *pluginapi.Allo
 		})
 	}
 
-	resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
-		ContainerPath: s.ngm.containerPathPrefix,
-		HostPath:      s.ngm.hostPathPrefix,
-		ReadOnly:      true,
-	})
+	for _, mountPath := range s.ngm.mountPaths {
+		resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
+			HostPath:      mountPath.HostPath,
+			ContainerPath: mountPath.ContainerPath,
+			ReadOnly:      true,
+		})
+	}
 	return resp, nil
 }
 

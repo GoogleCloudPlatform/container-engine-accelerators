@@ -47,24 +47,27 @@ var (
 
 // nvidiaGPUManager manages nvidia gpu devices.
 type nvidiaGPUManager struct {
-	hostPathPrefix      string
-	containerPathPrefix string
-	devDirectory        string
-	defaultDevices      []string
-	devices             map[string]pluginapi.Device
-	grpcServer          *grpc.Server
-	socket              string
-	stop                chan bool
-	devicesMutex        sync.Mutex
+	devDirectory   string
+	mountPaths     []MountPath
+	defaultDevices []string
+	devices        map[string]pluginapi.Device
+	grpcServer     *grpc.Server
+	socket         string
+	stop           chan bool
+	devicesMutex   sync.Mutex
 }
 
-func NewNvidiaGPUManager(hostPathPrefix, containerPathPrefix, devDirectory string) *nvidiaGPUManager {
+type MountPath struct {
+	HostPath      string
+	ContainerPath string
+}
+
+func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath) *nvidiaGPUManager {
 	return &nvidiaGPUManager{
-		hostPathPrefix:      hostPathPrefix,
-		containerPathPrefix: containerPathPrefix,
-		devDirectory:        devDirectory,
-		devices:             make(map[string]pluginapi.Device),
-		stop:                make(chan bool),
+		devDirectory: devDirectory,
+		mountPaths:   mountPaths,
+		devices:      make(map[string]pluginapi.Device),
+		stop:         make(chan bool),
 	}
 }
 
