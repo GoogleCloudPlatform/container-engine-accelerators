@@ -14,7 +14,8 @@
 
 FROM ubuntu:16.04
 
-RUN apt-get update && \
+RUN export DEBIAN_FRONTEND=noninteractive ;\
+    apt-get update && \
     apt-get install -y kmod gcc make curl && \
     rm -rf /var/lib/apt/lists/*
 

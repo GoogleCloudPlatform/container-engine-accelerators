@@ -70,7 +70,8 @@ update_container_ld_cache() {
 
 download_kernel_src() {
   echo "Downloading kernel sources..."
-  apt-get update && apt-get install -y linux-headers-${KERNEL_VERSION}
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y linux-headers-${KERNEL_VERSION}
   echo "Downloading kernel sources... DONE."
 }
 
