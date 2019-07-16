@@ -75,7 +75,7 @@ download_kernel_src() {
 configure_nvidia_installation_dirs() {
   echo "Configuring installation directories..."
   mkdir -p "${NVIDIA_INSTALL_DIR_CONTAINER}"
-  pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
+  pushd    "${NVIDIA_INSTALL_DIR_CONTAINER}"
 
   # nvidia-installer does not provide an option to configure the
   # installation path of `nvidia-modprobe` utility and always installs it
@@ -113,6 +113,11 @@ configure_nvidia_installation_dirs() {
 download_nvidia_installer() {
   echo "Downloading Nvidia installer..."
   pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
+  if [[ -e "${NVIDIA_INSTALLER_RUNFILE}" && -z "${NVIDIA_INSTALLER_OVERWRITE:-}" ]]; then
+    echo "Using the existing \"${NVIDIA_INSTALLER_RUNFILE}\""
+    echo 'set NVIDIA_INSTALLER_OVERWRITE=1 to replace it with a fresh copy'
+    return 0
+  fi
   curl -L -S -f "${NVIDIA_DRIVER_DOWNLOAD_URL}" -o "${NVIDIA_INSTALLER_RUNFILE}"
   popd
   echo "Downloading Nvidia installer... DONE."
