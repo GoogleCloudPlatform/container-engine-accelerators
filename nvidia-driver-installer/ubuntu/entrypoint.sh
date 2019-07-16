@@ -27,7 +27,9 @@ NVIDIA_INSTALLER_RUNFILE="$(basename "${NVIDIA_DRIVER_DOWNLOAD_URL}")"
 ROOT_MOUNT_DIR="${ROOT_MOUNT_DIR:-/root}"
 CACHE_FILE="${NVIDIA_INSTALL_DIR_CONTAINER}/.cache"
 KERNEL_VERSION="$(uname -r)"
-set +x
+if [[ -z "${ENTRYPOINT_DEBUG:-}" ]]; then
+  set +x
+fi
 
 check_cached_version() {
   echo "Checking cached version"
