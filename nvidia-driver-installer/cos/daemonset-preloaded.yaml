@@ -54,6 +54,9 @@ spec:
       - name: dev
         hostPath:
           path: /dev
+      - name: vulkan-icd-mount
+        hostPath:
+          path: /home/kubernetes/bin/nvidia/vulkan/icd.d
       - name: nvidia-install-dir-host
         hostPath:
           path: /home/kubernetes/bin/nvidia
@@ -74,11 +77,17 @@ spec:
             value: /home/kubernetes/bin/nvidia
           - name: NVIDIA_INSTALL_DIR_CONTAINER
             value: /usr/local/nvidia
+          - name: VULKAN_ICD_DIR_HOST
+            value: /home/kubernetes/bin/nvidia/vulkan/icd.d
+          - name: VULKAN_ICD_DIR_CONTAINER
+            value: /etc/vulkan/icd.d
           - name: ROOT_MOUNT_DIR
             value: /root
         volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
+        - name: vulkan-icd-mount
+          mountPath: /etc/vulkan/icd.d
         - name: dev
           mountPath: /dev
         - name: root-mount
