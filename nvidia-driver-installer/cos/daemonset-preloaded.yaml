@@ -66,9 +66,6 @@ spec:
       - name: cos-tools
         hostPath:
           path: /var/lib/cos-tools
-      - name: kernel-src
-        hostPath:
-          path: /var/lib/kernel-src
       initContainers:
       - image: "cos-nvidia-installer:fixed"
         imagePullPolicy: Never
@@ -93,10 +90,6 @@ spec:
             value: /var/lib/cos-tools
           - name: COS_TOOLS_DIR_CONTAINER
             value: /build/cos-tools
-          - name: KERNEL_SRC_DIR_HOST
-            value: /var/lib/kernel-src
-          - name: KERNEL_SRC_DIR_CONTAINER
-            value: /build/usr/src/linux
         volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
@@ -108,8 +101,6 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
-        - name: kernel-src
-          mountPath: /build/usr/src/linux
       containers:
       - image: "gcr.io/google-containers/pause:2.0"
         name: pause
