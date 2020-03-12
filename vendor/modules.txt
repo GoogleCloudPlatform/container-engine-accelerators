@@ -1,0 +1,71 @@
+# github.com/GoogleCloudPlatform/container-engine-accelerators v0.0.0-20191024220656-0f889ca9d2c1
+## explicit
+github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia
+# github.com/davecgh/go-spew v1.1.0
+## explicit
+github.com/davecgh/go-spew/spew
+# github.com/gogo/protobuf v0.0.0-20171007142547-342cbe0a0415
+## explicit
+github.com/gogo/protobuf/gogoproto
+github.com/gogo/protobuf/proto
+github.com/gogo/protobuf/protoc-gen-gogo/descriptor
+github.com/gogo/protobuf/sortkeys
+# github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+## explicit
+github.com/golang/glog
+# github.com/golang/protobuf v0.0.0-20171021043952-1643683e1b54
+## explicit
+github.com/golang/protobuf/proto
+github.com/golang/protobuf/ptypes
+github.com/golang/protobuf/ptypes/any
+github.com/golang/protobuf/ptypes/duration
+github.com/golang/protobuf/ptypes/timestamp
+# github.com/pmezard/go-difflib v1.0.0
+## explicit
+github.com/pmezard/go-difflib/difflib
+# github.com/stretchr/testify v1.1.4
+## explicit
+github.com/stretchr/testify/assert
+# golang.org/x/net v0.0.0-20171023174046-5561cd9b4330
+## explicit
+golang.org/x/net/context
+golang.org/x/net/http2
+golang.org/x/net/http2/hpack
+golang.org/x/net/idna
+golang.org/x/net/internal/timeseries
+golang.org/x/net/lex/httplex
+golang.org/x/net/trace
+# golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+## explicit
+# golang.org/x/text v0.1.1-0.20171013141220-c01e4764d870
+## explicit
+golang.org/x/text/secure/bidirule
+golang.org/x/text/transform
+golang.org/x/text/unicode/bidi
+golang.org/x/text/unicode/norm
+# google.golang.org/genproto v0.0.0-20171002232614-f676e0f3ac63
+## explicit
+google.golang.org/genproto/googleapis/rpc/status
+# google.golang.org/grpc v1.7.0
+## explicit
+google.golang.org/grpc
+google.golang.org/grpc/balancer
+google.golang.org/grpc/codes
+google.golang.org/grpc/connectivity
+google.golang.org/grpc/credentials
+google.golang.org/grpc/grpclb/grpc_lb_v1/messages
+google.golang.org/grpc/grpclog
+google.golang.org/grpc/internal
+google.golang.org/grpc/keepalive
+google.golang.org/grpc/metadata
+google.golang.org/grpc/naming
+google.golang.org/grpc/peer
+google.golang.org/grpc/resolver
+google.golang.org/grpc/stats
+google.golang.org/grpc/status
+google.golang.org/grpc/tap
+google.golang.org/grpc/transport
+# k8s.io/kubernetes v1.12.0
+## explicit
+k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha
+k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1
