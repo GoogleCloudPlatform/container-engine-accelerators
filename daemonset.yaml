@@ -14,6 +14,10 @@
 
 # The Dockerfile and other source for this daemonset are in
 # https://github.com/GoogleCloudPlatform/cos-gpu-installer
+#
+# This daemonset is only intended to be used by OSS K8s tests.
+# To install GPU drivers in GKE clusters, please use
+# https://github.com/GoogleCloudPlatform/container-engine-accelerators/blob/master/nvidia-driver-installer/cos/daemonset-preloaded.yaml
 
 apiVersion: apps/v1
 kind: DaemonSet
