@@ -35,7 +35,7 @@ presubmit: vet
 	@./build/check_boilerplate.sh
 
 TAG=$(shell cat VERSION)
-REGISTRY?=gcr.io/google-containers
+REGISTRY?=gcr.io/gke-release-staging
 IMAGE=nvidia-gpu-device-plugin
 
 build:
