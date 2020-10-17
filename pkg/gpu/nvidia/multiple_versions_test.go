@@ -27,8 +27,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pluginalpha "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1alpha"
-	pluginbeta "k8s.io/kubernetes/pkg/kubelet/apis/deviceplugin/v1beta1"
+	pluginalpha "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
+	pluginbeta "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
