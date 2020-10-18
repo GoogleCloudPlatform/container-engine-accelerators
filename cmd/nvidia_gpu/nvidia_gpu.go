@@ -20,6 +20,7 @@ import (
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/metrics"
 	"github.com/golang/glog"
 )
 
@@ -31,11 +32,14 @@ const (
 )
 
 var (
-	hostPathPrefix               = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
-	containerPathPrefix          = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts '-host-path'")
-	hostVulkanICDPathPrefix      = flag.String("host-vulkan-icd-path", "/home/kubernetes/bin/nvidia/vulkan/icd.d", "Path on the host that contains the Nvidia Vulkan installable client driver. This will be mounted inside the container as '-container-vulkan-icd-path'")
-	containerVulkanICDPathPrefix = flag.String("container-vulkan-icd-path", "/etc/vulkan/icd.d", "Path on the container that mounts '-host-vulkan-icd-path'")
-	pluginMountPath              = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
+	hostPathPrefix                 = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
+	containerPathPrefix            = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts '-host-path'")
+	hostVulkanICDPathPrefix        = flag.String("host-vulkan-icd-path", "/home/kubernetes/bin/nvidia/vulkan/icd.d", "Path on the host that contains the Nvidia Vulkan installable client driver. This will be mounted inside the container as '-container-vulkan-icd-path'")
+	containerVulkanICDPathPrefix   = flag.String("container-vulkan-icd-path", "/etc/vulkan/icd.d", "Path on the container that mounts '-host-vulkan-icd-path'")
+	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
+	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
+	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "POrt on which GPU metrics for containers are exposed")
+	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 2000, "Colection interval (in milli seconds) for container GPU metrics")
 )
 
 func main() {
@@ -56,5 +60,13 @@ func main() {
 		glog.V(3).Infof("nvidiaGPUManager.Start() failed: %v", err)
 		time.Sleep(5 * time.Second)
 	}
+
+	if *enableContainerGPUMetrics {
+		glog.Infof("Starting metrics server on port: %d, endpoint path: %s, collection frequency: %d", *gpuMetricsPort, "/metrics", *gpuMetricsCollectionIntervalMs)
+		metricServer := metrics.NewMetricServer(*gpuMetricsCollectionIntervalMs, *gpuMetricsPort, "/metrics")
+		metricServer.Start()
+		defer metricServer.Stop()
+	}
+
 	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
 }
