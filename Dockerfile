@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.9-alpine as builder
+FROM golang:1.15 as builder
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
 RUN go build cmd/nvidia_gpu/nvidia_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu
 
-FROM alpine
+FROM gcr.io/distroless/base-debian10
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/nvidia-gpu-device-plugin
 CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr"]
