@@ -64,7 +64,11 @@ func main() {
 	if *enableContainerGPUMetrics {
 		glog.Infof("Starting metrics server on port: %d, endpoint path: %s, collection frequency: %d", *gpuMetricsPort, "/metrics", *gpuMetricsCollectionIntervalMs)
 		metricServer := metrics.NewMetricServer(*gpuMetricsCollectionIntervalMs, *gpuMetricsPort, "/metrics")
-		metricServer.Start()
+		err := metricServer.Start()
+		if err != nil {
+			glog.Infof("Failed to start metric server: %v, err")
+			return
+		}
 		defer metricServer.Stop()
 	}
 

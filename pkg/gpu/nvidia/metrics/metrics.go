@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -61,8 +62,25 @@ func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *
 }
 
 // Start performs necessary initializations and starts the metric server.
-func (m *MetricServer) Start() {
+func (m *MetricServer) Start() error {
 	glog.Infoln("Starting metrics server")
+
+	err := nvml.Init()
+	if err != nil {
+		return fmt.Errorf("failed to initialize nvml: %v", err)
+	}
+
+	driverVersion, err := nvml.GetDriverVersion()
+	if err != nil {
+		return fmt.Errorf("failed to query nvml: %v", err)
+	}
+	glog.Infof("nvml initialized successfully. Driver version: %s", driverVersion)
+
+	err = DiscoverGPUDevices()
+	if err != nil {
+		return fmt.Errorf("failed to discover GPU devices: %v", err)
+	}
+
 	go func() {
 		http.Handle(m.metricsEndpointPath, promhttp.Handler())
 		err := http.ListenAndServe(fmt.Sprintf(":%d", m.port), nil)
@@ -72,6 +90,7 @@ func (m *MetricServer) Start() {
 	}()
 
 	go m.collectMetrics()
+	return nil
 }
 
 func (m *MetricServer) collectMetrics() {
@@ -93,14 +112,30 @@ func (m *MetricServer) collectMetrics() {
 
 func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) {
 	for container, devices := range containerDevices {
-		// TODO: fix resource name
-		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, "resource_name").Set(float64(len(devices)))
-		DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", "gpu-id", "nvidia-tesla-a100").Set(11)
-	}
+		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, gpuResourceName).Set(float64(len(devices)))
 
-	// TODO: add other metrics as well
+		for _, device := range devices {
+			d, err := DeviceFromName(device)
+			if err != nil {
+				glog.Errorf("Failed to get device for %s: %v", device, err)
+				continue
+			}
+
+			status, err := d.Status()
+			if err != nil {
+				glog.Errorf("Failed to get device status for %s: %v", device, err)
+			}
+
+			utilInfo := status.Utilization
+
+			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*utilInfo.GPU))
+			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory))
+			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*utilInfo.Memory))
+		}
+	}
 }
 
 // Stop performs cleanup operations and stops the metric server.
 func (m *MetricServer) Stop() {
+	nvml.Shutdown()
 }
