@@ -122,21 +122,6 @@ func DeviceFromName(deviceName string) (nvml.Device, error) {
 	return *device, nil
 }
 
-// DeviceUtilzation returns the current utilization of the GPU device.
-func DeviceUtilzation(deviceName string) (nvml.UtilizationInfo, error) {
-	device, ok := gpuDevices[deviceName]
-	if !ok {
-		return nvml.UtilizationInfo{}, fmt.Errorf("device %s not found", deviceName)
-	}
-
-	status, err := device.Status()
-	if err != nil {
-		return nvml.UtilizationInfo{}, fmt.Errorf("failed to get status for device %s: %v", deviceName, err)
-	}
-
-	return status.Utilization, nil
-}
-
 func deviceNameFromPath(path string) (string, error) {
 	m := gpuPathRegex.FindStringSubmatch(path)
 	if len(m) != 2 {
