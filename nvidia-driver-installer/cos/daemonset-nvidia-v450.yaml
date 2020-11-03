@@ -63,7 +63,7 @@ spec:
         name: nvidia-driver-installer
         resources:
           requests:
-            cpu: 0.15
+            cpu: "0.15"
         securityContext:
           privileged: true
         env:
