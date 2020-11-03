@@ -21,3 +21,5 @@ RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerato
 FROM gcr.io/distroless/base-debian10
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/nvidia-gpu-device-plugin
 CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr"]
+# Use the CMD below to make the device plugin expose prometheus endpoint with container level GPU metrics
+#CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "-v=10", "--enable-container-gpu-metrics"]
