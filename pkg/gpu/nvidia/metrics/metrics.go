@@ -141,8 +141,13 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 			}
 
 			utilInfo := status.Utilization
+			dutyCycle, err := AverageGPUUtilization(d.UUID, time.Second*10)
+			if err != nil {
+				glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
+				continue
+			}
 
-			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*utilInfo.GPU))
+			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
 			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory))
 			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*utilInfo.Memory))
 		}
