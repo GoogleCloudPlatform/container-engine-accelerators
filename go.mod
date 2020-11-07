@@ -8,6 +8,7 @@ require (
 	github.com/prometheus/client_golang v1.8.0
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
+	golang.org/x/sys v0.0.0-20201109165425-215b40eba54c
 	google.golang.org/grpc v1.28.1
 	k8s.io/kubelet v0.19.2
 	k8s.io/kubernetes v1.19.3

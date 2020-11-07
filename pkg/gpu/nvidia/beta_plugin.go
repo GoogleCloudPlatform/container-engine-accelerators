@@ -17,7 +17,6 @@ package nvidia
 import (
 	"fmt"
 	"net"
-	"path"
 	"time"
 
 	"github.com/golang/glog"
@@ -41,7 +40,7 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 	for {
 		if changed {
 			resp := new(pluginapi.ListAndWatchResponse)
-			for _, dev := range s.ngm.devices {
+			for _, dev := range s.ngm.ListDevices() {
 				resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health})
 			}
 			glog.Infof("ListAndWatch: send devices %v\n", resp)
@@ -62,18 +61,14 @@ func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi
 		resp := new(pluginapi.ContainerAllocateResponse)
 		// Add all requested devices to Allocate Response
 		for _, id := range rqt.DevicesIDs {
-			dev, ok := s.ngm.devices[id]
-			if !ok {
-				return nil, fmt.Errorf("invalid allocation request with non-existing device %s", id)
+			devices, err := s.ngm.DeviceSpec(id)
+			if err != nil {
+				return nil, err
 			}
-			if dev.Health != pluginapi.Healthy {
-				return nil, fmt.Errorf("invalid allocation request with unhealthy device %s", id)
+
+			for i := range devices {
+				resp.Devices = append(resp.Devices, &devices[i])
 			}
-			resp.Devices = append(resp.Devices, &pluginapi.DeviceSpec{
-				HostPath:      path.Join(s.ngm.devDirectory, id),
-				ContainerPath: path.Join(s.ngm.devDirectory, id),
-				Permissions:   "mrw",
-			})
 		}
 		// Add all default devices to Allocate Response
 		for _, d := range s.ngm.defaultDevices {
