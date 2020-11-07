@@ -38,7 +38,7 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	mountPaths := []MountPath{
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
-	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths)
+	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{})
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
