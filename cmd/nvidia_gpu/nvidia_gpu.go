@@ -66,7 +66,7 @@ func main() {
 		metricServer := metrics.NewMetricServer(*gpuMetricsCollectionIntervalMs, *gpuMetricsPort, "/metrics")
 		err := metricServer.Start()
 		if err != nil {
-			glog.Infof("Failed to start metric server: %v, err")
+			glog.Infof("Failed to start metric server: %v", err)
 			return
 		}
 		defer metricServer.Stop()
