@@ -39,7 +39,7 @@ var (
 	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "POrt on which GPU metrics for containers are exposed")
-	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 2000, "Colection interval (in milli seconds) for container GPU metrics")
+	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Colection interval (in milli seconds) for container GPU metrics")
 )
 
 func main() {

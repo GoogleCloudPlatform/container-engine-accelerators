@@ -60,18 +60,22 @@ var (
 		[]string{"namespace", "pod", "container", "resource_name"})
 )
 
+const metricsResetInterval = time.Minute
+
 // MetricServer exposes GPU metrics for all containers in prometheus format on the specified port.
 type MetricServer struct {
-	collectionInterval  int
-	port                int
-	metricsEndpointPath string
+	collectionInterval   int
+	port                 int
+	metricsEndpointPath  string
+	lastMetricsResetTime time.Time
 }
 
 func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *MetricServer {
 	return &MetricServer{
-		collectionInterval:  collectionInterval,
-		port:                port,
-		metricsEndpointPath: metricsEndpointPath,
+		collectionInterval:   collectionInterval,
+		port:                 port,
+		metricsEndpointPath:  metricsEndpointPath,
+		lastMetricsResetTime: time.Now(),
 	}
 }
 
@@ -125,6 +129,8 @@ func (m *MetricServer) collectMetrics() {
 }
 
 func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) {
+	m.resetMetricsIfNeeded()
+
 	for container, devices := range containerDevices {
 		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, gpuResourceName).Set(float64(len(devices)))
 
@@ -148,9 +154,20 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 			}
 
 			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory))
-			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*utilInfo.Memory))
+			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024)       // memory reported in bytes
+			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*utilInfo.Memory) * 1024 * 1024) // memory reported in bytes
 		}
+	}
+}
+
+func (m *MetricServer) resetMetricsIfNeeded() {
+	if time.Now().After(m.lastMetricsResetTime.Add(metricsResetInterval)) {
+		AcceleratorRequests.Reset()
+		DutyCycle.Reset()
+		MemoryTotal.Reset()
+		MemoryUsed.Reset()
+
+		m.lastMetricsResetTime = time.Now()
 	}
 }
 
