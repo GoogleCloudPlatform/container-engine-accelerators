@@ -54,6 +54,13 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
 			return net.DialTimeout("unix", addr, timeout)
 		}))
+	defer func() {
+		err := conn.Close()
+		if err != nil {
+			glog.Warning("Failed to close grpc connection to kubelet PodResourceLister endpoint: %v", err)
+		}
+	}()
+
 	if err != nil {
 		return containerDevices, fmt.Errorf("error connecting to kubelet PodResourceLister service: %v", err)
 	}
