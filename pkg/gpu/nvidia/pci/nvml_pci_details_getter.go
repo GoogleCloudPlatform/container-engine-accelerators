@@ -11,7 +11,7 @@ import (
 func NewNvmlPciDetailsGetter() (PciDetailsGetter, error) {
 	err := nvml.Init()
 	if err != nil {
-		return fmt.Errorf("Failed to initialize nvml: %v", err)
+		return nil, fmt.Errorf("Failed to initialize nvml: %v", err)
 	}
 
 	numDevices, err := nvml.GetDeviceCount()
