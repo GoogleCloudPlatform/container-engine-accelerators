@@ -7,6 +7,7 @@ import (
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 )
 
+// NewNvmlPciDetailsGetter returns a PciDetailsGetter that uses Nvidia's NVML library to map device id to PCI bus id.
 func NewNvmlPciDetailsGetter() (PciDetailsGetter, error) {
 
 	numDevices, err := nvml.GetDeviceCount()
@@ -15,28 +16,28 @@ func NewNvmlPciDetailsGetter() (PciDetailsGetter, error) {
 	}
 	glog.Infof("Found %d GPUs", numDevices)
 
-	deviceIdToBusId := make(map[string]string)   
+	deviceIDTobusID := make(map[string]string)
 	for deviceIndex := uint(0); deviceIndex < numDevices; deviceIndex++ {
 		device, err := nvml.NewDevice(deviceIndex)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to read device with index %d: %v", deviceIndex, err)
 		}
-		deviceId := strings.Replace(device.Path, "/dev/", "", 1)
-		pciBusId := device.PCI.BusID
-		glog.Infof("Mapped GPU %s to PCI bus id %s", deviceId, pciBusId)        
-		deviceIdToBusId[deviceId] = pciBusId
+		deviceID := strings.Replace(device.Path, "/dev/", "", 1)
+		pcibusID := device.PCI.busID
+		glog.Infof("Mapped GPU %s to PCI bus id %s", deviceID, pcibusID)
+		deviceIDTobusID[deviceID] = pcibusID
 	}
-	return &nvmlPciDetailsGetter{deviceIdToBusId: deviceIdToBusId}, nil
+	return &nvmlPciDetailsGetter{deviceIDTobusID: deviceIDTobusID}, nil
 }
 
 type nvmlPciDetailsGetter struct {
-	deviceIdToBusId map[string]string
+	deviceIDTobusID map[string]string
 }
 
-func (dg *nvmlPciDetailsGetter) GetPciBusId(deviceId string) (string, error) {
-	busId, exists := dg.deviceIdToBusId[deviceId]
+func (dg *nvmlPciDetailsGetter) GetpcibusID(deviceID string) (string, error) {
+	busID, exists := dg.deviceIDTobusID[deviceID]
 	if !exists {
-		return "", fmt.Errorf("Could not find GPU \"%s\"", deviceId)
+		return "", fmt.Errorf("Could not find GPU \"%s\"", deviceID)
 	}
-	return busId, nil
+	return busID, nil
 }

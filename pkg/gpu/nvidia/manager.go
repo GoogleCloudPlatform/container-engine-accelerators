@@ -133,7 +133,7 @@ func (ngm *nvidiaGPUManager) discoverNumGPUs() (int, error) {
 }
 
 func (ngm *nvidiaGPUManager) setDevice(name string, health string, numaNode int) {
-	var topology *pluginapi.TopologyInfo = nil
+	var topology *pluginapi.TopologyInfo
 	if numaNode >= 0 {
 		topology = &pluginapi.TopologyInfo{Nodes: []*pluginapi.NUMANode{&pluginapi.NUMANode{ID: int64(numaNode)}}}
 	}

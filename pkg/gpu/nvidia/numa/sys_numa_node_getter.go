@@ -10,6 +10,7 @@ import (
 	"github.com/golang/glog"
 )
 
+// NewSysNumaNodeGetter returns a NumaNodeGetter which maps device id to numa node by reading numa_node files under /sys.
 func NewSysNumaNodeGetter(sysd string, pdg pci.PciDetailsGetter) NumaNodeGetter {
 	return &sysNumaNodeGetter{sysDirectory: sysd, pciDetailsGetter: pdg}
 }
@@ -20,13 +21,13 @@ type sysNumaNodeGetter struct {
 	pciDetailsGetter pci.PciDetailsGetter
 }
 
-func (s *sysNumaNodeGetter) Get(deviceId string) (int, error) {
-	pciBusId, err := s.pciDetailsGetter.GetPciBusId(deviceId)
+func (s *sysNumaNodeGetter) Get(deviceID string) (int, error) {
+	pciBusID, err := s.pciDetailsGetter.GetPciBusId(deviceID)
 	if err != nil {
-		return -1, fmt.Errorf("Failed to get pci bus id for %s: %v", deviceId, err)
+		return -1, fmt.Errorf("Failed to get pci bus id for %s: %v", deviceID, err)
 	}
 
-	filename := fmt.Sprintf("%s/bus/pci/devices/%s/numa_node", s.sysDirectory, strings.ToLower(pciBusId))
+	filename := fmt.Sprintf("%s/bus/pci/devices/%s/numa_node", s.sysDirectory, strings.ToLower(pciBusID))
 	numaStr, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to read file %s: %v", filename, err)
@@ -37,7 +38,7 @@ func (s *sysNumaNodeGetter) Get(deviceId string) (int, error) {
 		return -1, fmt.Errorf("Failed parse \"%s\" read from file %s: %v", numaStr, filename, err)
 	}
 
-	glog.Infof("Mapped device %s to PciBusId %s and NUMA node %d\n", deviceId, pciBusId, numa)
+	glog.Infof("Mapped device %s to pciBusID %s and NUMA node %d\n", deviceID, pciBusID, numa)
 
 	return int(numa), nil
 }

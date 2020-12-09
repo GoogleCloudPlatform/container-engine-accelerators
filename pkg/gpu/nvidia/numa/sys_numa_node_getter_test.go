@@ -10,18 +10,18 @@ import (
 )
 
 type pciDetailsGetterMock struct {
-	mockBusId string
+	mockBusID string
 }
 
-func (s *pciDetailsGetterMock) GetPciBusId(deviceId string) (string, error) {
-	return s.mockBusId, nil
+func (s *pciDetailsGetterMock) GetPciBusID(deviceID string) (string, error) {
+	return s.mockBusID, nil
 }
 
 type pciDetailsGetterErrorMock struct {
-	mockBusId string
+	mockBusID string
 }
 
-func (s *pciDetailsGetterErrorMock) GetPciBusId(deviceId string) (string, error) {
+func (s *pciDetailsGetterErrorMock) GetPciBusID(deviceID string) (string, error) {
 	return "", errors.New("Failed to read pci bus id")
 }
 
@@ -40,7 +40,7 @@ func Test_WhenFileIsCorrupt_ReturnsError(t *testing.T) {
 func Test_WhenFailsToGetPciBusId_ReturnsError(t *testing.T) {
 	as := assert.New(t)
 
-	mockPci := pciDetailsGetterErrorMock{mockBusId: ""}
+	mockPci := pciDetailsGetterErrorMock{mockBusID: ""}
 	sut := NewSysNumaNodeGetter("a", &mockPci)
 
 	numaNode, err := sut.Get("/dev/nvidia4")
@@ -55,7 +55,7 @@ func testSysNumaNodeGetter(t *testing.T, numaNodeFileContents string, expectedRe
 	testSysDir, err := ioutil.TempDir("", "sys")
 	defer os.RemoveAll(testSysDir)
 
-	mockPci := pciDetailsGetterMock{mockBusId: "0000_00_09.0"}
+	mockPci := pciDetailsGetterMock{mockBusID: "0000_00_09.0"}
 	sut := NewSysNumaNodeGetter(testSysDir, &mockPci)
 
 	dirname := fmt.Sprintf("%s/bus/pci/devices/0000_00_09.0", testSysDir)
