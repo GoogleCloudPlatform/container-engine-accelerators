@@ -22,7 +22,7 @@ type sysNumaNodeGetter struct {
 }
 
 func (s *sysNumaNodeGetter) Get(deviceID string) (int, error) {
-	pciBusID, err := s.pciDetailsGetter.GetPciBusId(deviceID)
+	pciBusID, err := s.pciDetailsGetter.GetPciBusID(deviceID)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to get pci bus id for %s: %v", deviceID, err)
 	}

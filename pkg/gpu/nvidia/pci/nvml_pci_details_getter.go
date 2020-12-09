@@ -16,26 +16,26 @@ func NewNvmlPciDetailsGetter() (PciDetailsGetter, error) {
 	}
 	glog.Infof("Found %d GPUs", numDevices)
 
-	deviceIDTobusID := make(map[string]string)
+	deviceIDToBusID := make(map[string]string)
 	for deviceIndex := uint(0); deviceIndex < numDevices; deviceIndex++ {
 		device, err := nvml.NewDevice(deviceIndex)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to read device with index %d: %v", deviceIndex, err)
 		}
 		deviceID := strings.Replace(device.Path, "/dev/", "", 1)
-		pcibusID := device.PCI.busID
-		glog.Infof("Mapped GPU %s to PCI bus id %s", deviceID, pcibusID)
-		deviceIDTobusID[deviceID] = pcibusID
+		pciBusID := device.PCI.BusID
+		glog.Infof("Mapped GPU %s to PCI bus id %s", deviceID, pciBusID)
+		deviceIDToBusID[deviceID] = pciBusID
 	}
-	return &nvmlPciDetailsGetter{deviceIDTobusID: deviceIDTobusID}, nil
+	return &nvmlPciDetailsGetter{deviceIDToBusID: deviceIDToBusID}, nil
 }
 
 type nvmlPciDetailsGetter struct {
-	deviceIDTobusID map[string]string
+	deviceIDToBusID map[string]string
 }
 
-func (dg *nvmlPciDetailsGetter) GetpcibusID(deviceID string) (string, error) {
-	busID, exists := dg.deviceIDTobusID[deviceID]
+func (dg *nvmlPciDetailsGetter) GetPciBusID(deviceID string) (string, error) {
+	busID, exists := dg.deviceIDToBusID[deviceID]
 	if !exists {
 		return "", fmt.Errorf("Could not find GPU \"%s\"", deviceID)
 	}
