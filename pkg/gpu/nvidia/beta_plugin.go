@@ -36,10 +36,6 @@ func (s *pluginServiceV1Beta1) GetDevicePluginOptions(ctx context.Context, e *pl
 	return &pluginapi.DevicePluginOptions{}, nil
 }
 
-func (s *pluginServiceV1Beta1) GetPreferredAllocation(ctx context.Context, in *pluginapi.PreferredAllocationRequest) (*pluginapi.PreferredAllocationResponse, error) {
-	return nil, errors.New("GetPreferredAllocation not implemented")
-}
-
 func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	glog.Infoln("device-plugin: ListAndWatch start")
 	changed := true
@@ -104,6 +100,11 @@ func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi
 func (s *pluginServiceV1Beta1) PreStartContainer(ctx context.Context, r *pluginapi.PreStartContainerRequest) (*pluginapi.PreStartContainerResponse, error) {
 	glog.Errorf("device-plugin: PreStart should NOT be called for GKE nvidia GPU device plugin\n")
 	return &pluginapi.PreStartContainerResponse{}, nil
+}
+
+func (s *pluginServiceV1Beta1) GetPreferredAllocation(context.Context, *pluginapi.PreferredAllocationRequest) (*pluginapi.PreferredAllocationResponse, error) {
+	glog.Errorf("device-plugin: GetPreferredAllocation should NOT be called for GKE nvidia GPU device plugin\n")
+	return &pluginapi.PreferredAllocationResponse{}, nil
 }
 
 func (s *pluginServiceV1Beta1) RegisterService() {
