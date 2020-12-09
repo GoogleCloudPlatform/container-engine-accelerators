@@ -2,15 +2,12 @@ package pci
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
-	"unsafe"
-
 	"github.com/golang/glog"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 )
 
-func NewNvmlPciDetailsGetter(nvmlLibraryGlob string) (PciDetailsGetter, error) {
+func NewNvmlPciDetailsGetter() (PciDetailsGetter, error) {
 
 	numDevices, err := nvml.GetDeviceCount()
 	if err != nil {

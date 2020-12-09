@@ -63,7 +63,7 @@ func main() {
 		}
 	}
 
-	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths)
+	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths, numaNodeGetter)
 	// Keep on trying until success. This is required
 	// because Nvidia drivers may not be installed initially.
 	for {
