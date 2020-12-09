@@ -89,7 +89,7 @@ func (ngm *nvidiaGPUManager) discoverGPUs() error {
 			glog.Infof("Found Nvidia GPU %q\n", f.Name())
 			numaNode, err := ngm.numaNodeGetter.Get(f.Name())
 			if err != nil {
-				glog.Errorf("Not reporting NUMA Topology Info for GPU %s: %v", f.Name(), err)
+				glog.Infof("Not reporting NUMA Topology Info for GPU %s: %v", f.Name(), err)
 				numaNode = -1
 			}
 			ngm.setDevice(f.Name(), pluginapi.Healthy, numaNode)

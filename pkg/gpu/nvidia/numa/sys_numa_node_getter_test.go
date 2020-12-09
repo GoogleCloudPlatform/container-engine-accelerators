@@ -55,7 +55,7 @@ func testSysNumaNodeGetter(t *testing.T, numaNodeFileContents string, expectedRe
 	testSysDir, err := ioutil.TempDir("", "sys")
 	defer os.RemoveAll(testSysDir)
 
-	mockPci := pciDetailsGetterMock{mockBusID: "0000_00_09.0"}
+	mockPci := pciDetailsGetterMock{mockBusID: "00000000_00_09.0"}
 	sut := NewSysNumaNodeGetter(testSysDir, &mockPci)
 
 	dirname := fmt.Sprintf("%s/bus/pci/devices/0000_00_09.0", testSysDir)

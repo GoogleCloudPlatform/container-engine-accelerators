@@ -27,7 +27,7 @@ func (s *sysNumaNodeGetter) Get(deviceID string) (int, error) {
 		return -1, fmt.Errorf("Failed to get pci bus id for %s: %v", deviceID, err)
 	}
 
-	filename := fmt.Sprintf("%s/bus/pci/devices/%s/numa_node", s.sysDirectory, strings.ToLower(pciBusID))
+	filename := fmt.Sprintf("%s/bus/pci/devices/%s/numa_node", s.sysDirectory, strings.ToLower(pciBusID[4:]))
 	numaStr, err := ioutil.ReadFile(filename)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to read file %s: %v", filename, err)
