@@ -15,7 +15,6 @@
 package nvidia
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"path"
