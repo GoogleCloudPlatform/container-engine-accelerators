@@ -64,7 +64,7 @@ func main() {
 
 		driverVersion, err := nvml.GetDriverVersion()
 		if err != nil {
-			return glog.Errorf("Failed to get NVML driver version: %v", err)
+			glog.Errorf("Failed to get NVML driver version: %v", err)
 		}
 		glog.Infof("NVML initialized successfully. Driver version: %s", driverVersion)
 	}
