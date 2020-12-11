@@ -25,6 +25,7 @@ import (
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/pci"
 
 	"github.com/golang/glog"
+	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 )
 
 const (
