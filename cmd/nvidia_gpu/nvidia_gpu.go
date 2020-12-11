@@ -56,15 +56,16 @@ func main() {
 
 	if *topologyEnabled || *enableContainerGPUMetrics {
 		err := nvml.Init()
-		if err == nil {
-			defer nvml.Shutdown()
-		} else {
+		if err != nil {
 			glog.Errorf("Failed to initialize NVML: %v", err)
+			return
 		}
+		defer nvml.Shutdown()
 
 		driverVersion, err := nvml.GetDriverVersion()
 		if err != nil {
 			glog.Errorf("Failed to get NVML driver version: %v", err)
+			return
 		}
 		glog.Infof("NVML initialized successfully. Driver version: %s", driverVersion)
 	}
