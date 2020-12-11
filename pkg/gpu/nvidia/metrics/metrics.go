@@ -83,7 +83,7 @@ func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *
 func (m *MetricServer) Start() error {
 	glog.Infoln("Starting metrics server")
 
-	err = DiscoverGPUDevices()
+	err := DiscoverGPUDevices()
 	if err != nil {
 		return fmt.Errorf("failed to discover GPU devices: %v", err)
 	}
