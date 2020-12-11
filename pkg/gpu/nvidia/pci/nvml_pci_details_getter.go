@@ -9,11 +9,6 @@ import (
 
 // NewNvmlPciDetailsGetter returns a PciDetailsGetter that uses Nvidia's NVML library to map device id to PCI bus id.
 func NewNvmlPciDetailsGetter() (PciDetailsGetter, error) {
-	err := nvml.Init()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to initialize nvml: %v", err)
-	}
-
 	numDevices, err := nvml.GetDeviceCount()
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get device count: %v", err)

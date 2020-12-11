@@ -53,6 +53,21 @@ func main() {
 		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix},
 		{HostPath: *hostVulkanICDPathPrefix, ContainerPath: *containerVulkanICDPathPrefix}}
 
+	if *topologyEnabled || *enableContainerGPUMetrics {
+		err := nvml.Init()
+		if err == nil {
+			defer nvml.Shutdown()
+		} else {
+			glog.Errorf("Failed to initialize NVML: %v", err)
+		}
+
+		driverVersion, err := nvml.GetDriverVersion()
+		if err != nil {
+			return glog.Errorf("Failed to get NVML driver version: %v", err)
+		}
+		glog.Infof("NVML initialized successfully. Driver version: %s", driverVersion)
+	}
+
 	numaNodeGetter := numa.NewNullNumaNodeGetter()
 	if *topologyEnabled {
 		pciDetailsGetter, err := pci.NewNvmlPciDetailsGetter()
@@ -84,7 +99,6 @@ func main() {
 			glog.Infof("Failed to start metric server: %v", err)
 			return
 		}
-		defer metricServer.Stop()
 	}
 
 	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
