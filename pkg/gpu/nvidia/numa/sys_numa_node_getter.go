@@ -24,15 +24,31 @@ import (
 	"github.com/golang/glog"
 )
 
+type fileSystem interface {
+	ReadFile(filename string) ([]byte, error)
+}
+
+type realFileSystem struct{}
+
+func (realFileSystem) ReadFile(filename string) ([]byte, error) {
+	return ioutil.ReadFile(filename)
+}
+
 // NewSysNumaNodeGetter returns a NumaNodeGetter which maps device id to numa node by reading numa_node files under /sys.
 func NewSysNumaNodeGetter(sysd string, pdg pci.PciDetailsGetter) NumaNodeGetter {
-	return &sysNumaNodeGetter{sysDirectory: sysd, pciDetailsGetter: pdg}
+	return &sysNumaNodeGetter{sysDirectory: sysd, pciDetailsGetter: pdg, fs: realFileSystem{}}
+}
+
+// newSysNumaNodeGetterMockableFileSystem returns a NumaNodeGetter (like NewSysNumaNodeGetter) but allowing injection of a mock filesystem for testing.
+func newSysNumaNodeGetterMockableFileSystem(sysd string, pdg pci.PciDetailsGetter, fs fileSystem) NumaNodeGetter {
+	return &sysNumaNodeGetter{sysDirectory: sysd, pciDetailsGetter: pdg, fs: fs}
 }
 
 // Gets NUMA node by looking under /sys
 type sysNumaNodeGetter struct {
-	sysDirectory     string // always /sys in production, but allow mocking for tests
+	sysDirectory     string
 	pciDetailsGetter pci.PciDetailsGetter
+	fs               fileSystem
 }
 
 func (s *sysNumaNodeGetter) Get(deviceID string) (int, error) {
@@ -42,7 +58,7 @@ func (s *sysNumaNodeGetter) Get(deviceID string) (int, error) {
 	}
 
 	filename := fmt.Sprintf("%s/bus/pci/devices/%s/numa_node", s.sysDirectory, strings.ToLower(pciBusID[4:]))
-	numaStr, err := ioutil.ReadFile(filename)
+	numaStr, err := s.fs.ReadFile(filename)
 	if err != nil {
 		return -1, fmt.Errorf("Failed to read file %s: %v", filename, err)
 	}

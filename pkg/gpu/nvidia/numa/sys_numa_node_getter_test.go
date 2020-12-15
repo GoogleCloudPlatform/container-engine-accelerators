@@ -18,8 +18,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"os"
+	"syscall"
 	"testing"
 )
 
@@ -37,6 +37,18 @@ type pciDetailsGetterErrorMock struct {
 
 func (s *pciDetailsGetterErrorMock) GetPciBusID(deviceID string) (string, error) {
 	return "", errors.New("Failed to read pci bus id")
+}
+
+type mockFileSystem struct{
+	files map[string][]byte
+}
+
+func (fs mockFileSystem) ReadFile(filename string) ([]byte, error) {
+	contents, exists := fs.files[filename]
+	if !exists {
+		return nil, &os.PathError{Op: "open", Path: filename, Err: syscall.Errno(2)}
+	}
+	return contents, nil
 }
 
 func Test_WhenFileIsGood_ReturnsContentsCorrectly(t *testing.T) {
@@ -66,19 +78,17 @@ func Test_WhenFailsToGetPciBusId_ReturnsError(t *testing.T) {
 func testSysNumaNodeGetter(t *testing.T, numaNodeFileContents string, expectedResult int, expectError bool) {
 	as := assert.New(t)
 
-	wd, err := os.Getwd()
-	testSysDir, err := ioutil.TempDir(wd, "sys")
-	defer os.RemoveAll(testSysDir)
+	testSysDir := "/sys"
+	filename := fmt.Sprintf("%s/bus/pci/devices/0000_00_09.0/numa_node", testSysDir)
+
+	files := make(map[string][]byte)
+	if numaNodeFileContents != "" {
+		files[filename] = []byte(numaNodeFileContents)
+	}
 
 	mockPci := pciDetailsGetterMock{mockBusID: "00000000_00_09.0"}
-	sut := NewSysNumaNodeGetter(testSysDir, &mockPci)
 
-	dirname := fmt.Sprintf("%s/bus/pci/devices/0000_00_09.0", testSysDir)
-	as.Nil(os.MkdirAll(dirname, 0644))
-	filename := fmt.Sprintf("%s/numa_node", dirname)
-	if numaNodeFileContents != "" {
-		as.Nil(ioutil.WriteFile(filename, []byte(numaNodeFileContents), 0644))
-	}
+	sut := newSysNumaNodeGetterMockableFileSystem(testSysDir, &mockPci, mockFileSystem{files:files})
 
 	numaNode, err := sut.Get("/dev/nvidia4")
 
