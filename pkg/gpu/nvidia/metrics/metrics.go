@@ -83,11 +83,6 @@ func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *
 func (m *MetricServer) Start() error {
 	glog.Infoln("Starting metrics server")
 
-	err := nvml.Init()
-	if err != nil {
-		return fmt.Errorf("failed to initialize nvml: %v", err)
-	}
-
 	driverVersion, err := nvml.GetDriverVersion()
 	if err != nil {
 		return fmt.Errorf("failed to query nvml: %v", err)
@@ -173,5 +168,4 @@ func (m *MetricServer) resetMetricsIfNeeded() {
 
 // Stop performs cleanup operations and stops the metric server.
 func (m *MetricServer) Stop() {
-	nvml.Shutdown()
 }
