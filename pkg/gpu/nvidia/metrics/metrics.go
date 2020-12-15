@@ -19,7 +19,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
@@ -83,18 +82,7 @@ func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *
 func (m *MetricServer) Start() error {
 	glog.Infoln("Starting metrics server")
 
-	err := nvml.Init()
-	if err != nil {
-		return fmt.Errorf("failed to initialize nvml: %v", err)
-	}
-
-	driverVersion, err := nvml.GetDriverVersion()
-	if err != nil {
-		return fmt.Errorf("failed to query nvml: %v", err)
-	}
-	glog.Infof("nvml initialized successfully. Driver version: %s", driverVersion)
-
-	err = DiscoverGPUDevices()
+	err := DiscoverGPUDevices()
 	if err != nil {
 		return fmt.Errorf("failed to discover GPU devices: %v", err)
 	}
@@ -169,9 +157,4 @@ func (m *MetricServer) resetMetricsIfNeeded() {
 
 		m.lastMetricsResetTime = time.Now()
 	}
-}
-
-// Stop performs cleanup operations and stops the metric server.
-func (m *MetricServer) Stop() {
-	nvml.Shutdown()
 }

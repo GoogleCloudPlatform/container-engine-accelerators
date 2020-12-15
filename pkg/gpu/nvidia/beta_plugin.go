@@ -42,7 +42,7 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 		if changed {
 			resp := new(pluginapi.ListAndWatchResponse)
 			for _, dev := range s.ngm.devices {
-				resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health})
+				resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health, Topology: dev.Topology})
 			}
 			glog.Infof("ListAndWatch: send devices %v\n", resp)
 			if err := stream.Send(resp); err != nil {
