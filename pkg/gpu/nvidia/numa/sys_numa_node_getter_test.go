@@ -52,7 +52,8 @@ func Test_WhenFailsToGetPciBusId_ReturnsError(t *testing.T) {
 func testSysNumaNodeGetter(t *testing.T, numaNodeFileContents string, expectedResult int, expectError bool) {
 	as := assert.New(t)
 
-	testSysDir, err := ioutil.TempDir("", "sys")
+	wd, err := os.Getwd()
+	testSysDir, err := ioutil.TempDir(wd, "sys")
 	defer os.RemoveAll(testSysDir)
 
 	mockPci := pciDetailsGetterMock{mockBusID: "00000000_00_09.0"}
