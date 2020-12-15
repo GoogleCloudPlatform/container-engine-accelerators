@@ -2,9 +2,9 @@ package pci
 
 import (
 	"fmt"
-	"strings"
-	"github.com/golang/glog"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/golang/glog"
+	"strings"
 )
 
 // NewNvmlPciDetailsGetter returns a PciDetailsGetter that uses Nvidia's NVML library to map device id to PCI bus id.

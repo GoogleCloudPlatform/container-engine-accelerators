@@ -26,8 +26,8 @@ import (
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
-	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 const (
@@ -66,10 +66,10 @@ type MountPath struct {
 
 func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, numaNodeGetter numa.NumaNodeGetter) *nvidiaGPUManager {
 	return &nvidiaGPUManager{
-		devDirectory: devDirectory,
-		mountPaths:   mountPaths,
-		devices:      make(map[string]pluginapi.Device),
-		stop:         make(chan bool),
+		devDirectory:   devDirectory,
+		mountPaths:     mountPaths,
+		devices:        make(map[string]pluginapi.Device),
+		stop:           make(chan bool),
 		numaNodeGetter: numaNodeGetter,
 	}
 }
@@ -135,7 +135,7 @@ func (ngm *nvidiaGPUManager) discoverNumGPUs() (int, error) {
 func (ngm *nvidiaGPUManager) setDevice(name string, health string, numaNode int) {
 	var topology *pluginapi.TopologyInfo
 	if numaNode >= 0 {
-		topology = &pluginapi.TopologyInfo{Nodes: []*pluginapi.NUMANode{&pluginapi.NUMANode{ID: int64(numaNode)}}}
+		topology = &pluginapi.TopologyInfo{Nodes: []*pluginapi.NUMANode{{ID: int64(numaNode)}}}
 	}
 	ngm.devicesMutex.Lock()
 	ngm.devices[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}

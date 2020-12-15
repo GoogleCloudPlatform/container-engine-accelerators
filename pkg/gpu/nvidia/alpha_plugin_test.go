@@ -29,8 +29,8 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
 )
 
 type KubeletStub struct {
