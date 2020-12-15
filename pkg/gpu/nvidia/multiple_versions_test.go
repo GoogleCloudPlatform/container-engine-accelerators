@@ -29,6 +29,7 @@ import (
 
 	pluginalpha "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
 	pluginbeta "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
 )
 
 func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
@@ -39,7 +40,7 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	mountPaths := []MountPath{
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
-	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths)
+	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, numa.NewMockNumaNodeGetter(0))
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
