@@ -39,7 +39,7 @@ func (s *pciDetailsGetterErrorMock) GetPciBusID(deviceID string) (string, error)
 	return "", errors.New("Failed to read pci bus id")
 }
 
-type mockFileSystem struct{
+type mockFileSystem struct {
 	files map[string][]byte
 }
 
@@ -88,7 +88,7 @@ func testSysNumaNodeGetter(t *testing.T, numaNodeFileContents string, expectedRe
 
 	mockPci := pciDetailsGetterMock{mockBusID: "00000000_00_09.0"}
 
-	sut := newSysNumaNodeGetterMockableFileSystem(testSysDir, &mockPci, mockFileSystem{files:files})
+	sut := newSysNumaNodeGetterMockableFileSystem(testSysDir, &mockPci, mockFileSystem{files: files})
 
 	numaNode, err := sut.Get("/dev/nvidia4")
 
