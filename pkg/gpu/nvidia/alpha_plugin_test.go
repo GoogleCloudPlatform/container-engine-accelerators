@@ -29,6 +29,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
 )
 
@@ -91,7 +92,7 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 	mountPaths := []MountPath{
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
-	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths)
+	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, numa.NewMockNumaNodeGetter(0))
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 

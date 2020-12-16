@@ -27,6 +27,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -38,7 +39,7 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	mountPaths := []MountPath{
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
-	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths)
+	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, numa.NewMockNumaNodeGetter(1))
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
@@ -101,6 +102,9 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	}
 	as.NotNil(devices["nvidia1"])
 	as.NotNil(devices["nvidia2"])
+
+	as.Equal(int64(1), devices["nvidia1"].Topology.Nodes[0].ID)
+	as.Equal(int64(1), devices["nvidia2"].Topology.Nodes[0].ID)
 
 	// Tests Allocate
 	resp, err := client.Allocate(context.Background(), &pluginapi.AllocateRequest{

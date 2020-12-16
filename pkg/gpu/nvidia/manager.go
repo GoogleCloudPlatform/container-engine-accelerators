@@ -27,6 +27,7 @@ import (
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -58,6 +59,7 @@ type nvidiaGPUManager struct {
 	devicesMutex        sync.Mutex
 	nvidiaCtlDevicePath string
 	nvidiaUVMDevicePath string
+	numaNodeGetter      numa.NumaNodeGetter
 }
 
 type MountPath struct {
@@ -65,7 +67,7 @@ type MountPath struct {
 	ContainerPath string
 }
 
-func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath) *nvidiaGPUManager {
+func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, numaNodeGetter numa.NumaNodeGetter) *nvidiaGPUManager {
 	return &nvidiaGPUManager{
 		devDirectory:        devDirectory,
 		mountPaths:          mountPaths,
@@ -73,6 +75,7 @@ func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath) *nvidiaGPU
 		stop:                make(chan bool),
 		nvidiaCtlDevicePath: path.Join(devDirectory, nvidiaCtlDevice),
 		nvidiaUVMDevicePath: path.Join(devDirectory, nvidiaUVMDevice),
+		numaNodeGetter:      numaNodeGetter,
 	}
 }
 
@@ -89,7 +92,12 @@ func (ngm *nvidiaGPUManager) discoverGPUs() error {
 		}
 		if reg.MatchString(f.Name()) {
 			glog.Infof("Found Nvidia GPU %q\n", f.Name())
-			ngm.setDevice(f.Name(), pluginapi.Healthy)
+			numaNode, err := ngm.numaNodeGetter.Get(f.Name())
+			if err != nil {
+				glog.Infof("Not reporting NUMA Topology Info for GPU %s: %v", f.Name(), err)
+				numaNode = -1
+			}
+			ngm.setDevice(f.Name(), pluginapi.Healthy, numaNode)
 		}
 	}
 	return nil
@@ -129,9 +137,13 @@ func (ngm *nvidiaGPUManager) discoverNumGPUs() (int, error) {
 	return deviceCount, nil
 }
 
-func (ngm *nvidiaGPUManager) setDevice(name string, health string) {
+func (ngm *nvidiaGPUManager) setDevice(name string, health string, numaNode int) {
+	var topology *pluginapi.TopologyInfo
+	if numaNode >= 0 {
+		topology = &pluginapi.TopologyInfo{Nodes: []*pluginapi.NUMANode{{ID: int64(numaNode)}}}
+	}
 	ngm.devicesMutex.Lock()
-	ngm.devices[name] = pluginapi.Device{ID: name, Health: health}
+	ngm.devices[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 	ngm.devicesMutex.Unlock()
 }
 

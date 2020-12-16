@@ -21,6 +21,8 @@ import (
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/metrics"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/numa"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/pci"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 )
@@ -39,8 +41,9 @@ var (
 	containerVulkanICDPathPrefix   = flag.String("container-vulkan-icd-path", "/etc/vulkan/icd.d", "Path on the container that mounts '-host-vulkan-icd-path'")
 	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
-	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "POrt on which GPU metrics for containers are exposed")
+	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Colection interval (in milli seconds) for container GPU metrics")
+	topologyEnabled                = flag.Bool("topology", false, "Report NUMA node info for use by Kubernetes TopologyManager")
 )
 
 func main() {
@@ -50,7 +53,17 @@ func main() {
 		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix},
 		{HostPath: *hostVulkanICDPathPrefix, ContainerPath: *containerVulkanICDPathPrefix}}
 
-	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths)
+	numaNodeGetter := numa.NewNullNumaNodeGetter()
+	if *topologyEnabled {
+		pciDetailsGetter, err := pci.NewNvmlPciDetailsGetter()
+		if err == nil {
+			numaNodeGetter = numa.NewSysNumaNodeGetter("/sys", pciDetailsGetter)
+		} else {
+			glog.Errorf("NewNvmlPciDetailsGetter failed: %v", err)
+		}
+	}
+
+	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths, numaNodeGetter)
 	// Retry until nvidiactl and nvidia-uvm are detected. This is required
 	// because Nvidia drivers may not be installed initially.
 	for {
