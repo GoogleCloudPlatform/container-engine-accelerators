@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
@@ -31,6 +32,8 @@ import (
 )
 
 const (
+	// proc directory is used to lookup the access files for each GPU partition.
+	procDir = "/proc"
 	// All NVIDIA GPUs cards should be mounted with nvidiactl and nvidia-uvm
 	// If the driver installed correctly, these two devices will be there.
 	nvidiaCtlDevice = "nvidiactl"
@@ -46,6 +49,11 @@ var (
 	resourceName = "nvidia.com/gpu"
 )
 
+// GPUConfig stores the settings used to configure the GPUs on a node.
+type GPUConfig struct {
+	GPUPartitionSize string
+}
+
 // nvidiaGPUManager manages nvidia gpu devices.
 type nvidiaGPUManager struct {
 	devDirectory        string
@@ -58,6 +66,8 @@ type nvidiaGPUManager struct {
 	devicesMutex        sync.Mutex
 	nvidiaCtlDevicePath string
 	nvidiaUVMDevicePath string
+	gpuConfig           GPUConfig
+	migDeviceManager    mig.DeviceManager
 }
 
 type MountPath struct {
@@ -65,15 +75,48 @@ type MountPath struct {
 	ContainerPath string
 }
 
-func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath) *nvidiaGPUManager {
+func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, gpuConfig GPUConfig) *nvidiaGPUManager {
 	return &nvidiaGPUManager{
+
 		devDirectory:        devDirectory,
 		mountPaths:          mountPaths,
 		devices:             make(map[string]pluginapi.Device),
 		stop:                make(chan bool),
 		nvidiaCtlDevicePath: path.Join(devDirectory, nvidiaCtlDevice),
 		nvidiaUVMDevicePath: path.Join(devDirectory, nvidiaUVMDevice),
+		gpuConfig:           gpuConfig,
+		migDeviceManager:    mig.NewDeviceManager(devDirectory, procDir),
 	}
+}
+
+// ListDevices lists all GPU devices (including partitions) available on this node.
+func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
+	if ngm.gpuConfig.GPUPartitionSize == "" {
+		return ngm.devices
+	}
+
+	return ngm.migDeviceManager.ListGPUPartitionDevices()
+}
+
+// DeviceSpec returns the device spec that inclues list of devices to allocate for a deviceID.
+func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, error) {
+	if ngm.gpuConfig.GPUPartitionSize == "" {
+		deviceSpecs := make([]pluginapi.DeviceSpec, 0)
+		dev, ok := ngm.devices[deviceID]
+		if !ok {
+			return deviceSpecs, fmt.Errorf("invalid allocation request with non-existing device %s", deviceID)
+		}
+		if dev.Health != pluginapi.Healthy {
+			return deviceSpecs, fmt.Errorf("invalid allocation request with unhealthy device %s", deviceID)
+		}
+		deviceSpecs = append(deviceSpecs, pluginapi.DeviceSpec{
+			HostPath:      path.Join(ngm.devDirectory, deviceID),
+			ContainerPath: path.Join(ngm.devDirectory, deviceID),
+			Permissions:   "mrw",
+		})
+		return deviceSpecs, nil
+	}
+	return ngm.migDeviceManager.DeviceSpec(deviceID)
 }
 
 // Discovers all NVIDIA GPU devices available on the local node by walking nvidiaGPUManager's devDirectory.
@@ -167,6 +210,11 @@ func (ngm *nvidiaGPUManager) Start() error {
 
 	if err := ngm.discoverGPUs(); err != nil {
 		return err
+	}
+	if ngm.gpuConfig.GPUPartitionSize != "" {
+		if err := ngm.migDeviceManager.Start(ngm.gpuConfig.GPUPartitionSize); err != nil {
+			return fmt.Errorf("failed to start mig device manager: %v", err)
+		}
 	}
 
 	return nil
