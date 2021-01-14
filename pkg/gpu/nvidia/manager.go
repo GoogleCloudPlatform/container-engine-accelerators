@@ -68,6 +68,7 @@ type nvidiaGPUManager struct {
 	nvidiaUVMDevicePath string
 	gpuConfig           GPUConfig
 	migDeviceManager    mig.DeviceManager
+	Health              chan pluginapi.Device
 }
 
 type MountPath struct {
@@ -86,6 +87,7 @@ func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, gpuConfig 
 		nvidiaUVMDevicePath: path.Join(devDirectory, nvidiaUVMDevice),
 		gpuConfig:           gpuConfig,
 		migDeviceManager:    mig.NewDeviceManager(devDirectory, procDir),
+		Health:              make(chan pluginapi.Device),
 	}
 }
 
@@ -339,5 +341,6 @@ func (ngm *nvidiaGPUManager) Stop() error {
 	}
 	ngm.stop <- true
 	<-ngm.stop
+	close(ngm.Health)
 	return nil
 }

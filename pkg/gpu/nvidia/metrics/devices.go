@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 
 	"github.com/golang/glog"
@@ -108,7 +109,7 @@ func DiscoverGPUDevices() error {
 		if err != nil {
 			return fmt.Errorf("failed to read device with index %d: %v", i, err)
 		}
-		deviceName, err := deviceNameFromPath(device.Path)
+		deviceName, err := util.DeviceNameFromPath(device.Path)
 		if err != nil {
 			glog.Errorf("Invalid GPU device path found: %s. Skipping this device", device.Path)
 		}
@@ -127,12 +128,4 @@ func DeviceFromName(deviceName string) (nvml.Device, error) {
 	}
 
 	return *device, nil
-}
-
-func deviceNameFromPath(path string) (string, error) {
-	m := gpuPathRegex.FindStringSubmatch(path)
-	if len(m) != 2 {
-		return "", fmt.Errorf("path (%s) is not a valid GPU device path", path)
-	}
-	return m[1], nil
 }

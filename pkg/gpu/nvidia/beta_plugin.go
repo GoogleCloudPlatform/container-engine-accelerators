@@ -36,22 +36,18 @@ func (s *pluginServiceV1Beta1) GetDevicePluginOptions(ctx context.Context, e *pl
 
 func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	glog.Infoln("device-plugin: ListAndWatch start")
-	changed := true
+	if err := s.sendDevices(stream); err != nil {
+		return err
+	}
 	for {
-		if changed {
-			resp := new(pluginapi.ListAndWatchResponse)
-			for _, dev := range s.ngm.ListDevices() {
-				resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health})
-			}
-			glog.Infof("ListAndWatch: send devices %v\n", resp)
-			if err := stream.Send(resp); err != nil {
-				glog.Errorf("device-plugin: cannot update device states: %v\n", err)
-				s.ngm.grpcServer.Stop()
+		select {
+		case d := <-s.ngm.Health:
+			glog.Infof("device-plugin: %s device marked as %s", d.ID, d.Health)
+			s.ngm.devices[d.ID] = d
+			if err := s.sendDevices(stream); err != nil {
 				return err
 			}
 		}
-		time.Sleep(5 * time.Second)
-		changed = s.ngm.CheckDeviceStates()
 	}
 }
 
@@ -125,6 +121,20 @@ func RegisterWithV1Beta1Kubelet(kubeletEndpoint, pluginEndpoint, resourceName st
 
 	if _, err = client.Register(context.Background(), request); err != nil {
 		return fmt.Errorf("device-plugin: cannot register to kubelet service: %v", err)
+	}
+	return nil
+}
+
+func (s *pluginServiceV1Beta1) sendDevices(stream pluginapi.DevicePlugin_ListAndWatchServer) error {
+	resp := new(pluginapi.ListAndWatchResponse)
+	for _, dev := range s.ngm.ListDevices() {
+		resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health})
+	}
+	glog.Infof("ListAndWatch: send devices %v\n", resp)
+	if err := stream.Send(resp); err != nil {
+		glog.Errorf("device-plugin: cannot update device states: %v\n", err)
+		s.ngm.grpcServer.Stop()
+		return err
 	}
 	return nil
 }
