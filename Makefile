@@ -37,6 +37,7 @@ presubmit: vet
 TAG=$(shell cat VERSION)
 REGISTRY?=gcr.io/google-containers
 IMAGE=nvidia-gpu-device-plugin
+PARTITION_GPU_IMAGE=nvidia-partition-gpu
 
 build:
 	cd cmd/nvidia_gpu; go build nvidia_gpu.go
@@ -47,4 +48,7 @@ container:
 push:
 	gcloud docker -- push ${REGISTRY}/${IMAGE}:${TAG}
 
-.PHONY: all format test vet presubmit build container push
+partition-gpu:
+	docker build --pull -t ${REGISTRY}/${PARTITION_GPU_IMAGE}:${TAG} -f partition_gpu/Dockerfile .
+
+.PHONY: all format test vet presubmit build container push partition-gpu
