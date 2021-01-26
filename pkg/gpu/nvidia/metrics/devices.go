@@ -57,7 +57,7 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 	defer func() {
 		err := conn.Close()
 		if err != nil {
-			glog.Warning("Failed to close grpc connection to kubelet PodResourceLister endpoint: %v", err)
+			glog.Warningf("Failed to close grpc connection to kubelet PodResourceLister endpoint: %v", err)
 		}
 	}()
 
