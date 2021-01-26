@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-gpu-device-plugin
+  namespace: kube-system
+  labels:
+    k8s-app: nvidia-gpu-device-plugin
+    addonmanager.kubernetes.io/mode: EnsureExists
+spec:
+  selector:
+    matchLabels:
+      k8s-app: nvidia-gpu-device-plugin
+  template:
+    metadata:
+      labels:
+        k8s-app: nvidia-gpu-device-plugin
+    spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: cloud.google.com/gke-accelerator
+                operator: Exists
+      tolerations:
+      - operator: "Exists"
+        effect: "NoExecute"
+      - operator: "Exists"
+        effect: "NoSchedule"
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: nvidia
+        hostPath:
+            path: /home/kubernetes/bin/nvidia
+      - name: pod-resources
+        hostPath:
+            path: /var/lib/kubelet/pod-resources
+      - name: proc
+        hostPath:
+          path: /proc
+      - name: nvidia-config
+        hostPath:
+            path: /etc/nvidia
+      containers:
+      - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:5881b00412e4fbd0715741eba696ddf040a92a1680773d8937189181b4313c3f"
+        command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics"]
+        name: nvidia-gpu-device-plugin
+        ports:
+        - name: "metrics"
+          containerPort: 2112
+        env:
+        - name: LD_LIBRARY_PATH
+          value: /usr/local/nvidia/lib64
+        resources:
+          requests:
+            cpu: 50m
+            memory: 20Mi
+          limits:
+            cpu: 50m
+            memory: 20Mi
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /device-plugin
+        - name: dev
+          mountPath: /dev
+        - name: nvidia
+          mountPath: /usr/local/nvidia
+        - name: pod-resources
+          mountPath: /var/lib/kubelet/pod-resources
+        - name: proc
+          mountPath: /proc
+        - name: nvidia-config
+          mountPath: /etc/nvidia
+  updateStrategy:
+    type: RollingUpdate
