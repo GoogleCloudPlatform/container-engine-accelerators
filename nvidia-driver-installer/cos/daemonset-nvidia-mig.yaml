@@ -12,27 +12,28 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This daemonset deploys the GPU partitioner on all GPU nodes and partitions
-# the GPUs as defined in the GPU config file.
+# This daemonset installs nvidia driver 450.80.02 and invokes the
+# partition_gpu tool to enable MIG mode and create GPU instances as specified
+# in the GPU config.
 
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: partition-gpus
+  name: nvidia-driver-installer
   namespace: kube-system
   labels:
-    k8s-app: partition-gpus
+    k8s-app: nvidia-driver-installer
 spec:
   selector:
     matchLabels:
-      k8s-app: partition-gpus
+      k8s-app: nvidia-driver-installer
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: partition-gpus
-        k8s-app: partition-gpus
+        name: nvidia-driver-installer
+        k8s-app: nvidia-driver-installer
     spec:
       affinity:
         nodeAffinity:
@@ -49,25 +50,69 @@ spec:
       - name: dev
         hostPath:
           path: /dev
-      - name: nvidia
+      - name: vulkan-icd-mount
+        hostPath:
+          path: /home/kubernetes/bin/nvidia/vulkan/icd.d
+      - name: nvidia-install-dir-host
         hostPath:
           path: /home/kubernetes/bin/nvidia
+      - name: root-mount
+        hostPath:
+          path: /
+      - name: cos-tools
+        hostPath:
+          path: /var/lib/cos-tools
       - name: nvidia-config
         hostPath:
           path: /etc/nvidia
       initContainers:
+      - image: "cos-nvidia-installer:fixed"
+        command: ["./cos-gpu-installer", "install", "--version=450.80.02"]
+        imagePullPolicy: Never
+        name: nvidia-driver-installer
+        resources:
+          requests:
+            cpu: "0.15"
+        securityContext:
+          privileged: true
+        env:
+          - name: NVIDIA_INSTALL_DIR_HOST
+            value: /home/kubernetes/bin/nvidia
+          - name: NVIDIA_INSTALL_DIR_CONTAINER
+            value: /usr/local/nvidia
+          - name: VULKAN_ICD_DIR_HOST
+            value: /home/kubernetes/bin/nvidia/vulkan/icd.d
+          - name: VULKAN_ICD_DIR_CONTAINER
+            value: /etc/vulkan/icd.d
+          - name: ROOT_MOUNT_DIR
+            value: /root
+          - name: COS_TOOLS_DIR_HOST
+            value: /var/lib/cos-tools
+          - name: COS_TOOLS_DIR_CONTAINER
+            value: /build/cos-tools
+        volumeMounts:
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
+        - name: vulkan-icd-mount
+          mountPath: /etc/vulkan/icd.d
+        - name: dev
+          mountPath: /dev
+        - name: root-mount
+          mountPath: /root
+        - name: cos-tools
+          mountPath: /build/cos-tools
       - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:4238017c76b48ef82aa9e59f17469017f311a65945c3cd3aea6a96e0c3e143b4"
         name: partition-gpus
         env:
         - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64    
+          value: /usr/local/nvidia/lib64
         resources:
           requests:
             cpu: "0.15"
         securityContext:
           privileged: true
         volumeMounts:
-        - name: nvidia
+        - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
         - name: dev
           mountPath: /dev
