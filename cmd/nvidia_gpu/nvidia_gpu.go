@@ -22,6 +22,7 @@ import (
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
+	healthcheck "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/health_check"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/metrics"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
@@ -41,6 +42,7 @@ var (
 	containerVulkanICDPathPrefix   = flag.String("container-vulkan-icd-path", "/etc/vulkan/icd.d", "Path on the container that mounts '-host-vulkan-icd-path'")
 	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
+	enableHealthMonitoring         = flag.Bool("enable-health-monitoring", false, "If true, the device plugin will detect critical Xid errors and mark the GPUs unallocatable")
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "POrt on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Colection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
@@ -110,6 +112,15 @@ func main() {
 			return
 		}
 		defer metricServer.Stop()
+	}
+
+	if *enableHealthMonitoring {
+		hc := healthcheck.NewGPUHealthChecker(ngm.ListDevices(), ngm.Health)
+		if err := hc.Start(); err != nil {
+			glog.Infof("Failed to start GPU Health Checker: %v", err)
+			return
+		}
+		defer hc.Stop()
 	}
 
 	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
