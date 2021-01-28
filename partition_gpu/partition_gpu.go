@@ -64,6 +64,7 @@ func main() {
 		glog.Infof("failed to parse GPU config file, taking no action.")
 		return
 	}
+	glog.Infof("Using gpu config: %v", gpuConfig)
 	if gpuConfig.GPUPartitionSize == "" {
 		glog.Infof("No GPU partitions are required, exiting")
 		return
@@ -80,10 +81,12 @@ func main() {
 		os.Exit(1)
 	}
 	if !migModeEnabled {
+		glog.Infof("MIG mode is not enabled. Enabling now.")
 		if err := enableMigMode(); err != nil {
 			glog.Errorf("Failed to enable MIG mode: %v", err)
 			os.Exit(1)
 		}
+		glog.Infof("Rebooting node to enable MIG mode")
 		if err := rebootNode(); err != nil {
 			glog.Errorf("Failed to trigger node reboot after enabling MIG mode: %v", err)
 		}
@@ -105,6 +108,13 @@ func main() {
 		glog.Errorf("Failed to create GPU partitions: %v", err)
 		os.Exit(1)
 	}
+
+	glog.Infof("Running %s", *nvidiaSmiPath)
+	out, err := exec.Command(*nvidiaSmiPath).Output()
+	if err != nil {
+		glog.Errorf("Failed to run nvidia-smi, output: %s, error: %v", string(out), err)
+	}
+	glog.Infof("Output:\n %s", string(out))
 
 }
 
@@ -147,15 +157,21 @@ func rebootNode() error {
 }
 
 func cleanupAllGPUPartitions() error {
-	out, err := exec.Command(*nvidiaSmiPath, "mig", "-dci").Output()
+	args := []string{"mig", "-dci"}
+	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
+	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
 	if err != nil && !strings.Contains(string(out), "No GPU instances found") {
-		return fmt.Errorf("failed to destroy compute instance, nvidia-smi output: %s, error: %v ", out, err)
+		return fmt.Errorf("failed to destroy compute instance, nvidia-smi output: %s, error: %v ", string(out), err)
 	}
+	glog.Infof("Output:\n %s", string(out))
 
-	out, err = exec.Command(*nvidiaSmiPath, "mig", "-dgi").Output()
+	args = []string{"mig", "-dgi"}
+	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
+	out, err = exec.Command(*nvidiaSmiPath, args...).Output()
 	if err != nil && !strings.Contains(string(out), "No GPU instances found") {
-		return fmt.Errorf("failed to destroy gpu instance, nvidia-smi output: %s, error: %v ", out, err)
+		return fmt.Errorf("failed to destroy gpu instance, nvidia-smi output: %s, error: %v ", string(out), err)
 	}
+	glog.Infof("Output:\n %s", string(out))
 	return nil
 }
 
@@ -164,15 +180,22 @@ func createGPUPartitions(partitionSize string) error {
 	if err != nil {
 		return err
 	}
-	out, err := exec.Command(*nvidiaSmiPath, "mig", "-cgi", p).Output()
-	if err != nil {
-		return fmt.Errorf("failed to create GPU Instances: output: %s, error: %v", out, err)
-	}
 
-	out, err = exec.Command(*nvidiaSmiPath, "mig", "-cci").Output()
+	args := []string{"mig", "-cgi", p}
+	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
+	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
 	if err != nil {
-		return fmt.Errorf("failed to create compute instances: output: %s, error: %v", out, err)
+		return fmt.Errorf("failed to create GPU Instances: output: %s, error: %v", string(out), err)
 	}
+	glog.Infof("Output:\n %s", string(out))
+
+	args = []string{"mig", "-cci"}
+	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
+	out, err = exec.Command(*nvidiaSmiPath, args...).Output()
+	if err != nil {
+		return fmt.Errorf("failed to create compute instances: output: %s, error: %v", string(out), err)
+	}
+	glog.Infof("Output:\n %s", string(out))
 
 	return nil
 
