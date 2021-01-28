@@ -131,7 +131,7 @@ func (ngm *nvidiaGPUManager) discoverGPUs() error {
 			continue
 		}
 		if reg.MatchString(f.Name()) {
-			glog.Infof("Found Nvidia GPU %q\n", f.Name())
+			glog.V(3).Infof("Found Nvidia GPU %q\n", f.Name())
 			ngm.setDevice(f.Name(), pluginapi.Healthy)
 		}
 	}
