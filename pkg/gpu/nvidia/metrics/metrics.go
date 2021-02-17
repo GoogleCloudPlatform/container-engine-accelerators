@@ -54,7 +54,7 @@ var (
 	// AcceleratorRequests reports the number of GPU devices requested by the container.
 	AcceleratorRequests = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "accelerator_requests",
+			Name: "request",
 			Help: "Number of accelerator devices requested by the container",
 		},
 		[]string{"namespace", "pod", "container", "resource_name"})
