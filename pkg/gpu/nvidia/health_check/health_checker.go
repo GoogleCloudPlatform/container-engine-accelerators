@@ -118,7 +118,6 @@ func (hc *GPUHealthChecker) listenToEvents() error {
 
 		e, err := nvml.WaitForEvent(hc.eventSet, 5000)
 		if err != nil || e.Etype != nvml.XidCriticalError {
-			glog.Infof("XidCriticalError: Xid=%d, All devices will go unhealthy.", e.Edata)
 			continue
 		}
 
