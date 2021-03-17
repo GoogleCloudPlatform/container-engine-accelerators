@@ -26,6 +26,47 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+type deviceWrapper interface {
+	giveDevice() (*nvml.Device)
+	giveStatus() (status *nvml.DeviceStatus, err error)
+}
+
+
+type trueDeviceWrapper struct {
+	device nvml.Device
+}
+
+func (d *trueDeviceWrapper) giveDevice() (*nvml.Device){
+	return &d.device
+}
+
+func (d *trueDeviceWrapper) giveStatus() (status *nvml.DeviceStatus, err error){
+	return d.device.Status()
+}
+
+
+type gatherMetrics interface { 
+	gatherDevice (string) (deviceWrapper, error)
+	gatherStatus (deviceWrapper) (status *nvml.DeviceStatus, err error)
+    gatherDutyCycle (string, time.Duration) (uint, error) 
+}
+var g gatherMetrics
+
+type TrueGather struct {}
+
+func (t *TrueGather) gatherDevice(deviceName string) (deviceWrapper, error) {
+	d, err := DeviceFromName(deviceName)
+	return &trueDeviceWrapper{d}, err
+}
+
+func (t *TrueGather) gatherStatus(d deviceWrapper) (status *nvml.DeviceStatus, err error) {
+	return d.giveStatus()
+}
+
+func (t *TrueGather) gatherDutyCycle(uuid string, since time.Duration) (uint, error) {
+	return AverageGPUUtilization(uuid, since)
+}
+
 var (
 	// DutyCycle reports the percent of time when the GPU was actively processing.
 	DutyCycle = promauto.NewGaugeVec(
@@ -107,6 +148,7 @@ func (m *MetricServer) Start() error {
 }
 
 func (m *MetricServer) collectMetrics() {
+	g = &TrueGather{}
 	t := time.NewTicker(time.Millisecond * time.Duration(m.collectionInterval))
 	defer t.Stop()
 
@@ -130,19 +172,19 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, gpuResourceName).Set(float64(len(devices)))
 
 		for _, device := range devices {
-			d, err := DeviceFromName(device)
+			dw, err := g.gatherDevice(device)
 			if err != nil {
 				glog.Errorf("Failed to get device for %s: %v", device, err)
 				continue
 			}
 
-			status, err := d.Status()
+			status, err := g.gatherStatus(dw)
 			if err != nil {
 				glog.Errorf("Failed to get device status for %s: %v", device, err)
 			}
-
+            d := dw.giveDevice()
 			mem := status.Memory
-			dutyCycle, err := AverageGPUUtilization(d.UUID, time.Second*10)
+			dutyCycle, err := g.gatherDutyCycle(d.UUID, time.Second*10)
 			if err != nil {
 				glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 				continue
