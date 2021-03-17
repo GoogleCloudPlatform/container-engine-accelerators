@@ -5,7 +5,7 @@ go 1.14
 require (
 	github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20201006233419-a544dbcaacb0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/prometheus/client_golang v1.8.0
+	github.com/prometheus/client_golang v1.9.0
 	github.com/stretchr/testify v1.5.1
 	golang.org/x/net v0.0.0-20200707034311-ab3426394381
 	google.golang.org/grpc v1.28.1
