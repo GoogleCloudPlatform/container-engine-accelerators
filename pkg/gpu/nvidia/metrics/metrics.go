@@ -27,32 +27,31 @@ import (
 )
 
 type deviceWrapper interface {
-	giveDevice() (*nvml.Device)
+	giveDevice() *nvml.Device
 	giveStatus() (status *nvml.DeviceStatus, err error)
 }
-
 
 type trueDeviceWrapper struct {
 	device nvml.Device
 }
 
-func (d *trueDeviceWrapper) giveDevice() (*nvml.Device){
+func (d *trueDeviceWrapper) giveDevice() *nvml.Device {
 	return &d.device
 }
 
-func (d *trueDeviceWrapper) giveStatus() (status *nvml.DeviceStatus, err error){
+func (d *trueDeviceWrapper) giveStatus() (status *nvml.DeviceStatus, err error) {
 	return d.device.Status()
 }
 
-
-type gatherMetrics interface { 
-	gatherDevice (string) (deviceWrapper, error)
-	gatherStatus (deviceWrapper) (status *nvml.DeviceStatus, err error)
-    gatherDutyCycle (string, time.Duration) (uint, error) 
+type gatherMetrics interface {
+	gatherDevice(string) (deviceWrapper, error)
+	gatherStatus(deviceWrapper) (status *nvml.DeviceStatus, err error)
+	gatherDutyCycle(string, time.Duration) (uint, error)
 }
+
 var g gatherMetrics
 
-type TrueGather struct {}
+type TrueGather struct{}
 
 func (t *TrueGather) gatherDevice(deviceName string) (deviceWrapper, error) {
 	d, err := DeviceFromName(deviceName)
@@ -182,7 +181,7 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 			if err != nil {
 				glog.Errorf("Failed to get device status for %s: %v", device, err)
 			}
-            d := dw.giveDevice()
+			d := dw.giveDevice()
 			mem := status.Memory
 			dutyCycle, err := g.gatherDutyCycle(d.UUID, time.Second*10)
 			if err != nil {

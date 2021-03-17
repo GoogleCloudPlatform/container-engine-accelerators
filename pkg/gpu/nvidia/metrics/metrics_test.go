@@ -18,24 +18,24 @@ func stringPtr(u string) *string {
 }
 
 type MockDevice struct {
-	DeviceInfo  *nvml.Device 
-	Status      *nvml.DeviceStatus
+	DeviceInfo *nvml.Device
+	Status     *nvml.DeviceStatus
 }
 
 type mockDeviceWrapper struct {
 	device MockDevice
 }
 
-func (d *mockDeviceWrapper) giveDevice() (*nvml.Device){
+func (d *mockDeviceWrapper) giveDevice() *nvml.Device {
 	return d.device.DeviceInfo
 }
 
-func (d *mockDeviceWrapper) giveStatus () (status *nvml.DeviceStatus, err error) {
+func (d *mockDeviceWrapper) giveStatus() (status *nvml.DeviceStatus, err error) {
 	status = d.device.Status
 	return status, nil
 }
 
-type MockGather struct {}
+type MockGather struct{}
 
 func (t *MockGather) gatherDevice(deviceName string) (deviceWrapper, error) {
 	device, ok := gpuDevicesMock[deviceName]
@@ -47,7 +47,7 @@ func (t *MockGather) gatherDevice(deviceName string) (deviceWrapper, error) {
 }
 
 func (t *MockGather) gatherStatus(d deviceWrapper) (status *nvml.DeviceStatus, err error) {
-	return d.giveStatus()	
+	return d.giveStatus()
 }
 
 func (t *MockGather) gatherDutyCycle(uuid string, since time.Duration) (uint, error) {
@@ -58,124 +58,125 @@ func (t *MockGather) gatherDutyCycle(uuid string, since time.Duration) (uint, er
 	return dutyCycle, nil
 }
 
-
 var (
-	containerDevicesMock = map[ContainerID][]string {
+	containerDevicesMock = map[ContainerID][]string{
 		ContainerID{
 			namespace: "default",
 			pod:       "pod1",
 			container: "container1",
-		} : []string{
+		}: []string{
 			"q759757",
 		},
 		ContainerID{
 			namespace: "non-default",
 			pod:       "pod2",
 			container: "container2",
-		} : []string{
+		}: []string{
 			"afjodaj",
 			"7v89zhi",
 		},
-	
 	}
 
-	gpuDevicesMock = map[string]*MockDevice {
-		"q759757" : &MockDevice{
-			DeviceInfo:  &nvml.Device{
-				UUID:        "656547758",
-			    Model:       stringPtr("model1"),
-			    Memory:      uint64Ptr(200),
+	gpuDevicesMock = map[string]*MockDevice{
+		"q759757": &MockDevice{
+			DeviceInfo: &nvml.Device{
+				UUID:   "656547758",
+				Model:  stringPtr("model1"),
+				Memory: uint64Ptr(200),
 			},
-			Status:      &nvml.DeviceStatus{
-				Memory:  nvml.MemoryInfo{
+			Status: &nvml.DeviceStatus{
+				Memory: nvml.MemoryInfo{
 					Global: nvml.DeviceMemory{
 						Used: uint64Ptr(50),
 					},
 				},
 			},
 		},
-		"afjodaj" : &MockDevice{
-			DeviceInfo:  &nvml.Device{
-				UUID:        "850729563",
-				Model:       stringPtr("model2"),
-				Memory:      uint64Ptr(200),
+		"afjodaj": &MockDevice{
+			DeviceInfo: &nvml.Device{
+				UUID:   "850729563",
+				Model:  stringPtr("model2"),
+				Memory: uint64Ptr(200),
 			},
-			Status:      &nvml.DeviceStatus{
-				Memory:  nvml.MemoryInfo{
+			Status: &nvml.DeviceStatus{
+				Memory: nvml.MemoryInfo{
 					Global: nvml.DeviceMemory{
 						Used: uint64Ptr(150),
 					},
 				},
 			},
 		},
-		"7v89zhi" : &MockDevice{
-			DeviceInfo:  &nvml.Device{
-				UUID:        "3572375710",
-			    Model:       stringPtr("model1"),
-			    Memory:      uint64Ptr(350),
+		"7v89zhi": &MockDevice{
+			DeviceInfo: &nvml.Device{
+				UUID:   "3572375710",
+				Model:  stringPtr("model1"),
+				Memory: uint64Ptr(350),
 			},
-			Status:     &nvml.DeviceStatus{
-				Memory:  nvml.MemoryInfo{
+			Status: &nvml.DeviceStatus{
+				Memory: nvml.MemoryInfo{
 					Global: nvml.DeviceMemory{
 						Used: uint64Ptr(100),
 					},
 				},
 			},
-	
 		},
 	}
 
 	dutyCycleMock = map[string]uint{
-		"656547758" : 78,
-		"850729563" : 32,
+		"656547758":  78,
+		"850729563":  32,
 		"3572375710": 13,
 	}
 )
 
 func TestMetricsUpdate(t *testing.T) {
 	g = &MockGather{}
-    ms := MetricServer{}
+	ms := MetricServer{}
 	ms.updateMetrics(containerDevicesMock)
 
-    if testutil.ToFloat64(
+	if testutil.ToFloat64(
 		AcceleratorRequests.WithLabelValues(
-			"default", "pod1", "container1", gpuResourceName)) != 1 || 
-	   testutil.ToFloat64(
-		AcceleratorRequests.WithLabelValues(
-			"non-default", "pod2", "container2", gpuResourceName)) != 2 {
-		t.Fatalf("Wrong Result in AcceleratorRequsets")}
+			"default", "pod1", "container1", gpuResourceName)) != 1 ||
+		testutil.ToFloat64(
+			AcceleratorRequests.WithLabelValues(
+				"non-default", "pod2", "container2", gpuResourceName)) != 2 {
+		t.Fatalf("Wrong Result in AcceleratorRequsets")
+	}
 
 	if testutil.ToFloat64(
 		DutyCycle.WithLabelValues(
-			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 78 || 
-	   testutil.ToFloat64(
-		DutyCycle.WithLabelValues(
-			"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 32 || 
-	   testutil.ToFloat64(
-		DutyCycle.WithLabelValues(
-			"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 13 {
-		t.Fatalf("Wrong Result in DutyCycle")}
+			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 78 ||
+		testutil.ToFloat64(
+			DutyCycle.WithLabelValues(
+				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 32 ||
+		testutil.ToFloat64(
+			DutyCycle.WithLabelValues(
+				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 13 {
+		t.Fatalf("Wrong Result in DutyCycle")
+	}
 
 	if testutil.ToFloat64(
 		MemoryTotal.WithLabelValues(
-			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 200 * 1024 * 1024 || 
-	   testutil.ToFloat64(
-		MemoryTotal.WithLabelValues(
-			"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 200 * 1024 * 1024 || 
-	   testutil.ToFloat64(
-		MemoryTotal.WithLabelValues(
-			"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 350 * 1024 * 1024 {
-		t.Fatalf("Wrong Result in MemoryTotal")}
+			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 200*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryTotal.WithLabelValues(
+				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 200*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryTotal.WithLabelValues(
+				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 350*1024*1024 {
+		t.Fatalf("Wrong Result in MemoryTotal")
+	}
 
 	if testutil.ToFloat64(
 		MemoryUsed.WithLabelValues(
-			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 50 * 1024 * 1024 || 
-	   testutil.ToFloat64(
-		MemoryUsed.WithLabelValues(
-			"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 150 * 1024 * 1024 || 
-	   testutil.ToFloat64(
-		MemoryUsed.WithLabelValues(
-			"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 100 * 1024 * 1024 {
-		t.Fatalf("Wrong Result in MemoryTotal")}
-	 
+			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 50*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryUsed.WithLabelValues(
+				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 150*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryUsed.WithLabelValues(
+				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 100*1024*1024 {
+		t.Fatalf("Wrong Result in MemoryTotal")
+	}
+
 }
