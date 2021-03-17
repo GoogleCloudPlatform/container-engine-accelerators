@@ -118,13 +118,12 @@ func (hc *GPUHealthChecker) listenToEvents() error {
 
 		e, err := nvml.WaitForEvent(hc.eventSet, 5000)
 		if err != nil || e.Etype != nvml.XidCriticalError {
-			glog.Infof("XidCriticalError: Xid=%d, All devices will go unhealthy.", e.Edata)
 			continue
 		}
 
-		// Ignoring application errors. GPU should still be healthy
+		// Only marking device unhealthy on Double Bit ECC Error
 		// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
-		if e.Edata == 31 || e.Edata == 43 || e.Edata == 45 {
+		if e.Edata != 48 {
 			continue
 		}
 
