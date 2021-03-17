@@ -60,25 +60,25 @@ func (t *MockGather) gatherDutyCycle(uuid string, since time.Duration) (uint, er
 
 var (
 	containerDevicesMock = map[ContainerID][]string{
-		ContainerID{
+		{
 			namespace: "default",
 			pod:       "pod1",
 			container: "container1",
-		}: []string{
+		}: {
 			"q759757",
 		},
-		ContainerID{
+		{
 			namespace: "non-default",
 			pod:       "pod2",
 			container: "container2",
-		}: []string{
+		}: {
 			"afjodaj",
 			"7v89zhi",
 		},
 	}
 
 	gpuDevicesMock = map[string]*MockDevice{
-		"q759757": &MockDevice{
+		"q759757": {
 			DeviceInfo: &nvml.Device{
 				UUID:   "656547758",
 				Model:  stringPtr("model1"),
@@ -92,7 +92,7 @@ var (
 				},
 			},
 		},
-		"afjodaj": &MockDevice{
+		"afjodaj": {
 			DeviceInfo: &nvml.Device{
 				UUID:   "850729563",
 				Model:  stringPtr("model2"),
@@ -106,7 +106,7 @@ var (
 				},
 			},
 		},
-		"7v89zhi": &MockDevice{
+		"7v89zhi": {
 			DeviceInfo: &nvml.Device{
 				UUID:   "3572375710",
 				Model:  stringPtr("model1"),
