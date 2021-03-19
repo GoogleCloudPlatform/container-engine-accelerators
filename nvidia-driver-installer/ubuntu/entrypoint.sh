@@ -18,6 +18,7 @@ set -o pipefail
 set -u
 
 set -x
+# the list of versions is available from https://www.nvidia.com/Download/index.aspx?lang=en-us
 NVIDIA_DRIVER_VERSION="${NVIDIA_DRIVER_VERSION:-384.111}"
 NVIDIA_DRIVER_DOWNLOAD_URL_DEFAULT="https://us.download.nvidia.com/tesla/${NVIDIA_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run"
 NVIDIA_DRIVER_DOWNLOAD_URL="${NVIDIA_DRIVER_DOWNLOAD_URL:-$NVIDIA_DRIVER_DOWNLOAD_URL_DEFAULT}"
@@ -27,7 +28,9 @@ NVIDIA_INSTALLER_RUNFILE="$(basename "${NVIDIA_DRIVER_DOWNLOAD_URL}")"
 ROOT_MOUNT_DIR="${ROOT_MOUNT_DIR:-/root}"
 CACHE_FILE="${NVIDIA_INSTALL_DIR_CONTAINER}/.cache"
 KERNEL_VERSION="$(uname -r)"
-set +x
+if [[ -z "${ENTRYPOINT_DEBUG:-}" ]]; then
+  set +x
+fi
 
 check_cached_version() {
   echo "Checking cached version"
@@ -68,14 +71,15 @@ update_container_ld_cache() {
 
 download_kernel_src() {
   echo "Downloading kernel sources..."
-  apt-get update && apt-get install -y linux-headers-${KERNEL_VERSION}
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y linux-headers-${KERNEL_VERSION}
   echo "Downloading kernel sources... DONE."
 }
 
 configure_nvidia_installation_dirs() {
   echo "Configuring installation directories..."
   mkdir -p "${NVIDIA_INSTALL_DIR_CONTAINER}"
-  pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
+  pushd    "${NVIDIA_INSTALL_DIR_CONTAINER}"
 
   # nvidia-installer does not provide an option to configure the
   # installation path of `nvidia-modprobe` utility and always installs it
@@ -113,6 +117,11 @@ configure_nvidia_installation_dirs() {
 download_nvidia_installer() {
   echo "Downloading Nvidia installer..."
   pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
+  if [[ -e "${NVIDIA_INSTALLER_RUNFILE}" && -z "${NVIDIA_INSTALLER_OVERWRITE:-}" ]]; then
+    echo "Using the existing \"${NVIDIA_INSTALLER_RUNFILE}\""
+    echo 'set NVIDIA_INSTALLER_OVERWRITE=1 to replace it with a fresh copy'
+    return 0
+  fi
   curl -L -S -f "${NVIDIA_DRIVER_DOWNLOAD_URL}" -o "${NVIDIA_INSTALLER_RUNFILE}"
   popd
   echo "Downloading Nvidia installer... DONE."
