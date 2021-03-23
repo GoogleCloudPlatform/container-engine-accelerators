@@ -134,7 +134,7 @@ func (ngm *nvidiaGPUManager) discoverGPUs() error {
 		}
 		if reg.MatchString(f.Name()) {
 			glog.V(3).Infof("Found Nvidia GPU %q\n", f.Name())
-			ngm.setDevice(f.Name(), pluginapi.Healthy)
+			ngm.SetDeviceHealth(f.Name(), pluginapi.Healthy)
 		}
 	}
 	return nil
@@ -174,15 +174,17 @@ func (ngm *nvidiaGPUManager) discoverNumGPUs() (int, error) {
 	return deviceCount, nil
 }
 
-func (ngm *nvidiaGPUManager) setDevice(name string, health string) {
+// SetDeviceHealth sets the health status for a GPU device or partition if MIG is enabled
+func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string) {
 	ngm.devicesMutex.Lock()
-	ngm.devices[name] = pluginapi.Device{ID: name, Health: health}
-	ngm.devicesMutex.Unlock()
-}
+	defer ngm.devicesMutex.Unlock()
 
-func (ngm *nvidiaGPUManager) GetDeviceState(DeviceName string) string {
-	// TODO: calling Nvidia tools to figure out actual device state
-	return pluginapi.Healthy
+	reg := regexp.MustCompile(nvidiaDeviceRE)
+	if reg.MatchString(name) {
+		ngm.devices[name] = pluginapi.Device{ID: name, Health: health}
+	} else {
+		ngm.migDeviceManager.SetDeviceHealth(name, health)
+	}
 }
 
 // Checks if the two nvidia paths exist. Could be used to verify if the driver
@@ -220,21 +222,6 @@ func (ngm *nvidiaGPUManager) Start() error {
 	}
 
 	return nil
-}
-
-func (ngm *nvidiaGPUManager) CheckDeviceStates() bool {
-	changed := false
-	ngm.devicesMutex.Lock()
-	for id, dev := range ngm.devices {
-		state := ngm.GetDeviceState(id)
-		if dev.Health != state {
-			changed = true
-			dev.Health = state
-			ngm.devices[id] = dev
-		}
-	}
-	ngm.devicesMutex.Unlock()
-	return changed
 }
 
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {

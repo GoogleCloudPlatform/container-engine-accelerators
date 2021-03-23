@@ -38,17 +38,27 @@ type GPUHealthChecker struct {
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
 func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device) *GPUHealthChecker {
-	return &GPUHealthChecker{
-		devices:     devices,
+	hc := &GPUHealthChecker{
+		devices:     make(map[string]pluginapi.Device),
 		nvmlDevices: make(map[string]*nvml.Device),
 		health:      health,
 		stop:        make(chan bool),
 	}
+
+	// Cloning the device map to avoid interfering with the device manager
+	for id, d := range devices {
+		hc.devices[id] = d
+	}
+	return hc
 }
 
 // Start registers NVML events and starts listening to them
 func (hc *GPUHealthChecker) Start() error {
 	glog.Info("Starting GPU Health Checker")
+
+	for name, device := range hc.devices {
+		glog.Infof("Healthchecker receives device %s, device %v+", name, device)
+	}
 
 	// Building mapping between device ID and their nvml represetation
 	count, err := nvml.GetDeviceCount()
@@ -62,20 +72,27 @@ func (hc *GPUHealthChecker) Start() error {
 		if err != nil {
 			return fmt.Errorf("failed to read device with index %d: %v", i, err)
 		}
+
 		deviceName, err := util.DeviceNameFromPath(device.Path)
 		if err != nil {
 			glog.Errorf("Invalid GPU device path found: %s. Skipping this device", device.Path)
 			continue
 		}
 
-		if _, ok := hc.devices[deviceName]; !ok {
-			// we only monitor the devices passed in
-			glog.Warningf("Ignoring device %s for health check.", deviceName)
+		migEnabled, err := device.IsMigEnabled()
+		if err != nil {
+			glog.Errorf("Error checking if MIG is enabled on device %s. Skipping this device. Error: %v", deviceName, err)
 			continue
 		}
 
-		glog.Infof("Found device %s for health monitoring. UUID: %s", deviceName, device.UUID)
-		hc.nvmlDevices[deviceName] = device
+		if migEnabled {
+			if err := hc.addMigEnabledDevice(deviceName, device); err != nil {
+				glog.Errorf("Failed to add MIG-enabled device %s for health check. Skipping this device. Error: %v", deviceName, err)
+				continue
+			}
+		} else {
+			hc.addDevice(deviceName, device)
+		}
 	}
 
 	hc.eventSet = nvml.NewEventSet()
@@ -103,6 +120,42 @@ func (hc *GPUHealthChecker) Start() error {
 		}
 	}()
 
+	return nil
+}
+
+func (hc *GPUHealthChecker) addDevice(deviceName string, device *nvml.Device) {
+	if _, ok := hc.devices[deviceName]; !ok {
+		// Only monitor the devices passed in
+		glog.Warningf("Ignoring device %s for health check.", deviceName)
+		return
+	}
+	glog.Infof("Found non-mig device %s for health monitoring. UUID: %s", deviceName, device.UUID)
+	hc.nvmlDevices[deviceName] = device
+}
+
+func (hc *GPUHealthChecker) addMigEnabledDevice(deviceName string, device *nvml.Device) error {
+	glog.Infof("HealthChecker detects MIG is enabled on device %s", deviceName)
+
+	migs, err := device.GetMigDevices()
+	if err != nil {
+		return fmt.Errorf("error getting MIG devices on device %s. err: %v.", deviceName, err)
+	}
+
+	for _, mig := range migs {
+		gpu, gi, _, err := nvml.ParseMigDeviceUUID(mig.UUID)
+		if err != nil {
+			return fmt.Errorf("error parsing MIG UUID on device %s, MIG UUID: %s, error %v", gpu, mig.UUID, err)
+		}
+		migDeviceName := fmt.Sprintf("%s/gi%d", deviceName, gi)
+
+		if _, ok := hc.devices[migDeviceName]; !ok {
+			// Only monitor the devices passed in
+			glog.Warningf("Ignoring device %s for health check.", migDeviceName)
+			continue
+		}
+		glog.Infof("Found mig device %s for health monitoring. UUID: %s", migDeviceName, mig.UUID)
+		hc.nvmlDevices[migDeviceName] = mig
+	}
 	return nil
 }
 

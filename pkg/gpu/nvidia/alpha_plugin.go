@@ -40,7 +40,7 @@ func (s *pluginServiceV1Alpha) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 		select {
 		case d := <-s.ngm.Health:
 			glog.Infof("device-plugin: %s device marked as %s", d.ID, d.Health)
-			s.ngm.devices[d.ID] = d
+			s.ngm.SetDeviceHealth(d.ID, d.Health)
 			if err := s.sendDevices(stream); err != nil {
 				return err
 			}
