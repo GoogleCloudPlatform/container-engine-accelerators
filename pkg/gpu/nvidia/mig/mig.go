@@ -39,38 +39,31 @@ var gpuPartitionSizeMaxCount = map[string]int{
 
 // DeviceManager performs various management operations on mig devices.
 type DeviceManager struct {
-	devDirectory  string
-	procDirectory string
-	gpuPartitions map[string][]pluginapi.DeviceSpec
+	devDirectory      string
+	procDirectory     string
+	gpuPartitionSpecs map[string][]pluginapi.DeviceSpec
+	gpuPartitions     map[string]pluginapi.Device
 }
 
 // NewDeviceManager creates a new DeviceManager to handle MIG devices on the node.
 func NewDeviceManager(devDirectory, procDirectory string) DeviceManager {
 	return DeviceManager{
-		devDirectory:  devDirectory,
-		procDirectory: procDirectory,
-		gpuPartitions: make(map[string][]pluginapi.DeviceSpec),
+		devDirectory:      devDirectory,
+		procDirectory:     procDirectory,
+		gpuPartitionSpecs: make(map[string][]pluginapi.DeviceSpec),
+		gpuPartitions:     make(map[string]pluginapi.Device),
 	}
 }
 
 // ListGPUPartitionDevices lists all the GPU partitions as devices that can be advertised as
 // resources available on the node.
 func (d *DeviceManager) ListGPUPartitionDevices() map[string]pluginapi.Device {
-	devices := make(map[string]pluginapi.Device)
-
-	for id := range d.gpuPartitions {
-		devices[id] = pluginapi.Device{
-			ID:     id,
-			Health: pluginapi.Healthy,
-		}
-	}
-
-	return devices
+	return d.gpuPartitions
 }
 
 // DeviceSpec returns the device spec that inclues list of devices to allocate for a deviceID.
 func (d *DeviceManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, error) {
-	deviceSpecs, ok := d.gpuPartitions[deviceID]
+	deviceSpecs, ok := d.gpuPartitionSpecs[deviceID]
 	if !ok {
 		return []pluginapi.DeviceSpec{}, fmt.Errorf("invalid allocation request with non-existing GPU partition: %s", deviceID)
 	}
@@ -89,7 +82,7 @@ func (d *DeviceManager) Start(partitionSize string) error {
 		return fmt.Errorf("%s is not a valid GPU partition size", partitionSize)
 	}
 
-	d.gpuPartitions = make(map[string][]pluginapi.DeviceSpec)
+	d.gpuPartitionSpecs = make(map[string][]pluginapi.DeviceSpec)
 
 	nvidiaCapDir := path.Join(d.procDirectory, "driver/nvidia/capabilities")
 	capFiles, err := ioutil.ReadDir(nvidiaCapDir)
@@ -174,7 +167,7 @@ func (d *DeviceManager) Start(partitionSize string) error {
 			}
 
 			glog.Infof("Discovered GPU partition: %s", gpuInstanceID)
-			d.gpuPartitions[gpuInstanceID] = []pluginapi.DeviceSpec{
+			d.gpuPartitionSpecs[gpuInstanceID] = []pluginapi.DeviceSpec{
 				{
 					ContainerPath: gpuDevice,
 					HostPath:      gpuDevice,
@@ -191,6 +184,7 @@ func (d *DeviceManager) Start(partitionSize string) error {
 					Permissions:   "mrw",
 				},
 			}
+			d.gpuPartitions[gpuInstanceID] = pluginapi.Device{ID: gpuInstanceID, Health: pluginapi.Healthy}
 		}
 
 		if numPartitions != maxPartitionCount {
@@ -207,6 +201,11 @@ func (d *DeviceManager) Start(partitionSize string) error {
 	}
 
 	return nil
+}
+
+// SetDeviceHealth sets the health status for a GPU partition
+func (d *DeviceManager) SetDeviceHealth(name string, health string) {
+	d.gpuPartitions[name] = pluginapi.Device{ID: name, Health: health}
 }
 
 // Discovers all NVIDIA GPU devices available on the local node by walking nvidiaGPUManager's devDirectory.
