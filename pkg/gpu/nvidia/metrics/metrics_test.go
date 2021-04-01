@@ -21,6 +21,7 @@ import (
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/prometheus/client_golang/prometheus/testutil"
+	//"github.com/golang/glog"
 )
 
 func uint64Ptr(u uint64) *uint64 {
@@ -31,40 +32,17 @@ func stringPtr(u string) *string {
 	return &u
 }
 
-type MockDevice struct {
-	DeviceInfo *nvml.Device
-	Status     *nvml.DeviceStatus
+type mockCollector struct{}
+
+func (t *mockCollector) collectGPUDevice(deviceName string) (*nvml.Device, error) {
+	return gpuDevicesMock[deviceName], nil
 }
 
-type mockDeviceWrapper struct {
-	device MockDevice
+func (t *mockCollector) collectStatus(d *nvml.Device) (status *nvml.DeviceStatus, err error) {
+	return deviceToStatus[d], nil
 }
 
-func (d *mockDeviceWrapper) giveDevice() *nvml.Device {
-	return d.device.DeviceInfo
-}
-
-func (d *mockDeviceWrapper) giveStatus() (status *nvml.DeviceStatus, err error) {
-	status = d.device.Status
-	return status, nil
-}
-
-type MockGather struct{}
-
-func (t *MockGather) gatherDevice(deviceName string) (deviceWrapper, error) {
-	device, ok := gpuDevicesMock[deviceName]
-	if !ok {
-		return &mockDeviceWrapper{}, fmt.Errorf("device %s not found", deviceName)
-	}
-
-	return &mockDeviceWrapper{*device}, nil
-}
-
-func (t *MockGather) gatherStatus(d deviceWrapper) (status *nvml.DeviceStatus, err error) {
-	return d.giveStatus()
-}
-
-func (t *MockGather) gatherDutyCycle(uuid string, since time.Duration) (uint, error) {
+func (t *mockCollector) collectDutyCycle(uuid string, since time.Duration) (uint, error) {
 	dutyCycle, ok := dutyCycleMock[uuid]
 	if !ok {
 		return 0, fmt.Errorf("duty cycle for %s not found", uuid)
@@ -91,46 +69,46 @@ var (
 		},
 	}
 
-	gpuDevicesMock = map[string]*MockDevice{
-		"q759757": {
-			DeviceInfo: &nvml.Device{
-				UUID:   "656547758",
-				Model:  stringPtr("model1"),
-				Memory: uint64Ptr(200),
-			},
-			Status: &nvml.DeviceStatus{
-				Memory: nvml.MemoryInfo{
-					Global: nvml.DeviceMemory{
-						Used: uint64Ptr(50),
-					},
+	device1 = &nvml.Device{
+		UUID:   "656547758",
+		Model:  stringPtr("model1"),
+		Memory: uint64Ptr(200),
+	}
+	device2 = &nvml.Device{
+		UUID:   "850729563",
+		Model:  stringPtr("model2"),
+		Memory: uint64Ptr(200),
+	}
+	device3 = &nvml.Device{
+		UUID:   "3572375710",
+		Model:  stringPtr("model1"),
+		Memory: uint64Ptr(350),
+	}
+
+	gpuDevicesMock = map[string]*nvml.Device{
+		"q759757": device1,
+		"afjodaj": device2,
+		"7v89zhi": device3,
+	}
+	deviceToStatus = map[*nvml.Device]*nvml.DeviceStatus{
+		device1: &nvml.DeviceStatus{
+			Memory: nvml.MemoryInfo{
+				Global: nvml.DeviceMemory{
+					Used: uint64Ptr(50),
 				},
 			},
 		},
-		"afjodaj": {
-			DeviceInfo: &nvml.Device{
-				UUID:   "850729563",
-				Model:  stringPtr("model2"),
-				Memory: uint64Ptr(200),
-			},
-			Status: &nvml.DeviceStatus{
-				Memory: nvml.MemoryInfo{
-					Global: nvml.DeviceMemory{
-						Used: uint64Ptr(150),
-					},
+		device2: &nvml.DeviceStatus{
+			Memory: nvml.MemoryInfo{
+				Global: nvml.DeviceMemory{
+					Used: uint64Ptr(150),
 				},
 			},
 		},
-		"7v89zhi": {
-			DeviceInfo: &nvml.Device{
-				UUID:   "3572375710",
-				Model:  stringPtr("model1"),
-				Memory: uint64Ptr(350),
-			},
-			Status: &nvml.DeviceStatus{
-				Memory: nvml.MemoryInfo{
-					Global: nvml.DeviceMemory{
-						Used: uint64Ptr(100),
-					},
+		device3: &nvml.DeviceStatus{
+			Memory: nvml.MemoryInfo{
+				Global: nvml.DeviceMemory{
+					Used: uint64Ptr(100),
 				},
 			},
 		},
@@ -144,7 +122,7 @@ var (
 )
 
 func TestMetricsUpdate(t *testing.T) {
-	g = &MockGather{}
+	g = &mockCollector{}
 	ms := MetricServer{}
 	ms.updateMetrics(containerDevicesMock)
 
