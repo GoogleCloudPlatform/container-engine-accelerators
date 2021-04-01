@@ -91,21 +91,21 @@ var (
 		"7v89zhi": device3,
 	}
 	deviceToStatus = map[*nvml.Device]*nvml.DeviceStatus{
-		device1: &nvml.DeviceStatus{
+		device1: {
 			Memory: nvml.MemoryInfo{
 				Global: nvml.DeviceMemory{
 					Used: uint64Ptr(50),
 				},
 			},
 		},
-		device2: &nvml.DeviceStatus{
+		device2: {
 			Memory: nvml.MemoryInfo{
 				Global: nvml.DeviceMemory{
 					Used: uint64Ptr(150),
 				},
 			},
 		},
-		device3: &nvml.DeviceStatus{
+		device3: {
 			Memory: nvml.MemoryInfo{
 				Global: nvml.DeviceMemory{
 					Used: uint64Ptr(100),
