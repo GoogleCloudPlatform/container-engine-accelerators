@@ -45,13 +45,16 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	testNvidiaCtlDevice := path.Join(testDevDir, nvidiaCtlDevice)
 	testNvidiaUVMDevice := path.Join(testDevDir, nvidiaUVMDevice)
 	testNvidiaUVMToolsDevice := path.Join(testDevDir, nvidiaUVMToolsDevice)
+	testNvidiaModesetDevice := path.Join(testDevDir, nvidiaModesetDevice)
 	os.Create(testNvidiaCtlDevice)
 	os.Create(testNvidiaUVMDevice)
 	os.Create(testNvidiaUVMToolsDevice)
-	testGpuManager.defaultDevices = []string{testNvidiaCtlDevice, testNvidiaUVMDevice, testNvidiaUVMToolsDevice}
+	os.Create(testNvidiaModesetDevice)
+	testGpuManager.defaultDevices = []string{testNvidiaCtlDevice, testNvidiaUVMDevice, testNvidiaUVMToolsDevice, testNvidiaModesetDevice}
 	defer os.Remove(testNvidiaCtlDevice)
 	defer os.Remove(testNvidiaUVMDevice)
 	defer os.Remove(testNvidiaUVMToolsDevice)
+	defer os.Remove(testNvidiaModesetDevice)
 
 	gpu1 := path.Join(testDevDir, "nvidia1")
 	gpu2 := path.Join(testDevDir, "nvidia2")
@@ -123,6 +126,7 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	as.Contains(retDevices, testNvidiaCtlDevice)
 	as.Contains(retDevices, testNvidiaUVMDevice)
 	as.Contains(retDevices, testNvidiaUVMToolsDevice)
+	as.Contains(retDevices, testNvidiaModesetDevice)
 	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
 		ContainerRequests: []*pluginapi.ContainerAllocateRequest{
 			{DevicesIDs: []string{"nvidia1", "nvidia3"}}}})

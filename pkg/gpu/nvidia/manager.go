@@ -38,8 +38,11 @@ const (
 	// If the driver installed correctly, these two devices will be there.
 	nvidiaCtlDevice = "nvidiactl"
 	nvidiaUVMDevice = "nvidia-uvm"
-	// Optional device.
-	nvidiaUVMToolsDevice      = "nvidia-uvm-tools"
+
+	// Optional devices.
+	nvidiaUVMToolsDevice = "nvidia-uvm-tools"
+	nvidiaModesetDevice  = "nvidia-modeset"
+
 	nvidiaDeviceRE            = `^nvidia[0-9]*$`
 	gpuCheckInterval          = 10 * time.Second
 	pluginSocketCheckInterval = 1 * time.Second
@@ -206,6 +209,11 @@ func (ngm *nvidiaGPUManager) Start() error {
 		return fmt.Errorf("error checking device paths: %v", err)
 	}
 	ngm.defaultDevices = []string{ngm.nvidiaCtlDevicePath, ngm.nvidiaUVMDevicePath}
+
+	nvidiaModesetDevicePath := path.Join(ngm.devDirectory, nvidiaModesetDevice)
+	if _, err := os.Stat(nvidiaModesetDevicePath); err == nil {
+		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaModesetDevicePath)
+	}
 
 	nvidiaUVMToolsDevicePath := path.Join(ngm.devDirectory, nvidiaUVMToolsDevice)
 	if _, err := os.Stat(nvidiaUVMToolsDevicePath); err == nil {
