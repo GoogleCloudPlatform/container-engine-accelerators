@@ -26,6 +26,29 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+type metricsCollector interface {
+	collectGPUDevice(deviceName string) (*nvml.Device, error)
+	collectStatus(*nvml.Device) (status *nvml.DeviceStatus, err error)
+	collectDutyCycle(string, time.Duration) (uint, error)
+}
+
+var g metricsCollector
+
+type mCollector struct{}
+
+func (t *mCollector) collectGPUDevice(deviceName string) (*nvml.Device, error) {
+	return DeviceFromName(deviceName)
+}
+
+func (t *mCollector) collectStatus(d *nvml.Device) (status *nvml.DeviceStatus, err error) {
+	status, err = d.Status()
+	return status, err
+}
+
+func (t *mCollector) collectDutyCycle(uuid string, since time.Duration) (uint, error) {
+	return AverageGPUUtilization(uuid, since)
+}
+
 var (
 	// DutyCycle reports the percent of time when the GPU was actively processing.
 	DutyCycle = promauto.NewGaugeVec(
@@ -107,6 +130,7 @@ func (m *MetricServer) Start() error {
 }
 
 func (m *MetricServer) collectMetrics() {
+	g = &mCollector{}
 	t := time.NewTicker(time.Millisecond * time.Duration(m.collectionInterval))
 	defer t.Stop()
 
@@ -130,19 +154,19 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, gpuResourceName).Set(float64(len(devices)))
 
 		for _, device := range devices {
-			d, err := DeviceFromName(device)
+			dp, err := g.collectGPUDevice(device)
 			if err != nil {
 				glog.Errorf("Failed to get device for %s: %v", device, err)
 				continue
 			}
 
-			status, err := d.Status()
+			status, err := g.collectStatus(dp)
 			if err != nil {
 				glog.Errorf("Failed to get device status for %s: %v", device, err)
 			}
-
+			d := *dp
 			mem := status.Memory
-			dutyCycle, err := AverageGPUUtilization(d.UUID, time.Second*10)
+			dutyCycle, err := g.collectDutyCycle(d.UUID, time.Second*10)
 			if err != nil {
 				glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 				continue
