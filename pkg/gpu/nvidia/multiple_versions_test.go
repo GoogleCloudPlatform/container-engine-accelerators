@@ -113,7 +113,7 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 			{DevicesIDs: []string{"nvidia1"}}}})
 	as.Nil(err)
 	as.Len(resp.ContainerResponses, 1)
-	as.Len(resp.ContainerResponses[0].Devices, 4)
+	as.Len(resp.ContainerResponses[0].Devices, 5)
 	as.Len(resp.ContainerResponses[0].Mounts, 2)
 	resp, err = clientBeta.Allocate(context.Background(), &pluginbeta.AllocateRequest{
 		ContainerRequests: []*pluginbeta.ContainerAllocateRequest{
