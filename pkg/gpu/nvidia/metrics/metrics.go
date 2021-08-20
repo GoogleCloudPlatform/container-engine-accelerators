@@ -25,6 +25,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+type device interface {}
+type deviceStatus interface {}
 
 type metricsCollector interface {
 	collectGPUDevice(deviceName string) (*nvml.Device, error)
@@ -32,7 +34,7 @@ type metricsCollector interface {
 	collectDutyCycle(string, time.Duration) (uint, error)
 }
 
-var g metricsCollector
+var gmc metricsCollector
 
 type mCollector struct{}
 
@@ -130,7 +132,7 @@ func (m *MetricServer) Start() error {
 }
 
 func (m *MetricServer) collectMetrics() {
-	g = &mCollector{}
+	gmc = &mCollector{}
 	t := time.NewTicker(time.Millisecond * time.Duration(m.collectionInterval))
 	defer t.Stop()
 
@@ -154,19 +156,18 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, gpuResourceName).Set(float64(len(devices)))
 
 		for _, device := range devices {
-			dp, err := g.collectGPUDevice(device)
+			d, err := gmc.collectGPUDevice(device)
 			if err != nil {
 				glog.Errorf("Failed to get device for %s: %v", device, err)
 				continue
 			}
 
-			status, err := g.collectStatus(dp)
+			status, err := gmc.collectStatus(d)
 			if err != nil {
 				glog.Errorf("Failed to get device status for %s: %v", device, err)
 			}
-			d := *dp
 			mem := status.Memory
-			dutyCycle, err := g.collectDutyCycle(d.UUID, time.Second*10)
+			dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
 			if err != nil {
 				glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 				continue

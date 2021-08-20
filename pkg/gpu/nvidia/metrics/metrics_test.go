@@ -21,7 +21,6 @@ import (
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/prometheus/client_golang/prometheus/testutil"
-	//"github.com/golang/glog"
 )
 
 func uint64Ptr(u uint64) *uint64 {
@@ -122,7 +121,7 @@ var (
 )
 
 func TestMetricsUpdate(t *testing.T) {
-	g = &mockCollector{}
+	gmc = &mockCollector{}
 	ms := MetricServer{}
 	ms.updateMetrics(containerDevicesMock)
 
