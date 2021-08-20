@@ -121,11 +121,11 @@ func DiscoverGPUDevices() error {
 }
 
 // DeviceFromName returns the device object for a given device name.
-func DeviceFromName(deviceName string) (nvml.Device, error) {
+func DeviceFromName(deviceName string) (*nvml.Device, error) {
 	device, ok := gpuDevices[deviceName]
 	if !ok {
-		return nvml.Device{}, fmt.Errorf("device %s not found", deviceName)
+		return &nvml.Device{}, fmt.Errorf("device %s not found", deviceName)
 	}
 
-	return *device, nil
+	return device, nil
 }
