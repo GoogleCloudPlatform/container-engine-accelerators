@@ -25,8 +25,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
-type device interface {}
-type deviceStatus interface {}
+
+type device interface{}
+type deviceStatus interface{}
 
 type metricsCollector interface {
 	collectGPUDevice(deviceName string) (*nvml.Device, error)
