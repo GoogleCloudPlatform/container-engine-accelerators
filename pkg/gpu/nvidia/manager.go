@@ -205,9 +205,6 @@ func (ngm *nvidiaGPUManager) CheckDevicePaths() error {
 
 // Discovers Nvidia GPU devices and sets up device access environment.
 func (ngm *nvidiaGPUManager) Start() error {
-	if err := ngm.CheckDevicePaths(); err != nil {
-		return fmt.Errorf("error checking device paths: %v", err)
-	}
 	ngm.defaultDevices = []string{ngm.nvidiaCtlDevicePath, ngm.nvidiaUVMDevicePath}
 
 	nvidiaModesetDevicePath := path.Join(ngm.devDirectory, nvidiaModesetDevice)
