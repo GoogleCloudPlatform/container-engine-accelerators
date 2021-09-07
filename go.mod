@@ -7,10 +7,10 @@ require (
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/prometheus/client_golang v1.9.0
 	github.com/stretchr/testify v1.5.1
-	golang.org/x/net v0.0.0-20200707034311-ab3426394381
+	golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 	google.golang.org/grpc v1.28.1
 	k8s.io/kubelet v0.19.2
-	k8s.io/kubernetes v1.19.3
+	k8s.io/kubernetes v1.19.11
 )
 
 replace (
