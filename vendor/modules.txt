@@ -7,7 +7,7 @@ github.com/beorn7/perks/quantile
 github.com/cespare/xxhash/v2
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/gogo/protobuf v1.3.1
+# github.com/gogo/protobuf v1.3.2
 github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/proto
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
@@ -46,7 +46,7 @@ github.com/prometheus/procfs/internal/util
 # github.com/stretchr/testify v1.5.1
 ## explicit
 github.com/stretchr/testify/assert
-# golang.org/x/net v0.0.0-20200707034311-ab3426394381
+# golang.org/x/net v0.0.0-20201110031124-69a78807bb2b
 ## explicit
 golang.org/x/net/context
 golang.org/x/net/http/httpguts
@@ -143,7 +143,7 @@ gopkg.in/yaml.v2
 ## explicit
 k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha
 k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1
-# k8s.io/kubernetes v1.19.3
+# k8s.io/kubernetes v1.19.11
 ## explicit
 k8s.io/kubernetes/pkg/kubelet/apis/podresources/v1alpha1
 # k8s.io/api => k8s.io/api v0.19.2
