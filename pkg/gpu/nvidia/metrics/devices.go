@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/time_sharing"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 
@@ -86,6 +87,9 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 				}
 				containerDevices[container] = make([]string, 0)
 				for _, deviceID := range d.DeviceIds {
+					if time_sharing.IsVirtualDeviceID(deviceID) {
+						continue
+					}
 					containerDevices[container] = append(containerDevices[container], deviceID)
 				}
 			}

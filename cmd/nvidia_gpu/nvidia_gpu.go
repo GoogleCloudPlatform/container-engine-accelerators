@@ -115,7 +115,7 @@ func main() {
 	}
 
 	if *enableHealthMonitoring {
-		hc := healthcheck.NewGPUHealthChecker(ngm.ListDevices(), ngm.Health)
+		hc := healthcheck.NewGPUHealthChecker(ngm.ListPhysicalDevices(), ngm.Health)
 		if err := hc.Start(); err != nil {
 			glog.Infof("Failed to start GPU Health Checker: %v", err)
 			return

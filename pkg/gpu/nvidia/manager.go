@@ -24,11 +24,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/time_sharing"
 )
 
 const (
@@ -55,6 +57,14 @@ var (
 // GPUConfig stores the settings used to configure the GPUs on a node.
 type GPUConfig struct {
 	GPUPartitionSize string
+	GPUSharingConfig GPUSharingConfig
+}
+
+type GPUSharingConfig struct {
+	// GPUSharingStrategy could be a string with multiple strategies that are separated by commas.
+	GPUSharingStrategy string
+	// TODO we might revisit the name of this field.
+	GPUSharingCountPerGPU int
 }
 
 // nvidiaGPUManager manages nvidia gpu devices.
@@ -94,19 +104,48 @@ func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, gpuConfig 
 	}
 }
 
-// ListDevices lists all GPU devices (including partitions) available on this node.
-func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
+// ListPhysicalDevices lists all physical GPU devices (including partitions) available on this node.
+func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 	if ngm.gpuConfig.GPUPartitionSize == "" {
 		return ngm.devices
 	}
-
 	return ngm.migDeviceManager.ListGPUPartitionDevices()
+}
+
+// ListDevices lists all GPU devices available on this node.
+func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
+	physicalGPUDevices := ngm.ListPhysicalDevices()
+
+	switch {
+	// We will have MPS solution in the future, which will be mutually exclusive with the time-sharing solution.
+	case time_sharing.HasTimeSharingStrategy(ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy):
+		virtualGPUDevices := map[string]pluginapi.Device{}
+		for _, device := range physicalGPUDevices {
+			for i := 0; i < ngm.gpuConfig.GPUSharingConfig.GPUSharingCountPerGPU; i++ {
+				virtualDeviceID := fmt.Sprintf("%s/vgpu%d", device.ID, i)
+				// The virtual GPU device with time-sharing solution will inherit the health status from its underlying physical GPU device.
+				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health}
+			}
+		}
+		return virtualGPUDevices
+	default:
+		return physicalGPUDevices
+	}
 }
 
 // DeviceSpec returns the device spec that inclues list of devices to allocate for a deviceID.
 func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, error) {
+	deviceSpecs := make([]pluginapi.DeviceSpec, 0)
+	// If we are using the time-sharing solution, the input deviceID will be a virtual Device ID.
+	// We need to map it to the corresponding physical device ID.
+	if time_sharing.HasTimeSharingStrategy(ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy) {
+		physicalDeviceID, err := time_sharing.VirtualToPhysicalDeviceID(deviceID)
+		if err != nil {
+			return deviceSpecs, nil
+		}
+		deviceID = physicalDeviceID
+	}
 	if ngm.gpuConfig.GPUPartitionSize == "" {
-		deviceSpecs := make([]pluginapi.DeviceSpec, 0)
 		dev, ok := ngm.devices[deviceID]
 		if !ok {
 			return deviceSpecs, fmt.Errorf("invalid allocation request with non-existing device %s", deviceID)
@@ -205,9 +244,6 @@ func (ngm *nvidiaGPUManager) CheckDevicePaths() error {
 
 // Discovers Nvidia GPU devices and sets up device access environment.
 func (ngm *nvidiaGPUManager) Start() error {
-	if err := ngm.CheckDevicePaths(); err != nil {
-		return fmt.Errorf("error checking device paths: %v", err)
-	}
 	ngm.defaultDevices = []string{ngm.nvidiaCtlDevicePath, ngm.nvidiaUVMDevicePath}
 
 	nvidiaModesetDevicePath := path.Join(ngm.devDirectory, nvidiaModesetDevice)

@@ -25,11 +25,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
+
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/time_sharing"
 )
 
 type KubeletStub struct {
@@ -204,4 +207,150 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 		retDevices = append(retDevices, dev.HostPath)
 	}
 	as.Contains(retDevices, gpu3)
+}
+
+func TestNvidiaGPUManagerAlphaAPIWithTimeSharingSolution(t *testing.T) {
+	wantDevices := map[string]*pluginapi.Device{
+		"nvidia0/vgpu0": &pluginapi.Device{
+			ID:     "nvidia0/vgpu0",
+			Health: pluginapi.Healthy,
+		},
+		"nvidia0/vgpu1": &pluginapi.Device{
+			ID:     "nvidia0/vgpu1",
+			Health: pluginapi.Healthy,
+		},
+		"nvidia1/vgpu0": &pluginapi.Device{
+			ID:     "nvidia1/vgpu0",
+			Health: pluginapi.Healthy,
+		},
+		"nvidia1/vgpu1": &pluginapi.Device{
+			ID:     "nvidia1/vgpu1",
+			Health: pluginapi.Healthy,
+		},
+	}
+
+	testDevDir, err := ioutil.TempDir("", "dev")
+	defer os.RemoveAll(testDevDir)
+
+	// Expects a valid GPUManager to be created.
+	mountPaths := []MountPath{
+		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
+		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
+	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{
+		GPUSharingConfig: GPUSharingConfig{
+			GPUSharingStrategy:    time_sharing.TimeSharing,
+			GPUSharingCountPerGPU: 2,
+		},
+	})
+	as := assert.New(t)
+	as.NotNil(testGpuManager)
+
+	testNvidiaCtlDevice := path.Join(testDevDir, nvidiaCtlDevice)
+	testNvidiaUVMDevice := path.Join(testDevDir, nvidiaUVMDevice)
+	testNvidiaUVMToolsDevice := path.Join(testDevDir, nvidiaUVMToolsDevice)
+	testNvidiaModesetDevice := path.Join(testDevDir, nvidiaModesetDevice)
+	os.Create(testNvidiaCtlDevice)
+	os.Create(testNvidiaUVMDevice)
+	os.Create(testNvidiaUVMToolsDevice)
+	os.Create(testNvidiaModesetDevice)
+	testGpuManager.defaultDevices = []string{testNvidiaCtlDevice, testNvidiaUVMDevice, testNvidiaUVMToolsDevice, testNvidiaModesetDevice}
+	defer os.Remove(testNvidiaCtlDevice)
+	defer os.Remove(testNvidiaUVMDevice)
+	defer os.Remove(testNvidiaUVMToolsDevice)
+	defer os.Remove(testNvidiaModesetDevice)
+
+	gpu0 := path.Join(testDevDir, "nvidia0")
+	gpu1 := path.Join(testDevDir, "nvidia1")
+	os.Create(gpu0)
+	os.Create(gpu1)
+	defer os.Remove(gpu0)
+	defer os.Remove(gpu1)
+
+	// Tests discoverGPUs()
+	if _, err := os.Stat(testNvidiaCtlDevice); err == nil {
+		err = testGpuManager.discoverGPUs()
+		as.Nil(err)
+		gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()
+		as.NotZero(gpus)
+	}
+
+	testdir, err := ioutil.TempDir("", "gpu_device_plugin")
+	as.Nil(err)
+	defer os.RemoveAll(testdir)
+
+	kubeletEndpoint := path.Join(testdir, "kubelet.sock")
+	kubeletStub := NewKubeletStub(kubeletEndpoint)
+	kubeletStub.Start()
+	defer kubeletStub.server.Stop()
+
+	go func() {
+		testGpuManager.Serve(testdir, "kubelet.sock", "plugin.sock")
+	}()
+
+	time.Sleep(5 * time.Second)
+	devicePluginSock := path.Join(testdir, "plugin.sock")
+	defer testGpuManager.Stop()
+	// Verifies the grpcServer is ready to serve services.
+	conn, err := grpc.Dial(devicePluginSock, grpc.WithInsecure(), grpc.WithBlock(),
+		grpc.WithTimeout(10*time.Second),
+		grpc.WithDialer(func(addr string, timeout time.Duration) (net.Conn, error) {
+			return net.DialTimeout("unix", addr, timeout)
+		}))
+	as.Nil(err)
+	defer conn.Close()
+
+	client := pluginapi.NewDevicePluginClient(conn)
+
+	// Tests ListAndWatch.
+	stream, err := client.ListAndWatch(context.Background(), &pluginapi.Empty{})
+	as.Nil(err)
+	devs, err := stream.Recv()
+	as.Nil(err)
+	devices := make(map[string]*pluginapi.Device)
+	for _, d := range devs.Devices {
+		devices[d.ID] = d
+	}
+	if diff := cmp.Diff(wantDevices, devices); diff != "" {
+		t.Error("unexpected devices (-want, +got) = ", diff)
+	}
+
+	// Tests Allocate.
+	// Allocate a valid request.
+	resp, err := client.Allocate(context.Background(), &pluginapi.AllocateRequest{
+		DevicesIDs: []string{"nvidia0/vgpu0"},
+	})
+	as.Nil(err)
+	as.Len(resp.Devices, 5)
+	as.Len(resp.Mounts, 2)
+	var retDevices []string
+	for _, dev := range resp.Devices {
+		retDevices = append(retDevices, dev.HostPath)
+	}
+	as.Contains(retDevices, gpu0)
+	as.Contains(retDevices, testNvidiaCtlDevice)
+	as.Contains(retDevices, testNvidiaUVMDevice)
+	as.Contains(retDevices, testNvidiaUVMToolsDevice)
+	as.Contains(retDevices, testNvidiaModesetDevice)
+	// Allocate an invalid request.
+	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
+		DevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu0"},
+	})
+	as.Nil(resp)
+	as.NotNil(err)
+
+	// Tests detecting new GPU.
+	gpu2 := path.Join(testDevDir, "nvidia2")
+	os.Create(gpu2)
+	defer os.Remove(gpu2)
+	// The GPU device check is every 10s
+	time.Sleep(gpuCheckInterval + 1*time.Second)
+
+	resp, err = client.Allocate(context.Background(), &pluginapi.AllocateRequest{
+		DevicesIDs: []string{"nvidia2/vgpu0"},
+	})
+	as.Nil(err)
+	for _, dev := range resp.Devices {
+		retDevices = append(retDevices, dev.HostPath)
+	}
+	as.Contains(retDevices, gpu2)
 }
