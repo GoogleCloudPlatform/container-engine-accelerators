@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package time_sharing
+package timesharing
 
 import (
 	"errors"
@@ -23,23 +23,23 @@ import (
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
 )
 
-func TestHasTimeSharingStrategy(t *testing.T) {
+func TestIsEnabled(t *testing.T) {
 	cases := []struct {
 		name               string
-		gpuSharingStrategy string
+		gpuSharingStrategy []string
 		want               bool
 	}{{
 		name:               "include time-sharing solution",
-		gpuSharingStrategy: "mig,time-sharing",
+		gpuSharingStrategy: []string{"mig", "time-sharing"},
 		want:               true,
 	}, {
 		name:               "don't include time-sharing solution",
-		gpuSharingStrategy: "mig,mps",
+		gpuSharingStrategy: []string{"mig", "mps"},
 		want:               false,
 	}}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			get := HasTimeSharingStrategy(tc.gpuSharingStrategy)
+			get := IsEnabled(tc.gpuSharingStrategy)
 			if diff := cmp.Diff(tc.want, get); diff != "" {
 				t.Error("unexpected error (-want, +got) = ", diff)
 			}
@@ -47,7 +47,7 @@ func TestHasTimeSharingStrategy(t *testing.T) {
 	}
 }
 
-func TestTimeSharingRequestValidation(t *testing.T) {
+func TestValidateRequest(t *testing.T) {
 	cases := []struct {
 		name              string
 		requestDevicesIDs []string
@@ -73,18 +73,12 @@ func TestTimeSharingRequestValidation(t *testing.T) {
 		name:              "request multiple virtual devices and have multiple physical devices",
 		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu1"},
 		deviceCount:       2,
-		wantError:         errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 physical GPUs in a node"),
-	}, {
-		name:              "request multiple virtual devices in MIG mode, but no mig device manager presents",
-		requestDevicesIDs: []string{"nvidia0/gi10/vgpu0", "nvidia1/gi11/vgpu1"},
-		deviceCount:       1,
-		wantError:         errors.New("invalid request for time-sharing solution, node suppose to be in MIG mode, but can't find MIG device manager"),
-		migDeviceManager:  nil,
+		wantError:         errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 physical GPUs or GPU partitions in a node"),
 	}}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := TimeSharingRequestValidation(tc.requestDevicesIDs, tc.deviceCount, tc.migDeviceManager)
+			err := ValidateRequest(tc.requestDevicesIDs, tc.deviceCount)
 			if err != nil && tc.wantError != nil {
 				if diff := cmp.Diff(tc.wantError.Error(), err.Error()); diff != "" {
 					t.Error("unexpected error (-want, +got) = ", diff)

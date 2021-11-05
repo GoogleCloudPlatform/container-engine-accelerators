@@ -30,7 +30,7 @@ import (
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/time_sharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
 )
 
 func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
@@ -183,8 +183,8 @@ func TestNvidiaGPUManagerBetaAPIWithTimeSharingSolution(t *testing.T) {
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
 	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{
 		GPUSharingConfig: GPUSharingConfig{
-			GPUSharingStrategy:    time_sharing.TimeSharing,
-			GPUSharingCountPerGPU: 2,
+			GPUSharingStrategy:     []string{timesharing.TimeSharing},
+			MaxSharedClientsPerGPU: 2,
 		},
 	})
 	as := assert.New(t)

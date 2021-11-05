@@ -12,28 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package time_sharing
+package timesharing
 
 import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
-
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
 )
 
 const (
-	// TODO revisit the name of this solution.
 	TimeSharing = "time-sharing"
 )
 
-// HasTimeSharingStrategy returns true if the input gpuSharingStrategy include time-sharing.
-func HasTimeSharingStrategy(gpuSharingStrategy string) bool {
+// IsEnabled returns true if the input gpuSharingStrategy include time-sharing.
+func IsEnabled(gpuSharingStrategy []string) bool {
 	// Slicing GPUSharingStrategy into strategies.
 	// GPUSharingStrategy will look like "mig,time-sharing" in the future.
-	strategies := strings.Split(gpuSharingStrategy, ",")
-	for _, strategy := range strategies {
+	for _, strategy := range gpuSharingStrategy {
 		if strategy == TimeSharing {
 			return true
 		}
@@ -41,25 +36,16 @@ func HasTimeSharingStrategy(gpuSharingStrategy string) bool {
 	return false
 }
 
-// TimeSharingRequestValidation will first check if the input device IDs are virtual device IDs, and then validate the request.
+// ValidateRequest will first check if the input device IDs are virtual device IDs, and then validate the request.
 // A valid time-sharing solution request should meet the following conditions:
 // 1. if there is only one physical device, it is valid to request multiple virtual devices in a single request.
 // 2. if there are multiple physical devices, it is only valid to request one virtual device in a single request.
 // Noted: in this validation, each compute unit will be regarded as a physical device in the MIG mode.
-func TimeSharingRequestValidation(requestDevicesIDs []string, deviceCount int, migDeviceManager *mig.DeviceManager) error {
-	if len(requestDevicesIDs) < 2 {
-		return nil
+func ValidateRequest(requestDevicesIDs []string, deviceCount int) error {
+	if len(requestDevicesIDs) > 1 && IsVirtualDeviceID(requestDevicesIDs[0]) && deviceCount > 1 {
+		return errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 physical GPUs or GPU partitions in a node")
 	}
 
-	if isVirtualDeviceIDForDefaultMode(requestDevicesIDs[0]) && deviceCount > 1 {
-		return errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 physical GPUs in a node")
-	} else if isVirtualDeviceIDForMIGMode(requestDevicesIDs[0]) {
-		if migDeviceManager == nil {
-			return errors.New("invalid request for time-sharing solution, node suppose to be in MIG mode, but can't find MIG device manager")
-		} else if len(migDeviceManager.ListGPUPartitionDevices()) > 1 {
-			return errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 MIG GPU partitions in a node")
-		}
-	}
 	return nil
 }
 

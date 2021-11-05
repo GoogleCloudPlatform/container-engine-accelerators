@@ -26,7 +26,7 @@ import (
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/time_sharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
 )
 
 type pluginServiceV1Alpha struct {
@@ -53,7 +53,7 @@ func (s *pluginServiceV1Alpha) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 func (s *pluginServiceV1Alpha) Allocate(ctx context.Context, rqt *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	// Validate if it is requesting time-sharing GPU resources.
 	// If it is, then validate if the request meets the time-sharing specific conditions.
-	if err := time_sharing.TimeSharingRequestValidation(rqt.DevicesIDs, len(s.ngm.devices), &s.ngm.migDeviceManager); err != nil {
+	if err := timesharing.ValidateRequest(rqt.DevicesIDs, len(s.ngm.ListPhysicalDevices())); err != nil {
 		return nil, err
 	}
 	resp := new(pluginapi.AllocateResponse)
@@ -61,8 +61,8 @@ func (s *pluginServiceV1Alpha) Allocate(ctx context.Context, rqt *pluginapi.Allo
 	for _, id := range rqt.DevicesIDs {
 		// If we are using the time-sharing solution, the input deviceID will be a virtual Device ID.
 		// We need to map it to the corresponding physical device ID.
-		if time_sharing.HasTimeSharingStrategy(s.ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy) {
-			physicalDeviceID, err := time_sharing.VirtualToPhysicalDeviceID(id)
+		if timesharing.IsEnabled(s.ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy) {
+			physicalDeviceID, err := timesharing.VirtualToPhysicalDeviceID(id)
 			if err != nil {
 				return nil, err
 			}
