@@ -209,6 +209,7 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 	as.Contains(retDevices, gpu3)
 }
 
+// TODO Add a unit test for time-sharing a MIG partition.
 func TestNvidiaGPUManagerAlphaAPIWithTimeSharingSolution(t *testing.T) {
 	wantDevices := map[string]*pluginapi.Device{
 		"nvidia0/vgpu0": &pluginapi.Device{

@@ -19,8 +19,6 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
 )
 
 func TestIsEnabled(t *testing.T) {
@@ -52,7 +50,6 @@ func TestValidateRequest(t *testing.T) {
 		name              string
 		requestDevicesIDs []string
 		deviceCount       int
-		migDeviceManager  *mig.DeviceManager
 		wantError         error
 	}{{
 		name:              "don't have virtual device IDs",
@@ -61,7 +58,7 @@ func TestValidateRequest(t *testing.T) {
 		wantError:         nil,
 	}, {
 		name:              "only have one physical device",
-		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu1"},
+		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia0/vgpu1"},
 		deviceCount:       1,
 		wantError:         nil,
 	}, {
@@ -73,7 +70,7 @@ func TestValidateRequest(t *testing.T) {
 		name:              "request multiple virtual devices and have multiple physical devices",
 		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu1"},
 		deviceCount:       2,
-		wantError:         errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 physical GPUs or GPU partitions in a node"),
+		wantError:         errors.New("invalid request for time-sharing GPU, at most 1 nvidia.com/gpu can be requested on nodes which have more than 1 physical GPU or MIG partitions"),
 	}}
 
 	for _, tc := range cases {

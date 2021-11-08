@@ -61,7 +61,7 @@ type GPUConfig struct {
 }
 
 type GPUSharingConfig struct {
-	// GPUSharingStrategy could be a string with multiple strategies that are separated by commas.
+	// GPUSharingStrategy could be a slice of string with multiple strategies.
 	GPUSharingStrategy []string
 	// maxSharedClientsPerGPU is the number of the shared GPU resources to expose for each physical GPU.
 	MaxSharedClientsPerGPU int

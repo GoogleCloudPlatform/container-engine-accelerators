@@ -43,14 +43,13 @@ func IsEnabled(gpuSharingStrategy []string) bool {
 // Noted: in this validation, each compute unit will be regarded as a physical device in the MIG mode.
 func ValidateRequest(requestDevicesIDs []string, deviceCount int) error {
 	if len(requestDevicesIDs) > 1 && IsVirtualDeviceID(requestDevicesIDs[0]) && deviceCount > 1 {
-		return errors.New("invalid request for time-sharing solution, at most 1 nvidia.com/gpu can be requested when there are more than 1 physical GPUs or GPU partitions in a node")
+		return errors.New("invalid request for time-sharing GPU, at most 1 nvidia.com/gpu can be requested on nodes which have more than 1 physical GPU or MIG partitions")
 	}
 
 	return nil
 }
 
-// TODO We might be able to re-use this function for MPS solution in the future.
-// VirtualToPhysicalDeviceID takes a virtualDeviceID and transfers it to a physicalDeviceID.
+// VirtualToPhysicalDeviceID takes a virtualDeviceID and converts it to a physicalDeviceID.
 func VirtualToPhysicalDeviceID(virtualDeviceID string) (string, error) {
 	if !IsVirtualDeviceID(virtualDeviceID) {
 		return "", fmt.Errorf("virtual device ID (%s) is not valid", virtualDeviceID)
@@ -60,7 +59,6 @@ func VirtualToPhysicalDeviceID(virtualDeviceID string) (string, error) {
 	return vgpuRegex.Split(virtualDeviceID, -1)[0], nil
 }
 
-// TODO We might be able to re-use this function for MPS solution in the future.
 // isVirtualDeviceID returns true if a input device ID comes from a virtual GPU device.
 func IsVirtualDeviceID(virtualDeviceID string) bool {
 	return isVirtualDeviceIDForDefaultMode(virtualDeviceID) || isVirtualDeviceIDForMIGMode(virtualDeviceID)
