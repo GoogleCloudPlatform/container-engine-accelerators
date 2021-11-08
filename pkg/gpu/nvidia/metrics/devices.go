@@ -21,8 +21,10 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -47,6 +49,7 @@ type ContainerID struct {
 }
 
 // GetDevicesForAllContainers returns a map with container as the key and the list of devices allocated to that container as the value.
+// It will skip time-shared GPU devices when time-sharing solution is enabled.
 func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 	containerDevices := make(map[ContainerID][]string)
 	conn, err := grpc.Dial(
@@ -86,6 +89,9 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 				}
 				containerDevices[container] = make([]string, 0)
 				for _, deviceID := range d.DeviceIds {
+					if timesharing.IsVirtualDeviceID(deviceID) {
+						continue
+					}
 					containerDevices[container] = append(containerDevices[container], deviceID)
 				}
 			}
