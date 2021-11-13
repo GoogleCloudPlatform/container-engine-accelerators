@@ -20,22 +20,6 @@ import (
 	"regexp"
 )
 
-const (
-	TimeSharing = "time-sharing"
-)
-
-// IsEnabled returns true if the input gpuSharingStrategy include time-sharing.
-func IsEnabled(gpuSharingStrategy []string) bool {
-	// Slicing GPUSharingStrategy into strategies.
-	// GPUSharingStrategy will look like "mig,time-sharing" in the future.
-	for _, strategy := range gpuSharingStrategy {
-		if strategy == TimeSharing {
-			return true
-		}
-	}
-	return false
-}
-
 // ValidateRequest will first check if the input device IDs are virtual device IDs, and then validate the request.
 // A valid time-sharing solution request should meet the following conditions:
 // 1. if there is only one physical device, it is valid to request multiple virtual devices in a single request.

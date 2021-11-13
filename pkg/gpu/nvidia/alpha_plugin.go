@@ -61,7 +61,7 @@ func (s *pluginServiceV1Alpha) Allocate(ctx context.Context, rqt *pluginapi.Allo
 	for _, id := range rqt.DevicesIDs {
 		// If we are using the time-sharing solution, the input deviceID will be a virtual Device ID.
 		// We need to map it to the corresponding physical device ID.
-		if timesharing.IsEnabled(s.ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy) {
+		if s.ngm.gpuConfig.MaxTimeSharedClientsPerGPU > 0 {
 			physicalDeviceID, err := timesharing.VirtualToPhysicalDeviceID(id)
 			if err != nil {
 				return nil, err

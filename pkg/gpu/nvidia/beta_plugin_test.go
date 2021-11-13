@@ -29,8 +29,6 @@ import (
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
-
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
 )
 
 func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
@@ -183,10 +181,7 @@ func TestNvidiaGPUManagerBetaAPIWithTimeSharingSolution(t *testing.T) {
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
 	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{
-		GPUSharingConfig: GPUSharingConfig{
-			GPUSharingStrategy:     []string{timesharing.TimeSharing},
-			MaxSharedClientsPerGPU: 2,
-		},
+		MaxTimeSharedClientsPerGPU: 2,
 	})
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
