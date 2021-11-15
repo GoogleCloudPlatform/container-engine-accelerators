@@ -57,7 +57,7 @@ var (
 // GPUConfig stores the settings used to configure the GPUs on a node.
 type GPUConfig struct {
 	GPUPartitionSize string
-	// maxTimeSharedClientsPerGPU is the number of the time-shared GPU resources to expose for each physical GPU.
+	// MaxTimeSharedClientsPerGPU is the number of the time-shared GPU resources to expose for each physical GPU.
 	MaxTimeSharedClientsPerGPU int
 }
 
