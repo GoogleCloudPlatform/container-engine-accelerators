@@ -21,30 +21,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func TestIsEnabled(t *testing.T) {
-	cases := []struct {
-		name               string
-		gpuSharingStrategy []string
-		want               bool
-	}{{
-		name:               "include time-sharing solution",
-		gpuSharingStrategy: []string{"mig", "time-sharing"},
-		want:               true,
-	}, {
-		name:               "don't include time-sharing solution",
-		gpuSharingStrategy: []string{"mig", "mps"},
-		want:               false,
-	}}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			get := IsEnabled(tc.gpuSharingStrategy)
-			if diff := cmp.Diff(tc.want, get); diff != "" {
-				t.Error("unexpected error (-want, +got) = ", diff)
-			}
-		})
-	}
-}
-
 func TestValidateRequest(t *testing.T) {
 	cases := []struct {
 		name              string

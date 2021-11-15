@@ -57,14 +57,8 @@ var (
 // GPUConfig stores the settings used to configure the GPUs on a node.
 type GPUConfig struct {
 	GPUPartitionSize string
-	GPUSharingConfig GPUSharingConfig
-}
-
-type GPUSharingConfig struct {
-	// GPUSharingStrategy could be a slice of string with multiple strategies.
-	GPUSharingStrategy []string
-	// maxSharedClientsPerGPU is the number of the shared GPU resources to expose for each physical GPU.
-	MaxSharedClientsPerGPU int
+	// MaxTimeSharedClientsPerGPU is the number of the time-shared GPU resources to expose for each physical GPU.
+	MaxTimeSharedClientsPerGPU int
 }
 
 // nvidiaGPUManager manages nvidia gpu devices.
@@ -118,10 +112,10 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 
 	switch {
 	// We will have MPS solution in the future, which will be mutually exclusive with the time-sharing solution.
-	case timesharing.IsEnabled(ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy):
+	case ngm.gpuConfig.MaxTimeSharedClientsPerGPU > 0:
 		virtualGPUDevices := map[string]pluginapi.Device{}
 		for _, device := range physicalGPUDevices {
-			for i := 0; i < ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU; i++ {
+			for i := 0; i < ngm.gpuConfig.MaxTimeSharedClientsPerGPU; i++ {
 				virtualDeviceID := fmt.Sprintf("%s/vgpu%d", device.ID, i)
 				// The virtual GPU device with time-sharing solution will inherit the health status from its underlying physical GPU device.
 				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health}
@@ -138,7 +132,7 @@ func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec
 	deviceSpecs := make([]pluginapi.DeviceSpec, 0)
 	// If we are using the time-sharing solution, the input deviceID will be a virtual Device ID.
 	// We need to map it to the corresponding physical device ID.
-	if timesharing.IsEnabled(ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy) {
+	if ngm.gpuConfig.MaxTimeSharedClientsPerGPU > 0 {
 		physicalDeviceID, err := timesharing.VirtualToPhysicalDeviceID(deviceID)
 		if err != nil {
 			return nil, err
