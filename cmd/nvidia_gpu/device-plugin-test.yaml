@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-gpu-device-plugin-test
+  namespace: kube-system
+  labels:
+    k8s-app: nvidia-gpu-device-plugin-test
+    addonmanager.kubernetes.io/mode: EnsureExists
+spec:
+  selector:
+    matchLabels:
+      k8s-app: nvidia-gpu-device-plugin-test
+  template:
+    metadata:
+      labels:
+        k8s-app: nvidia-gpu-device-plugin-test
+    spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator-test
+                    operator: Exists
+      tolerations:
+        - operator: "Exists"
+          effect: "NoExecute"
+        - operator: "Exists"
+          effect: "NoSchedule"
+      volumes:
+        - name: device-plugin
+          hostPath:
+            path: /var/lib/kubelet/device-plugins
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: nvidia
+          hostPath:
+            path: /home/kubernetes/bin/nvidia
+        - name: pod-resources
+          hostPath:
+            path: /var/lib/kubelet/pod-resources
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: nvidia-config
+          hostPath:
+            path: /etc/nvidia
+      containers:
+        - image: "gcr.io/gke-release-staging/nvidia-gpu-device-plugin@sha256:c408b9ac8f666864fd683f3fceff6a3f04fc51c078fd26c1c95797907f0cb776"
+          command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics"]
+          name: nvidia-gpu-device-plugin
+          ports:
+            - name: "metrics"
+              containerPort: 2112
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /usr/local/nvidia/lib64
+          resources:
+            requests:
+              cpu: 50m
+              memory: 20Mi
+            limits:
+              cpu: 50m
+              memory: 50Mi
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: device-plugin
+              mountPath: /device-plugin
+            - name: dev
+              mountPath: /dev
+            - name: nvidia
+              mountPath: /usr/local/nvidia
+            - name: pod-resources
+              mountPath: /var/lib/kubelet/pod-resources
+            - name: proc
+              mountPath: /proc
+            - name: nvidia-config
+              mountPath: /etc/nvidia
+  updateStrategy:
+    type: RollingUpdate
