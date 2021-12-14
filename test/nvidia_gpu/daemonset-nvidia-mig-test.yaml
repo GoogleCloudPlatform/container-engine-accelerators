@@ -12,13 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# The Dockerfile and other source for this daemonset are in
-# https://github.com/GoogleCloudPlatform/cos-gpu-installer
-#
-# This is the same as ../../daemonset.yaml except that it assumes that the
-# docker image is present on the node instead of downloading from GCR. This
-# allows easier upgrades because GKE can preload the correct image on the
-# node and the daemonset can just use that image.
+# This daemonset installs nvidia driver 450.80.02 and invokes the
+# partition_gpu tool to enable MIG mode and create GPU instances as specified
+# in the GPU config.
 
 apiVersion: apps/v1
 kind: DaemonSet
@@ -66,6 +62,9 @@ spec:
         - name: cos-tools
           hostPath:
             path: /var/lib/cos-tools
+        - name: nvidia-config
+          hostPath:
+            path: /etc/nvidia
       initContainers:
         - image: "cos-nvidia-installer:fixed"
           imagePullPolicy: Never
@@ -101,6 +100,23 @@ spec:
               mountPath: /root
             - name: cos-tools
               mountPath: /build/cos-tools
+        - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:6317b8b1bbf0c487f220c419a00840e518924fcda1d4485b47486ef21c0891f2"
+          name: partition-gpus
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /usr/local/nvidia/lib64
+          resources:
+            requests:
+              cpu: "0.15"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: nvidia-install-dir-host
+              mountPath: /usr/local/nvidia
+            - name: dev
+              mountPath: /dev
+            - name: nvidia-config
+              mountPath: /etc/nvidia
       containers:
         - image: "gcr.io/google-containers/pause:2.0"
           name: pause
