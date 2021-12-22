@@ -150,7 +150,7 @@ gopkg.in/yaml.v2
 ## explicit
 k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha
 k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1
-# k8s.io/kubernetes v1.19.11
+# k8s.io/kubernetes v1.19.16
 ## explicit
 k8s.io/kubernetes/pkg/kubelet/apis/podresources/v1alpha1
 # k8s.io/api => k8s.io/api v0.19.2
