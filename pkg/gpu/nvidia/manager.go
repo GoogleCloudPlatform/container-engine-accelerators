@@ -245,6 +245,11 @@ func (ngm *nvidiaGPUManager) Start() error {
 		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaModesetDevicePath)
 	}
 
+	nvidiaModesetDevicePath := path.Join(ngm.devDirectory, nvidiaModesetDevice)
+	if _, err := os.Stat(nvidiaModesetDevicePath); err == nil {
+		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaModesetDevicePath)
+	}
+
 	nvidiaUVMToolsDevicePath := path.Join(ngm.devDirectory, nvidiaUVMToolsDevice)
 	if _, err := os.Stat(nvidiaUVMToolsDevicePath); err == nil {
 		ngm.defaultDevices = append(ngm.defaultDevices, nvidiaUVMToolsDevicePath)
