@@ -38,6 +38,7 @@ spec:
       - name: nvidia
         hostPath:
             path: /home/kubernetes/bin/nvidia
+            type: DirectoryOrCreate
       - name: pod-resources
         hostPath:
             path: /var/lib/kubelet/pod-resources
