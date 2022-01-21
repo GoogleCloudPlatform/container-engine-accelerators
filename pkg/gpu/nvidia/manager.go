@@ -27,6 +27,7 @@ import (
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
+	"k8s.io/apimachinery/pkg/util/wait"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
@@ -298,9 +299,18 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 				// Starts device plugin service.
 				go func() {
 					defer wg.Done()
-					// Blocking call to accept incoming connections.
-					err := ngm.grpcServer.Serve(lis)
-					glog.Errorf("device-plugin server stopped serving: %v", err)
+					if pollErr := wait.PollImmediate(10*time.Second, 2*time.Minute, func() (bool, error) {
+						// Blocking call to accept incoming connections.
+						// Race condition may cause the function fail,
+						// trying to make the call until it returns true with 2 minute timeout.
+						err := ngm.grpcServer.Serve(lis)
+						if err != nil {
+							return false, fmt.Errorf("device-plugin server stopped serving: %v", err)
+						}
+						return true, nil
+					}); pollErr != nil {
+						glog.Errorf(pollErr.Error())
+					}
 				}()
 
 				if registerWithKubelet {
