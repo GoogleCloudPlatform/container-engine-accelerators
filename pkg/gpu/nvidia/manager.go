@@ -34,8 +34,6 @@ import (
 )
 
 const (
-	// proc directory is used to lookup the access files for each GPU partition.
-	procDir = "/proc"
 	// All NVIDIA GPUs cards should be mounted with nvidiactl and nvidia-uvm
 	// If the driver installed correctly, these two devices will be there.
 	nvidiaCtlDevice = "nvidiactl"
@@ -83,7 +81,7 @@ type MountPath struct {
 	ContainerPath string
 }
 
-func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, gpuConfig GPUConfig) *nvidiaGPUManager {
+func NewNvidiaGPUManager(devDirectory, procDirectory string, mountPaths []MountPath, gpuConfig GPUConfig) *nvidiaGPUManager {
 	return &nvidiaGPUManager{
 
 		devDirectory:        devDirectory,
@@ -93,7 +91,7 @@ func NewNvidiaGPUManager(devDirectory string, mountPaths []MountPath, gpuConfig 
 		nvidiaCtlDevicePath: path.Join(devDirectory, nvidiaCtlDevice),
 		nvidiaUVMDevicePath: path.Join(devDirectory, nvidiaUVMDevice),
 		gpuConfig:           gpuConfig,
-		migDeviceManager:    mig.NewDeviceManager(devDirectory, procDir),
+		migDeviceManager:    mig.NewDeviceManager(devDirectory, procDirectory),
 		Health:              make(chan pluginapi.Device),
 	}
 }
