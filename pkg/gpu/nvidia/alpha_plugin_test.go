@@ -237,6 +237,10 @@ func TestNvidiaGPUManagerAlphaAPIWithTimeSharingSolution(t *testing.T) {
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia", ReadOnly: true},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d", ReadOnly: true}}
 	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{
+		GPUSharingConfig: GPUSharingConfig{
+			GPUSharingStrategy:     "time-sharing",
+			MaxSharedClientsPerGPU: 2,
+		},
 		MaxTimeSharedClientsPerGPU: 2,
 	})
 	as := assert.New(t)
