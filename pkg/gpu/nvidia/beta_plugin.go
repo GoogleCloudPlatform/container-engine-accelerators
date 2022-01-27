@@ -25,7 +25,7 @@ import (
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
 )
 
 type pluginServiceV1Beta1 struct {
@@ -56,8 +56,8 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	resps := new(pluginapi.AllocateResponse)
 	for _, rqt := range requests.ContainerRequests {
-		// Validate if the request is for time shared GPU resources and check if the request meets the time-sharing solution conditions.
-		if err := timesharing.ValidateRequest(rqt.DevicesIDs, len(s.ngm.ListPhysicalDevices())); err != nil {
+		// Validate if the request is for shared GPUs and check if the request meets the GPU sharing conditions.
+		if err := gpusharing.ValidateRequest(rqt.DevicesIDs, len(s.ngm.ListPhysicalDevices())); err != nil {
 			return nil, err
 		}
 

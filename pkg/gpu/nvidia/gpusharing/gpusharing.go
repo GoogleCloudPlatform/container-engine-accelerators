@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package timesharing
+package gpusharing
 
 import (
 	"errors"
@@ -21,13 +21,13 @@ import (
 )
 
 // ValidateRequest will first check if the input device IDs are virtual device IDs, and then validate the request.
-// A valid time-sharing solution request should meet the following conditions:
+// A valid sharing request should meet the following conditions:
 // 1. if there is only one physical device, it is valid to request multiple virtual devices in a single request.
 // 2. if there are multiple physical devices, it is only valid to request one virtual device in a single request.
-// Noted: in this validation, each compute unit will be regarded as a physical device in the MIG mode.
+// Note: in this validation, each MIG partition will be regarded as a physical device.
 func ValidateRequest(requestDevicesIDs []string, deviceCount int) error {
 	if len(requestDevicesIDs) > 1 && IsVirtualDeviceID(requestDevicesIDs[0]) && deviceCount > 1 {
-		return errors.New("invalid request for time-sharing GPU, at most 1 nvidia.com/gpu can be requested on nodes which have more than 1 physical GPU or MIG partitions")
+		return errors.New("invalid request for sharing GPU, at most 1 nvidia.com/gpu can be requested on multi-GPU nodes")
 	}
 
 	return nil

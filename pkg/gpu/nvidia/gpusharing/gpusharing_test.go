@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package timesharing
+package gpusharing
 
 import (
 	"errors"
@@ -46,7 +46,7 @@ func TestValidateRequest(t *testing.T) {
 		name:              "request multiple virtual devices and have multiple physical devices",
 		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu1"},
 		deviceCount:       2,
-		wantError:         errors.New("invalid request for time-sharing GPU, at most 1 nvidia.com/gpu can be requested on nodes which have more than 1 physical GPU or MIG partitions"),
+		wantError:         errors.New("invalid request for sharing GPU, at most 1 nvidia.com/gpu can be requested on multi-GPU nodes"),
 	}}
 
 	for _, tc := range cases {

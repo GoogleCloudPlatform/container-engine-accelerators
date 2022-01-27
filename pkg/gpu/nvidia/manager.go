@@ -34,8 +34,8 @@ import (
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
 )
 
 const (
@@ -107,7 +107,7 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 			break
 		case Undefined:
 			if config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
-				return fmt.Errorf("GPU sharing strategy needs to specified when MaxSharedClientsPerGPU > 0")
+				return fmt.Errorf("GPU sharing strategy needs to be specified when MaxSharedClientsPerGPU > 0")
 			}
 		default:
 			return fmt.Errorf("invalid GPU Sharing strategy: %v, should be one of time-sharing or mps", config.GPUSharingConfig.GPUSharingStrategy)
@@ -163,13 +163,12 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 	physicalGPUDevices := ngm.ListPhysicalDevices()
 
 	switch {
-	// We will have MPS solution in the future, which will be mutually exclusive with the time-sharing solution.
 	case ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU > 0:
 		virtualGPUDevices := map[string]pluginapi.Device{}
 		for _, device := range physicalGPUDevices {
 			for i := 0; i < ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU; i++ {
 				virtualDeviceID := fmt.Sprintf("%s/vgpu%d", device.ID, i)
-				// The virtual GPU device with time-sharing solution will inherit the health status from its underlying physical GPU device.
+				// When sharing GPUs, the virtual GPU device will inherit the health status from its underlying physical GPU device.
 				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health}
 			}
 		}
@@ -182,10 +181,10 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 // DeviceSpec returns the device spec that inclues list of devices to allocate for a deviceID.
 func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, error) {
 	deviceSpecs := make([]pluginapi.DeviceSpec, 0)
-	// If we are using the time-sharing solution, the input deviceID will be a virtual Device ID.
+	// With GPU sharing, the input deviceID will be a virtual Device ID.
 	// We need to map it to the corresponding physical device ID.
 	if ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
-		physicalDeviceID, err := timesharing.VirtualToPhysicalDeviceID(deviceID)
+		physicalDeviceID, err := gpusharing.VirtualToPhysicalDeviceID(deviceID)
 		if err != nil {
 			return nil, err
 		}
