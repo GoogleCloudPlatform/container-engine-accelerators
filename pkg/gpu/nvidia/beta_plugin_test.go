@@ -36,9 +36,9 @@ func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	defer os.RemoveAll(testDevDir)
 
 	// Expects a valid GPUManager to be created.
-	mountPaths := []MountPath{
-		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
-		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
+	mountPaths := []pluginapi.Mount{
+		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia", ReadOnly: true},
+		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d", ReadOnly: true}}
 	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{})
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
@@ -177,11 +177,14 @@ func TestNvidiaGPUManagerBetaAPIWithTimeSharingSolution(t *testing.T) {
 	defer os.RemoveAll(testDevDir)
 
 	// Expects a valid GPUManager to be created.
-	mountPaths := []MountPath{
-		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
-		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
+	mountPaths := []pluginapi.Mount{
+		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia", ReadOnly: true},
+		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d", ReadOnly: true}}
 	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{
-		MaxTimeSharedClientsPerGPU: 2,
+		GPUSharingConfig: GPUSharingConfig{
+			GPUSharingStrategy:     "time-sharing",
+			MaxSharedClientsPerGPU: 2,
+		},
 	})
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
