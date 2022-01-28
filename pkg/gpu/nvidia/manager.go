@@ -15,22 +15,27 @@
 package nvidia
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net"
 	"os"
+	"os/exec"
 	"path"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
+	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
 )
 
 const (
@@ -46,6 +51,12 @@ const (
 	nvidiaDeviceRE            = `^nvidia[0-9]*$`
 	gpuCheckInterval          = 10 * time.Second
 	pluginSocketCheckInterval = 1 * time.Second
+
+	nvidiaMpsDir       = "/tmp/nvidia-mps"
+	mpsControlBin      = "/usr/local/nvidia/bin/nvidia-cuda-mps-control"
+	mpsActiveThreadCmd = "get_default_active_thread_percentage"
+	mpsMemLimitEnv     = "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT"
+	mpsThreadLimitEnv  = "CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"
 )
 
 var (
@@ -56,13 +67,58 @@ var (
 type GPUConfig struct {
 	GPUPartitionSize string
 	// MaxTimeSharedClientsPerGPU is the number of the time-shared GPU resources to expose for each physical GPU.
+	// Deprecated in favor of GPUSharingConfig.
 	MaxTimeSharedClientsPerGPU int
+	// GPUSharingConfig informs how GPUs on this node can be shared between containers.
+	GPUSharingConfig GPUSharingConfig
+}
+
+type GPUSharingStrategy string
+
+const (
+	Undefined   GPUSharingStrategy = ""
+	TimeSharing GPUSharingStrategy = "time-sharing"
+	MPS         GPUSharingStrategy = "mps"
+)
+
+type GPUSharingConfig struct {
+	// GPUSharingStrategy is the type of sharing strategy to enable on this node. Values are "time-sharing" or "mps".
+	GPUSharingStrategy GPUSharingStrategy
+	// MaxSharedClientsPerGPU is the maximum number of clients that are allowed to share a single GPU.
+	MaxSharedClientsPerGPU int
+}
+
+func (config *GPUConfig) AddDefaultsAndValidate() error {
+	if config.MaxTimeSharedClientsPerGPU > 0 {
+		if config.GPUSharingConfig.GPUSharingStrategy != "" || config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
+			return fmt.Errorf("invalid GPUConfig, only one of MaxTimeSharedClientsPerGPU or GPUSharingConfig should be set")
+		}
+
+		config.GPUSharingConfig.GPUSharingStrategy = TimeSharing
+		config.GPUSharingConfig.MaxSharedClientsPerGPU = config.MaxTimeSharedClientsPerGPU
+	} else {
+		switch config.GPUSharingConfig.GPUSharingStrategy {
+		case TimeSharing, MPS:
+			if config.GPUSharingConfig.MaxSharedClientsPerGPU <= 0 {
+				return fmt.Errorf("MaxSharedClientsPerGPU should be > 0 for time-sharing or mps GPU sharing strategies")
+			}
+			break
+		case Undefined:
+			if config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
+				return fmt.Errorf("GPU sharing strategy needs to be specified when MaxSharedClientsPerGPU > 0")
+			}
+		default:
+			return fmt.Errorf("invalid GPU Sharing strategy: %v, should be one of time-sharing or mps", config.GPUSharingConfig.GPUSharingStrategy)
+
+		}
+	}
+	return nil
 }
 
 // nvidiaGPUManager manages nvidia gpu devices.
 type nvidiaGPUManager struct {
 	devDirectory        string
-	mountPaths          []MountPath
+	mountPaths          []pluginapi.Mount
 	defaultDevices      []string
 	devices             map[string]pluginapi.Device
 	grpcServer          *grpc.Server
@@ -74,14 +130,10 @@ type nvidiaGPUManager struct {
 	gpuConfig           GPUConfig
 	migDeviceManager    mig.DeviceManager
 	Health              chan pluginapi.Device
+	totalMemPerGPU      uint64 // Total memory available per GPU (in MB)
 }
 
-type MountPath struct {
-	HostPath      string
-	ContainerPath string
-}
-
-func NewNvidiaGPUManager(devDirectory, procDirectory string, mountPaths []MountPath, gpuConfig GPUConfig) *nvidiaGPUManager {
+func NewNvidiaGPUManager(devDirectory, procDirectory string, mountPaths []pluginapi.Mount, gpuConfig GPUConfig) *nvidiaGPUManager {
 	return &nvidiaGPUManager{
 
 		devDirectory:        devDirectory,
@@ -109,13 +161,12 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 	physicalGPUDevices := ngm.ListPhysicalDevices()
 
 	switch {
-	// We will have MPS solution in the future, which will be mutually exclusive with the time-sharing solution.
-	case ngm.gpuConfig.MaxTimeSharedClientsPerGPU > 0:
+	case ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU > 0:
 		virtualGPUDevices := map[string]pluginapi.Device{}
 		for _, device := range physicalGPUDevices {
-			for i := 0; i < ngm.gpuConfig.MaxTimeSharedClientsPerGPU; i++ {
+			for i := 0; i < ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU; i++ {
 				virtualDeviceID := fmt.Sprintf("%s/vgpu%d", device.ID, i)
-				// The virtual GPU device with time-sharing solution will inherit the health status from its underlying physical GPU device.
+				// When sharing GPUs, the virtual GPU device will inherit the health status from its underlying physical GPU device.
 				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health}
 			}
 		}
@@ -128,10 +179,10 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 // DeviceSpec returns the device spec that inclues list of devices to allocate for a deviceID.
 func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, error) {
 	deviceSpecs := make([]pluginapi.DeviceSpec, 0)
-	// If we are using the time-sharing solution, the input deviceID will be a virtual Device ID.
+	// With GPU sharing, the input deviceID will be a virtual Device ID.
 	// We need to map it to the corresponding physical device ID.
-	if ngm.gpuConfig.MaxTimeSharedClientsPerGPU > 0 {
-		physicalDeviceID, err := timesharing.VirtualToPhysicalDeviceID(deviceID)
+	if ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
+		physicalDeviceID, err := gpusharing.VirtualToPhysicalDeviceID(deviceID)
 		if err != nil {
 			return nil, err
 		}
@@ -208,6 +259,49 @@ func (ngm *nvidiaGPUManager) discoverNumGPUs() (int, error) {
 	return deviceCount, nil
 }
 
+// isMpsHealthy checks whether MPS control daemon is running and healhty on the node.
+func (ngm *nvidiaGPUManager) isMpsHealthy() error {
+	var out bytes.Buffer
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	defer reader.Close()
+
+	mpsCmd := exec.Command(mpsControlBin)
+	mpsCmd.Stdin = reader
+	mpsCmd.Stdout = &out
+
+	err := mpsCmd.Start()
+	if err != nil {
+		return fmt.Errorf("failed to start NVIDIA MPS health check command: %v", err)
+	}
+
+	writer.Write([]byte(mpsActiveThreadCmd))
+	writer.Close()
+
+	err = mpsCmd.Wait()
+	if err != nil {
+		return fmt.Errorf("failed to health check NVIDIA MPS: %v", err)
+	}
+
+	reader.Close()
+	glog.Infof("MPS is healthy, active thread percentage = %s", out.String())
+	return nil
+}
+
+func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
+	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == MPS {
+		activeThreadLimit := numDevicesRequested * 100 / ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU
+		memoryLimit := uint64(numDevicesRequested) * ngm.totalMemPerGPU / uint64(ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU)
+
+		return map[string]string{
+			mpsThreadLimitEnv: strconv.Itoa(activeThreadLimit),
+			mpsMemLimitEnv:    fmt.Sprintf("%dMB", memoryLimit),
+		}
+
+	}
+	return map[string]string{}
+}
+
 // SetDeviceHealth sets the health status for a GPU device or partition if MIG is enabled
 func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string) {
 	ngm.devicesMutex.Lock()
@@ -257,7 +351,35 @@ func (ngm *nvidiaGPUManager) Start() error {
 		}
 	}
 
+	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == "mps" {
+		if err := ngm.isMpsHealthy(); err != nil {
+			return fmt.Errorf("NVIDIA MPS is not running on this node: %v", err)
+		}
+		ngm.mountPaths = append(ngm.mountPaths, pluginapi.Mount{HostPath: nvidiaMpsDir, ContainerPath: nvidiaMpsDir, ReadOnly: false})
+		var err error
+		ngm.totalMemPerGPU, err = totalMemPerGPU()
+		if err != nil {
+			return fmt.Errorf("failed to query total memory available per GPU: %v", err)
+		}
+	}
+
 	return nil
+}
+
+// totalMemPerGPU returns the GPU memory available on each GPU device.
+func totalMemPerGPU() (uint64, error) {
+	count, err := nvml.GetDeviceCount()
+	if err != nil {
+		return 0, fmt.Errorf("failed to enumerate devices: %v", err)
+	}
+	if count <= 0 {
+		return 0, fmt.Errorf("no GPUs on node, count: %d", count)
+	}
+	device, err := nvml.NewDevice(0)
+	if err != nil {
+		return 0, fmt.Errorf("failed to query GPU with nvml: %v", err)
+	}
+	return *device.Memory, nil
 }
 
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {

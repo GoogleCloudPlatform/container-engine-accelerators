@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
+	betapluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 type KubeletStub struct {
@@ -116,6 +117,10 @@ func TestNvidiaGPUManagerAlphaAPI(t *testing.T) {
 			name: "GPU manager with time-sharing",
 			gpuConfig: GPUConfig{
 				MaxTimeSharedClientsPerGPU: 2,
+				GPUSharingConfig: GPUSharingConfig{
+					GPUSharingStrategy:     "time-sharing",
+					MaxSharedClientsPerGPU: 2,
+				},
 			},
 			wantDevices: map[string]*pluginapi.Device{
 				"nvidia0/vgpu0": {
@@ -176,9 +181,9 @@ func testNvidiaGPUManagerAlphaAPI(gpuConfig GPUConfig, wantDevices map[string]*p
 	}()
 
 	// Expects a valid GPUManager to be created.
-	mountPaths := []MountPath{
-		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia"},
-		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d"}}
+	mountPaths := []betapluginapi.Mount{
+		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia", ReadOnly: true},
+		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d", ReadOnly: true}}
 	testGpuManager := NewNvidiaGPUManager(testDevDir, "", mountPaths, gpuConfig)
 	if testGpuManager == nil {
 		return fmt.Errorf("failed to initilize a GPU manager")
