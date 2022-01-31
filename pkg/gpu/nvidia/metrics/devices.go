@@ -23,7 +23,7 @@ import (
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 
 	"github.com/golang/glog"
@@ -89,7 +89,7 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 				}
 				containerDevices[container] = make([]string, 0)
 				for _, deviceID := range d.DeviceIds {
-					if timesharing.IsVirtualDeviceID(deviceID) {
+					if gpusharing.IsVirtualDeviceID(deviceID) {
 						continue
 					}
 					containerDevices[container] = append(containerDevices[container], deviceID)
