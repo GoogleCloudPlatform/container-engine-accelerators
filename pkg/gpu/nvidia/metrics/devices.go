@@ -23,7 +23,7 @@ import (
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/timesharing"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 
 	"github.com/golang/glog"
@@ -89,7 +89,7 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 				}
 				containerDevices[container] = make([]string, 0)
 				for _, deviceID := range d.DeviceIds {
-					if gpusharing.IsVirtualDeviceID(deviceID) {
+					if timesharing.IsVirtualDeviceID(deviceID) {
 						continue
 					}
 					containerDevices[container] = append(containerDevices[container], deviceID)
@@ -99,6 +99,10 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 	}
 
 	return containerDevices, nil
+}
+
+func GetAllGpuDevices() map[string]*nvml.Device {
+	return gpuDevices
 }
 
 // DiscoverGPUDevices discovers GPUs attached to the node, and updates `gpuDevices` map.

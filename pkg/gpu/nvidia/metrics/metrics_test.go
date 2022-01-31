@@ -83,11 +83,17 @@ var (
 		Model:  stringPtr("model1"),
 		Memory: uint64Ptr(350),
 	}
+	device4 = &nvml.Device{
+		UUID:   "8732906554",
+		Model:  stringPtr("model1"),
+		Memory: uint64Ptr(700),
+	}
 
 	gpuDevicesMock = map[string]*nvml.Device{
 		"q759757": device1,
 		"afjodaj": device2,
 		"7v89zhi": device3,
+		"8g45fc3": device4,
 	}
 	deviceToStatus = map[*nvml.Device]*nvml.DeviceStatus{
 		device1: {
@@ -111,19 +117,27 @@ var (
 				},
 			},
 		},
+		device4: {
+			Memory: nvml.MemoryInfo{
+				Global: nvml.DeviceMemory{
+					Used: uint64Ptr(375),
+				},
+			},
+		},
 	}
 
 	dutyCycleMock = map[string]uint{
 		"656547758":  78,
 		"850729563":  32,
 		"3572375710": 13,
+		"8732906554": 1,
 	}
 )
 
 func TestMetricsUpdate(t *testing.T) {
 	gmc = &mockCollector{}
 	ms := MetricServer{}
-	ms.updateMetrics(containerDevicesMock)
+	ms.updateMetrics(containerDevicesMock, gpuDevicesMock)
 
 	if testutil.ToFloat64(
 		AcceleratorRequests.WithLabelValues(
@@ -170,4 +184,48 @@ func TestMetricsUpdate(t *testing.T) {
 		t.Fatalf("Wrong Result in MemoryTotal")
 	}
 
+	if testutil.ToFloat64(
+		DutyCycleGpu.WithLabelValues(
+			"nvidia", "656547758", "model1")) != 78 ||
+		testutil.ToFloat64(
+			DutyCycleGpu.WithLabelValues(
+				"nvidia", "850729563", "model2")) != 32 ||
+		testutil.ToFloat64(
+			DutyCycleGpu.WithLabelValues(
+				"nvidia", "3572375710", "model1")) != 13 ||
+		testutil.ToFloat64(
+			DutyCycleGpu.WithLabelValues(
+				"nvidia", "8732906554", "model1")) != 1 {
+		t.Fatalf("Wrong Result in DutyCycleGpu")
+	}
+
+	if testutil.ToFloat64(
+		MemoryTotalGpu.WithLabelValues(
+			"nvidia", "656547758", "model1")) != 200*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryTotalGpu.WithLabelValues(
+				"nvidia", "850729563", "model2")) != 200*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryTotalGpu.WithLabelValues(
+				"nvidia", "3572375710", "model1")) != 350*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryTotalGpu.WithLabelValues(
+				"nvidia", "8732906554", "model1")) != 700*1024*1024 {
+		t.Fatalf("Wrong Result in MemoryTotalGpu")
+	}
+
+	if testutil.ToFloat64(
+		MemoryUsedGpu.WithLabelValues(
+			"nvidia", "656547758", "model1")) != 50*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryUsedGpu.WithLabelValues(
+				"nvidia", "850729563", "model2")) != 150*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryUsedGpu.WithLabelValues(
+				"nvidia", "3572375710", "model1")) != 100*1024*1024 ||
+		testutil.ToFloat64(
+			MemoryUsedGpu.WithLabelValues(
+				"nvidia", "8732906554", "model1")) != 375*1024*1024 {
+		t.Fatalf("Wrong Result in MemoryUsedGpu")
+	}
 }

@@ -54,6 +54,30 @@ func (t *mCollector) collectDutyCycle(uuid string, since time.Duration) (uint, e
 
 var (
 	// DutyCycle reports the percent of time when the GPU was actively processing.
+	DutyCycleGpu = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "duty_cycle_gpu",
+			Help: "Percent of time when the GPU was actively processing",
+		},
+		[]string{"make", "accelerator_id", "model"})
+
+	// MemoryTotal reports the total memory available on the GPU.
+	MemoryTotalGpu = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "memory_total_gpu",
+			Help: "Total memory available on the GPU in bytes",
+		},
+		[]string{"make", "accelerator_id", "model"})
+
+	// MemoryUsed reports GPU memory allocated.
+	MemoryUsedGpu = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "memory_used_gpu",
+			Help: "Allocated GPU memory in bytes",
+		},
+		[]string{"make", "accelerator_id", "model"})
+
+	// DutyCycle reports the percent of time when the GPU was actively processing.
 	DutyCycle = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "duty_cycle",
@@ -88,7 +112,7 @@ var (
 
 const metricsResetInterval = time.Minute
 
-// MetricServer exposes GPU metrics for all containers in prometheus format on the specified port.
+// MetricServer exposes GPU metrics for all containers and nodes in prometheus format on the specified port.
 type MetricServer struct {
 	collectionInterval   int
 	port                 int
@@ -145,12 +169,13 @@ func (m *MetricServer) collectMetrics() {
 				glog.Errorf("Failed to get devices for containers: %v", err)
 				continue
 			}
-			m.updateMetrics(devices)
+			gpuDevices := GetAllGpuDevices()
+			m.updateMetrics(devices, gpuDevices)
 		}
 	}
 }
 
-func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) {
+func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, gpuDevices map[string]*nvml.Device) {
 	m.resetMetricsIfNeeded()
 
 	for container, devices := range containerDevices {
@@ -179,6 +204,23 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string) 
 			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
 		}
 	}
+
+	for device, d := range gpuDevices {
+		status, err := gmc.collectStatus(d)
+		if err != nil {
+			glog.Errorf("Failed to get device status for %s: %v", device, err)
+		}
+		mem := status.Memory
+		dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
+		if err != nil {
+			glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
+			continue
+		}
+
+		DutyCycleGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
+		MemoryTotalGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024)       // memory reported in bytes
+		MemoryUsedGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
+	}
 }
 
 func (m *MetricServer) resetMetricsIfNeeded() {
@@ -187,6 +229,9 @@ func (m *MetricServer) resetMetricsIfNeeded() {
 		DutyCycle.Reset()
 		MemoryTotal.Reset()
 		MemoryUsed.Reset()
+		DutyCycleGpu.Reset()
+		MemoryTotalGpu.Reset()
+		MemoryUsedGpu.Reset()
 
 		m.lastMetricsResetTime = time.Now()
 	}
