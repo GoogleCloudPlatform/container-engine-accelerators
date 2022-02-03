@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
