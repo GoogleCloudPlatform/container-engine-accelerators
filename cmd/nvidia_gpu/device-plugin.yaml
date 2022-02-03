@@ -1,3 +1,4 @@
+# NOTE: This file is not the source of truth for GKE device plugins. Modifying this file would have no effect on GKE clusters.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -54,11 +55,6 @@ spec:
         ports:
         - name: "metrics"
           containerPort: 2112
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
         resources:
