@@ -27,7 +27,6 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	pluginalpha "k8s.io/kubelet/pkg/apis/deviceplugin/v1alpha"
 	pluginbeta "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -92,7 +91,6 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	as.Nil(err)
 	defer conn.Close()
 
-	clientAlpha := pluginalpha.NewDevicePluginClient(conn)
 	clientBeta := pluginbeta.NewDevicePluginClient(conn)
 
 	// Tests Beta ListAndWatch
@@ -134,16 +132,4 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 			{DevicesIDs: []string{"nvidia1", "nvidia3"}}}})
 	as.Nil(resp)
 	as.NotNil(err)
-
-	// Tests Alpha ListAndWatch
-	stream2, err := clientAlpha.ListAndWatch(context.Background(), &pluginalpha.Empty{})
-	as.Nil(err)
-	devs2, err := stream2.Recv()
-	as.Nil(err)
-	devices2 := make(map[string]*pluginalpha.Device)
-	for _, d := range devs2.Devices {
-		devices2[d.ID] = d
-	}
-	as.NotNil(devices2["nvidia1"])
-	as.NotNil(devices2["nvidia2"])
 }
