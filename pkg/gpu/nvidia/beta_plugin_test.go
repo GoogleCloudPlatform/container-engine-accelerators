@@ -32,7 +32,6 @@ import (
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
-
 type KubeletStub struct {
 	sync.Mutex
 	socket         string
