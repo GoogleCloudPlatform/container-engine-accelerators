@@ -17,6 +17,7 @@ package metrics
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
@@ -53,29 +54,29 @@ func (t *mCollector) collectDutyCycle(uuid string, since time.Duration) (uint, e
 }
 
 var (
-	// DutyCycle reports the percent of time when the GPU was actively processing.
-	DutyCycleGpu = promauto.NewGaugeVec(
+	// DutyCycle reports the percent of time when the GPU was actively processing per Node.
+	DutyCycleNodeGpu = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "duty_cycle_gpu",
+			Name: "duty_cycle_gpu_node",
 			Help: "Percent of time when the GPU was actively processing",
 		},
-		[]string{"make", "accelerator_id", "model"})
+		[]string{"node_name", "make", "accelerator_id", "model"})
 
-	// MemoryTotal reports the total memory available on the GPU.
-	MemoryTotalGpu = promauto.NewGaugeVec(
+	// MemoryTotal reports the total memory available on the GPU per Node.
+	MemoryTotalNodeGpu = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "memory_total_gpu",
+			Name: "memory_total_gpu_node",
 			Help: "Total memory available on the GPU in bytes",
 		},
-		[]string{"make", "accelerator_id", "model"})
+		[]string{"node_name", "make", "accelerator_id", "model"})
 
-	// MemoryUsed reports GPU memory allocated.
-	MemoryUsedGpu = promauto.NewGaugeVec(
+	// MemoryUsed reports GPU memory allocated per Node.
+	MemoryUsedNodeGpu = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "memory_used_gpu",
+			Name: "memory_used_gpu_node",
 			Help: "Allocated GPU memory in bytes",
 		},
-		[]string{"make", "accelerator_id", "model"})
+		[]string{"node_name", "make", "accelerator_id", "model"})
 
 	// DutyCycle reports the percent of time when the GPU was actively processing.
 	DutyCycle = promauto.NewGaugeVec(
@@ -204,7 +205,7 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
 		}
 	}
-
+	node_name := os.Getenv("NODE_NAME")
 	for device, d := range gpuDevices {
 		status, err := gmc.collectStatus(d)
 		if err != nil {
@@ -217,9 +218,9 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 			continue
 		}
 
-		DutyCycleGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-		MemoryTotalGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024)       // memory reported in bytes
-		MemoryUsedGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
+		DutyCycleNodeGpu.WithLabelValues(node_name, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
+		MemoryTotalNodeGpu.WithLabelValues(node_name, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024)       // memory reported in bytes
+		MemoryUsedNodeGpu.WithLabelValues(node_name, "nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
 	}
 }
 
@@ -229,9 +230,9 @@ func (m *MetricServer) resetMetricsIfNeeded() {
 		DutyCycle.Reset()
 		MemoryTotal.Reset()
 		MemoryUsed.Reset()
-		DutyCycleGpu.Reset()
-		MemoryTotalGpu.Reset()
-		MemoryUsedGpu.Reset()
+		DutyCycleNodeGpu.Reset()
+		MemoryTotalNodeGpu.Reset()
+		MemoryUsedNodeGpu.Reset()
 
 		m.lastMetricsResetTime = time.Now()
 	}
