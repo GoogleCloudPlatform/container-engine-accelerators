@@ -34,6 +34,8 @@ const (
 	kubeletEndpoint      = "kubelet.sock"
 	pluginEndpointPrefix = "nvidiaGPU"
 	devDirectory         = "/dev"
+	// Proc directory is used to lookup the access files for each GPU partition.
+	procDirectory = "/proc"
 )
 
 var (
@@ -87,7 +89,7 @@ func main() {
 		}
 	}
 	glog.Infof("Using gpu config: %v", gpuConfig)
-	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths, gpuConfig)
+	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, procDirectory, mountPaths, gpuConfig)
 
 	// Retry until nvidiactl and nvidia-uvm are detected. This is required
 	// because Nvidia drivers may not be installed initially.
