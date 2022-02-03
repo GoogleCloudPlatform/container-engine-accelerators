@@ -38,7 +38,7 @@ func TestNvidiaGPUManagerMultuipleAPIs(t *testing.T) {
 	mountPaths := []pluginbeta.Mount{
 		{HostPath: "/home/kubernetes/bin/nvidia", ContainerPath: "/usr/local/nvidia", ReadOnly: true},
 		{HostPath: "/home/kubernetes/bin/vulkan/icd.d", ContainerPath: "/etc/vulkan/icd.d", ReadOnly: true}}
-	testGpuManager := NewNvidiaGPUManager(testDevDir, mountPaths, GPUConfig{})
+	testGpuManager := NewNvidiaGPUManager(testDevDir, "", mountPaths, GPUConfig{})
 	as := assert.New(t)
 	as.NotNil(testGpuManager)
 
