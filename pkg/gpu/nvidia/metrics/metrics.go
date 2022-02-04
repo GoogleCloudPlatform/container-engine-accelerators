@@ -54,7 +54,7 @@ func (t *mCollector) collectDutyCycle(uuid string, since time.Duration) (uint, e
 }
 
 var (
-	// DutyCycle reports the percent of time when the GPU was actively processing per Node.
+	// DutyCycleNodeGpu reports the percent of time when the GPU was actively processing per Node.
 	DutyCycleNodeGpu = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "duty_cycle_gpu_node",
@@ -62,7 +62,7 @@ var (
 		},
 		[]string{"node_name", "make", "accelerator_id", "model"})
 
-	// MemoryTotal reports the total memory available on the GPU per Node.
+	// MemoryTotalNodeGpu reports the total memory available on the GPU per Node.
 	MemoryTotalNodeGpu = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "memory_total_gpu_node",
@@ -70,7 +70,7 @@ var (
 		},
 		[]string{"node_name", "make", "accelerator_id", "model"})
 
-	// MemoryUsed reports GPU memory allocated per Node.
+	// MemoryUsedNodeGpu reports GPU memory allocated per Node.
 	MemoryUsedNodeGpu = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "memory_used_gpu_node",
@@ -78,7 +78,7 @@ var (
 		},
 		[]string{"node_name", "make", "accelerator_id", "model"})
 
-	// DutyCycle reports the percent of time when the GPU was actively processing.
+	// DutyCycle reports the percent of time when the GPU was actively processing per container.
 	DutyCycle = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "duty_cycle",
@@ -86,7 +86,7 @@ var (
 		},
 		[]string{"namespace", "pod", "container", "make", "accelerator_id", "model"})
 
-	// MemoryTotal reports the total memory available on the GPU.
+	// MemoryTotal reports the total memory available on the GPUper container.
 	MemoryTotal = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "memory_total",
@@ -94,7 +94,7 @@ var (
 		},
 		[]string{"namespace", "pod", "container", "make", "accelerator_id", "model"})
 
-	// MemoryUsed reports GPU memory allocated.
+	// MemoryUsed reports GPU memory allocated per container.
 	MemoryUsed = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "memory_used",
@@ -176,6 +176,19 @@ func (m *MetricServer) collectMetrics() {
 	}
 }
 
+func getGpuMetrics(device string, d *nvml.Device) (uint, uint64, error) {
+	status, err := gmc.collectStatus(d)
+	if err != nil {
+		glog.Errorf("Failed to get device status for %s: %v", device, err)
+	}
+	mem := status.Memory
+	dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
+	if err != nil {
+		return 0, 0, fmt.Errorf("Failed to get dutyCycle: %v", err)
+	}
+	return dutyCycle, *mem.Global.Used, nil
+}
+
 func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, gpuDevices map[string]*nvml.Device) {
 	m.resetMetricsIfNeeded()
 
@@ -188,39 +201,28 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 				glog.Errorf("Failed to get device for %s: %v", device, err)
 				continue
 			}
-
-			status, err := gmc.collectStatus(d)
-			if err != nil {
-				glog.Errorf("Failed to get device status for %s: %v", device, err)
-			}
-			mem := status.Memory
-			dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
+			dutyCycle, usedMemory, err := getGpuMetrics(device, d)
 			if err != nil {
 				glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 				continue
 			}
 
 			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024)       // memory reported in bytes
-			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
+			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
+			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
 		}
 	}
-	node_name := os.Getenv("NODE_NAME")
+	nodeName := os.Getenv("NODE_NAME")
 	for device, d := range gpuDevices {
-		status, err := gmc.collectStatus(d)
-		if err != nil {
-			glog.Errorf("Failed to get device status for %s: %v", device, err)
-		}
-		mem := status.Memory
-		dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
+		dutyCycle, usedMemory, err := getGpuMetrics(device, d)
 		if err != nil {
 			glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 			continue
 		}
 
-		DutyCycleNodeGpu.WithLabelValues(node_name, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-		MemoryTotalNodeGpu.WithLabelValues(node_name, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024)       // memory reported in bytes
-		MemoryUsedNodeGpu.WithLabelValues(node_name, "nvidia", d.UUID, *d.Model).Set(float64(*mem.Global.Used) * 1024 * 1024) // memory reported in bytes
+		DutyCycleNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
+		MemoryTotalNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
+		MemoryUsedNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
 	}
 }
 
