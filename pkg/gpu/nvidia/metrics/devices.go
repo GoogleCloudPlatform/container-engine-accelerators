@@ -101,6 +101,10 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 	return containerDevices, nil
 }
 
+func GetAllGpuDevices() map[string]*nvml.Device {
+	return gpuDevices
+}
+
 // DiscoverGPUDevices discovers GPUs attached to the node, and updates `gpuDevices` map.
 func DiscoverGPUDevices() error {
 	count, err := nvml.GetDeviceCount()
