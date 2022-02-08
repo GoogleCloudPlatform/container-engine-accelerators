@@ -21,6 +21,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +31,42 @@ import (
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
+
+type KubeletStub struct {
+	sync.Mutex
+	socket         string
+	pluginEndpoint string
+	server         *grpc.Server
+}
+
+// NewKubeletStub returns an initialized KubeletStub for testing purpose.
+func NewKubeletStub(socket string) *KubeletStub {
+	return &KubeletStub{
+		socket: socket,
+	}
+}
+
+func (k *KubeletStub) Register(ctx context.Context, r *pluginapi.RegisterRequest) (*pluginapi.Empty, error) {
+	k.Lock()
+	defer k.Unlock()
+	k.pluginEndpoint = r.Endpoint
+	return &pluginapi.Empty{}, nil
+}
+
+func (k *KubeletStub) Start() error {
+	os.Remove(k.socket)
+	s, err := net.Listen("unix", k.socket)
+	if err != nil {
+		fmt.Printf("Can't listen at the socket: %+v", err)
+		return err
+	}
+
+	k.server = grpc.NewServer([]grpc.ServerOption{}...)
+
+	pluginapi.RegisterRegistrationServer(k.server, k)
+	go k.server.Serve(s)
+	return nil
+}
 
 func TestNvidiaGPUManagerBetaAPI(t *testing.T) {
 	cases := []struct {
