@@ -92,7 +92,7 @@ var (
 		},
 		[]string{"namespace", "pod", "container", "make", "accelerator_id", "model"})
 
-	// MemoryTotal reports the total memory available on the GPUper container.
+	// MemoryTotal reports the total memory available on the GPU per container.
 	MemoryTotal = promauto.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "memory_total",
