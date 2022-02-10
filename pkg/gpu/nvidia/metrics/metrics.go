@@ -226,6 +226,7 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 			continue
 		}
 		accel_index_str := strconv.FormatUint(uint64(accel_index), 10)
+
 		dutyCycle, usedMemory, err := getGpuMetrics(device, d)
 		if err != nil {
 			glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)

@@ -408,8 +408,6 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 				ngm.grpcServer = grpc.NewServer()
 
 				// Registers the supported versions of service.
-				pluginalpha := &pluginServiceV1Alpha{ngm: ngm}
-				pluginalpha.RegisterService()
 				pluginbeta := &pluginServiceV1Beta1{ngm: ngm}
 				pluginbeta.RegisterService()
 
@@ -430,11 +428,7 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 					}
 					glog.Infoln("device-plugin server started serving")
 					// Registers with Kubelet.
-					err = RegisterWithKubelet(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
-					if err != nil {
-						glog.Infoln("falling back to v1beta1 API")
-						err = RegisterWithV1Beta1Kubelet(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
-					}
+					err = RegisterWithV1Beta1Kubelet(path.Join(pMountPath, kEndpoint), pluginEndpoint, resourceName)
 					if err != nil {
 						ngm.grpcServer.Stop()
 						wg.Wait()
