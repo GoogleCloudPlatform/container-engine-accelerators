@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
@@ -33,7 +32,6 @@ type deviceStatus interface{}
 
 type metricsCollector interface {
 	collectGPUDevice(deviceName string) (*nvml.Device, error)
-	collectGPUDeviceIndex(deviceName string) (uint, error)
 	collectStatus(*nvml.Device) (status *nvml.DeviceStatus, err error)
 	collectDutyCycle(string, time.Duration) (uint, error)
 }
@@ -44,10 +42,6 @@ type mCollector struct{}
 
 func (t *mCollector) collectGPUDevice(deviceName string) (*nvml.Device, error) {
 	return DeviceFromName(deviceName)
-}
-
-func (t *mCollector) collectGPUDeviceIndex(deviceName string) (uint, error) {
-	return DeviceIndexFromName(deviceName)
 }
 
 func (t *mCollector) collectStatus(d *nvml.Device) (status *nvml.DeviceStatus, err error) {
@@ -66,7 +60,7 @@ var (
 			Name: "duty_cycle_gpu_node",
 			Help: "Percent of time when the GPU was actively processing",
 		},
-		[]string{"node_name", "make", "accelerator_index", "model"})
+		[]string{"node_name", "make", "accelerator_id", "model"})
 
 	// MemoryTotalNodeGpu reports the total memory available on the GPU per Node.
 	MemoryTotalNodeGpu = promauto.NewGaugeVec(
@@ -74,7 +68,7 @@ var (
 			Name: "memory_total_gpu_node",
 			Help: "Total memory available on the GPU in bytes",
 		},
-		[]string{"node_name", "make", "accelerator_index", "model"})
+		[]string{"node_name", "make", "accelerator_id", "model"})
 
 	// MemoryUsedNodeGpu reports GPU memory allocated per Node.
 	MemoryUsedNodeGpu = promauto.NewGaugeVec(
@@ -82,7 +76,7 @@ var (
 			Name: "memory_used_gpu_node",
 			Help: "Allocated GPU memory in bytes",
 		},
-		[]string{"node_name", "make", "accelerator_index", "model"})
+		[]string{"node_name", "make", "accelerator_id", "model"})
 
 	// DutyCycle reports the percent of time when the GPU was actively processing per container.
 	DutyCycle = promauto.NewGaugeVec(
@@ -220,21 +214,15 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 	}
 	nodeName := os.Getenv("NODE_NAME")
 	for device, d := range gpuDevices {
-		accel_index, err := gmc.collectGPUDeviceIndex(device)
-		if err != nil {
-			glog.Infof("Error finding device index for device: %s: %v. Skipping this device", device, err)
-			continue
-		}
-		accel_index_str := strconv.FormatUint(uint64(accel_index), 10)
-
 		dutyCycle, usedMemory, err := getGpuMetrics(device, d)
 		if err != nil {
 			glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 			continue
 		}
-		DutyCycleNodeGpu.WithLabelValues(nodeName, "nvidia", accel_index_str, *d.Model).Set(float64(dutyCycle))
-		MemoryTotalNodeGpu.WithLabelValues(nodeName, "nvidia", accel_index_str, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
-		MemoryUsedNodeGpu.WithLabelValues(nodeName, "nvidia", accel_index_str, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
+
+		DutyCycleNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
+		MemoryTotalNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
+		MemoryUsedNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
 	}
 }
 

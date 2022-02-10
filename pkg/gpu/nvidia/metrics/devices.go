@@ -38,8 +38,7 @@ var (
 
 	connectionTimeout = 10 * time.Second
 
-	gpuDevices      map[string]*nvml.Device
-	gpuDevicesIndex map[string]uint
+	gpuDevices map[string]*nvml.Device
 )
 
 // ContainerID uniquely identifies a container.
@@ -126,19 +125,9 @@ func DiscoverGPUDevices() error {
 		}
 		glog.Infof("Found device %s for metrics collection", deviceName)
 		gpuDevices[deviceName] = device
-		gpuDevicesIndex[deviceName] = i
 	}
 
 	return nil
-}
-
-// DeviceIndexFromName returns the device index for a given device name.
-func DeviceIndexFromName(deviceName string) (uint, error) {
-	index, ok := gpuDevicesIndex[deviceName]
-	if !ok {
-		return 0, fmt.Errorf("device %s not found", deviceName)
-	}
-	return index, nil
 }
 
 // DeviceFromName returns the device object for a given device name.
