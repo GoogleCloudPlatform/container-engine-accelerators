@@ -38,6 +38,7 @@ TAG=$(shell cat VERSION)
 REGISTRY?=gcr.io/google-containers
 IMAGE=nvidia-gpu-device-plugin
 PARTITION_GPU_IMAGE=nvidia-partition-gpu
+FASTSOCKET_INSTALLER_IMAGE=fastsocket-installer
 
 build:
 	cd cmd/nvidia_gpu; go build nvidia_gpu.go
@@ -50,5 +51,8 @@ push:
 
 partition-gpu:
 	docker build --pull -t ${REGISTRY}/${PARTITION_GPU_IMAGE}:${TAG} -f partition_gpu/Dockerfile .
+
+fastsocket_installer:
+	docker build --pull -t ${REGISTRY}/${FASTSOCKET_INSTALLER_IMAGE}:${TAG} -f fast-socket-installer/Dockerfile .
 
 .PHONY: all format test vet presubmit build container push partition-gpu
