@@ -56,3 +56,4 @@ fastsocket_installer:
 	docker build --pull -t ${REGISTRY}/${FASTSOCKET_INSTALLER_IMAGE}:${TAG} -f fast-socket-installer/Dockerfile .
 
 .PHONY: all format test vet presubmit build container push partition-gpu
+.PHONY: all format test vet presubmit build container push fastsocket_installer
