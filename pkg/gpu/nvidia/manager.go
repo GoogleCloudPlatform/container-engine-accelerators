@@ -71,6 +71,8 @@ type GPUConfig struct {
 	MaxTimeSharedClientsPerGPU int
 	// GPUSharingConfig informs how GPUs on this node can be shared between containers.
 	GPUSharingConfig GPUSharingConfig
+	// Xid error codes that will set the node to unhealthy 
+	HealthCriticalXid []int
 }
 
 type GPUSharingStrategy string
