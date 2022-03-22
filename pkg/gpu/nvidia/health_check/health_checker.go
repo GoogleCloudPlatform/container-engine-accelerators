@@ -34,21 +34,24 @@ type GPUHealthChecker struct {
 	health      chan pluginapi.Device
 	eventSet    nvml.EventSet
 	stop        chan bool
+	criticalCodes []int
 }
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
-func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device) *GPUHealthChecker {
+func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device, codes []int) *GPUHealthChecker {
 	hc := &GPUHealthChecker{
 		devices:     make(map[string]pluginapi.Device),
 		nvmlDevices: make(map[string]*nvml.Device),
 		health:      health,
 		stop:        make(chan bool),
+		criticalCodes: make([]int, len(codes))
 	}
 
 	// Cloning the device map to avoid interfering with the device manager
 	for id, d := range devices {
 		hc.devices[id] = d
 	}
+	copy(hc.criticalCodes, codes)
 	return hc
 }
 
