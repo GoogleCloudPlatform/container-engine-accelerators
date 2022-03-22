@@ -34,7 +34,7 @@ type GPUHealthChecker struct {
 	health      chan pluginapi.Device
 	eventSet    nvml.EventSet
 	stop        chan bool
-	criticalCodes []int
+	healthCriticalXid []int
 }
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
@@ -44,7 +44,7 @@ func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan plugin
 		nvmlDevices: make(map[string]*nvml.Device),
 		health:      health,
 		stop:        make(chan bool),
-		criticalCodes: make([]int, len(codes))
+		healthCriticalXid: make([]int, len(codes))
 	}
 
 	// Cloning the device map to avoid interfering with the device manager
@@ -179,7 +179,14 @@ func (hc *GPUHealthChecker) listenToEvents() error {
 
 		// Only marking device unhealthy on Double Bit ECC Error
 		// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
-		if e.Edata != 48 {
+		xidIncluded := false
+		for _, xid := range hc.healthCriticalXid {
+			if e.Edata == xid {
+				xidIncluded = true
+				break
+			}
+		}
+		if !xidIncluded && e.Edata != 48 {
 			continue
 		}
 

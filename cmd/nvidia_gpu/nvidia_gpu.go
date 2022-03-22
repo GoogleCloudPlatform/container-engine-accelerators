@@ -130,7 +130,7 @@ func main() {
 	}
 
 	if *enableHealthMonitoring {
-		hc := healthcheck.NewGPUHealthChecker(ngm.ListPhysicalDevices(), ngm.Health, ngm.gpuConfig.criticalCodes)
+		hc := healthcheck.NewGPUHealthChecker(ngm.ListPhysicalDevices(), ngm.Health, ngm.gpuConfig.healthCriticalXid)
 		if err := hc.Start(); err != nil {
 			glog.Infof("Failed to start GPU Health Checker: %v", err)
 			return
@@ -138,6 +138,5 @@ func main() {
 		defer hc.Stop()
 	}
 
-	
-	.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
+	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
 }
