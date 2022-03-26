@@ -8,4 +8,4 @@ communication performance on Google Cloud.
   After creating the GKE cluster, add
  `cloud.google.com/gke-nccl-fastsocket: "true"` on the node YAML file
 - ### Deploy NCCL fast socket installer
-  run `kubectl apply -f fast-socket-installer.yaml`
+  Run `kubectl apply -f fast-socket-installer.yaml`
