@@ -91,7 +91,7 @@ type GPUSharingConfig struct {
 func (config *GPUConfig) AddDefaultsAndValidate() error {
 	if config.MaxTimeSharedClientsPerGPU > 0 {
 		if config.GPUSharingConfig.GPUSharingStrategy != "" || config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
-			return fmt.Errorf("invalid GPUConfig, only one of MaxTimeSharedClientsPerGPU or GPUSharingConfig should be set")
+			glog.Infof("Both MaxTimeSharedClientsPerGPU and GPUSharingConfig are set, use the value of MaxTimeSharedClientsPerGPU")
 		}
 
 		config.GPUSharingConfig.GPUSharingStrategy = TimeSharing
