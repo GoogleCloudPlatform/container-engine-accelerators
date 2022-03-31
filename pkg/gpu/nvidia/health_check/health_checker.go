@@ -29,29 +29,32 @@ import (
 // device naming pattern in device manager, GPUHealthChecker will not work with
 // MIG devices.
 type GPUHealthChecker struct {
-	devices     map[string]pluginapi.Device
-	nvmlDevices map[string]*nvml.Device
-	health      chan pluginapi.Device
-	eventSet    nvml.EventSet
-	stop        chan bool
-	healthCriticalXid []int
+	devices           map[string]pluginapi.Device
+	nvmlDevices       map[string]*nvml.Device
+	health            chan pluginapi.Device
+	eventSet          nvml.EventSet
+	stop              chan bool
+	healthCriticalXid map[uint64]bool
 }
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
-func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device, codes []int) *GPUHealthChecker {
+func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device, codes []uint64) *GPUHealthChecker {
 	hc := &GPUHealthChecker{
-		devices:     make(map[string]pluginapi.Device),
-		nvmlDevices: make(map[string]*nvml.Device),
-		health:      health,
-		stop:        make(chan bool),
-		healthCriticalXid: make([]int, len(codes))
+		devices:           make(map[string]pluginapi.Device),
+		nvmlDevices:       make(map[string]*nvml.Device),
+		health:            health,
+		stop:              make(chan bool),
+		healthCriticalXid: make(map[uint64]bool),
 	}
 
 	// Cloning the device map to avoid interfering with the device manager
 	for id, d := range devices {
 		hc.devices[id] = d
 	}
-	copy(hc.criticalCodes, codes)
+	for _, c := range codes {
+		hc.healthCriticalXid[c] = true
+	}
+	hc.healthCriticalXid[48] = true
 	return hc
 }
 
@@ -179,14 +182,8 @@ func (hc *GPUHealthChecker) listenToEvents() error {
 
 		// Only marking device unhealthy on Double Bit ECC Error
 		// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
-		xidIncluded := false
-		for _, xid := range hc.healthCriticalXid {
-			if e.Edata == xid {
-				xidIncluded = true
-				break
-			}
-		}
-		if !xidIncluded && e.Edata != 48 {
+
+		if _, ok := hc.healthCriticalXid[e.Edata]; !ok {
 			continue
 		}
 

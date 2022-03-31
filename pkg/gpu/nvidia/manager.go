@@ -71,8 +71,8 @@ type GPUConfig struct {
 	MaxTimeSharedClientsPerGPU int
 	// GPUSharingConfig informs how GPUs on this node can be shared between containers.
 	GPUSharingConfig GPUSharingConfig
-	// Xid error codes that will set the node to unhealthy 
-	HealthCriticalXid []int
+	// Xid error codes that will set the node to unhealthy
+	HealthCriticalXid []uint64
 }
 
 type GPUSharingStrategy string
@@ -156,6 +156,10 @@ func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 		return ngm.devices
 	}
 	return ngm.migDeviceManager.ListGPUPartitionDevices()
+}
+
+func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []uint64 {
+	return ngm.gpuConfig.HealthCriticalXid
 }
 
 // ListDevices lists all GPU devices available on this node.
