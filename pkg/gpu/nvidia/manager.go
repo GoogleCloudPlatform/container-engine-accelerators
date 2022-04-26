@@ -72,7 +72,7 @@ type GPUConfig struct {
 	// GPUSharingConfig informs how GPUs on this node can be shared between containers.
 	GPUSharingConfig GPUSharingConfig
 	// Xid error codes that will set the node to unhealthy
-	HealthCriticalXid []uint64
+	HealthCriticalXid []int
 }
 
 type GPUSharingStrategy string
@@ -158,7 +158,7 @@ func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 	return ngm.migDeviceManager.ListGPUPartitionDevices()
 }
 
-func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []uint64 {
+func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []int {
 	return ngm.gpuConfig.HealthCriticalXid
 }
 
@@ -368,7 +368,6 @@ func (ngm *nvidiaGPUManager) Start() error {
 			return fmt.Errorf("failed to query total memory available per GPU: %v", err)
 		}
 	}
-
 	return nil
 }
 
