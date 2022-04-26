@@ -38,7 +38,7 @@ type GPUHealthChecker struct {
 }
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
-func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device, codes []int) *GPUHealthChecker {
+func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan pluginapi.Device, codes []uint64) *GPUHealthChecker {
 	hc := &GPUHealthChecker{
 		devices:           make(map[string]pluginapi.Device),
 		nvmlDevices:       make(map[string]*nvml.Device),
@@ -52,8 +52,7 @@ func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan plugin
 		hc.devices[id] = d
 	}
 	for _, c := range codes {
-		glog.Infof("reading code %v", c)
-		hc.healthCriticalXid[uint64(c)] = true
+		hc.healthCriticalXid[c] = true
 	}
 	hc.healthCriticalXid[48] = true
 	return hc
@@ -166,56 +165,6 @@ func (hc *GPUHealthChecker) addMigEnabledDevice(deviceName string, device *nvml.
 	return nil
 }
 
-type callDevice interface {
-	parseMigDeviceUUID(UUID string) (string, uint, uint, error)
-}
-type GPUDevice struct{}
-
-func (gd *GPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error) {
-	return nvml.ParseMigDeviceUUID(UUID)
-}
-
-func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
-	if e.Etype != nvml.XidCriticalError {
-		return
-	}
-	// Only marking device unhealthy on Double Bit ECC Error
-	// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
-	if _, ok := hc.healthCriticalXid[e.Edata]; !ok {
-		return
-	}
-
-	if e.UUID == nil || len(*e.UUID) == 0 {
-		// All devices are unhealthy
-		glog.Errorf("XidCriticalError: Xid=%d, All devices will go unhealthy.", e.Edata)
-		for id, d := range hc.devices {
-			d.Health = pluginapi.Unhealthy
-			hc.devices[id] = d
-			hc.health <- d
-		}
-		return
-	}
-
-	for _, d := range hc.devices {
-		// Please see https://github.com/NVIDIA/gpu-monitoring-tools/blob/148415f505c96052cb3b7fdf443b34ac853139ec/bindings/go/nvml/nvml.h#L1424
-		// for the rationale why gi and ci can be set as such when the UUID is a full GPU UUID and not a MIG device UUID.
-		uuid := hc.nvmlDevices[d.ID].UUID
-		gpu, gi, ci, err := cd.parseMigDeviceUUID(uuid)
-		if err != nil {
-			gpu = uuid
-			gi = 0xFFFFFFFF
-			ci = 0xFFFFFFFF
-		}
-
-		if gpu == *e.UUID && gi == *e.GpuInstanceId && ci == *e.ComputeInstanceId {
-			glog.Errorf("XidCriticalError: Xid=%d on Device=%s, uuid=%s, the device will go unhealthy.", e.Edata, d.ID, uuid)
-			d.Health = pluginapi.Unhealthy
-			hc.devices[d.ID] = d
-			hc.health <- d
-		}
-	}
-}
-
 // listenToEvents listens to events from NVML to detect GPU critical errors
 func (hc *GPUHealthChecker) listenToEvents() error {
 	for {
@@ -227,11 +176,46 @@ func (hc *GPUHealthChecker) listenToEvents() error {
 		}
 
 		e, err := nvml.WaitForEvent(hc.eventSet, 5000)
-		if err != nil {
+		if err != nil || e.Etype != nvml.XidCriticalError {
 			continue
 		}
-		gd := GPUDevice{}
-		hc.catchError(e, &gd)
+
+		// Only marking device unhealthy on Double Bit ECC Error
+		// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
+
+		if _, ok := hc.healthCriticalXid[e.Edata]; !ok {
+			continue
+		}
+
+		if e.UUID == nil || len(*e.UUID) == 0 {
+			// All devices are unhealthy
+			glog.Errorf("XidCriticalError: Xid=%d, All devices will go unhealthy.", e.Edata)
+			for id, d := range hc.devices {
+				d.Health = pluginapi.Unhealthy
+				hc.devices[id] = d
+				hc.health <- d
+			}
+			continue
+		}
+
+		for _, d := range hc.devices {
+			// Please see https://github.com/NVIDIA/gpu-monitoring-tools/blob/148415f505c96052cb3b7fdf443b34ac853139ec/bindings/go/nvml/nvml.h#L1424
+			// for the rationale why gi and ci can be set as such when the UUID is a full GPU UUID and not a MIG device UUID.
+			uuid := hc.nvmlDevices[d.ID].UUID
+			gpu, gi, ci, err := nvml.ParseMigDeviceUUID(uuid)
+			if err != nil {
+				gpu = uuid
+				gi = 0xFFFFFFFF
+				ci = 0xFFFFFFFF
+			}
+
+			if gpu == *e.UUID && gi == *e.GpuInstanceId && ci == *e.ComputeInstanceId {
+				glog.Errorf("XidCriticalError: Xid=%d on Device=%s, uuid=%s, the device will go unhealthy.", e.Edata, d.ID, uuid)
+				d.Health = pluginapi.Unhealthy
+				hc.devices[d.ID] = d
+				hc.health <- d
+			}
+		}
 	}
 }
 
