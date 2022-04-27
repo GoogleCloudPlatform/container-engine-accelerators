@@ -32,36 +32,6 @@ var (
 	gpuConfigFile = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
 )
 
-var partitionSizeToProfileID = map[string]string{
-	//nvidia-tesla-a100
-	"1g.5gb":  "19",
-	"2g.10gb": "14",
-	"3g.20gb": "9",
-	"4g.20gb": "5",
-	"7g.40gb": "0",
-	//nvidia-a100-80gb
-	"1g.10gb": "19",
-	"2g.20gb": "14",
-	"3g.40gb": "9",
-	"4g.40gb": "5",
-	"7g.80gb": "0",
-}
-
-var partitionSizeMaxCount = map[string]int{
-	//nvidia-tesla-a100
-	"1g.5gb":  7,
-	"2g.10gb": 3,
-	"3g.20gb": 2,
-	"4g.20gb": 1,
-	"7g.40gb": 1,
-	//nvidia-a100-80gb
-	"1g.10gb": 7,
-	"2g.20gb": 3,
-	"3g.40gb": 2,
-	"4g.40gb": 1,
-	"7g.80gb": 1,
-}
-
 const SIGRTMIN = 34
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
@@ -174,6 +144,22 @@ func rebootNode() error {
 	return syscall.Kill(1, SIGRTMIN+5)
 }
 
+func discoverPossibleGPUPartitions() (GPUAvailableProfiles, error) {
+	args := []string{"mig", "-lgip"}
+	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
+	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
+	if err != nil {
+		return GPUAvailableProfiles{}, fmt.Errorf("failed to discover partitions, nvidia-smi output: %s, error: %v ", string(out), err)
+	}
+	profiles, err := ParseMIGAvailableProfiles(string(out))
+	if err != nil || len(profiles) == 0 {
+		return GPUAvailableProfiles{}, fmt.Errorf("failed to parse output of nvidia-smi. output: %s, error: %v ", string(out), err)
+	}
+
+	glog.Infof("Output:\n %s", string(out))
+	return profiles[0], nil
+}
+
 func cleanupAllGPUPartitions() error {
 	args := []string{"mig", "-dci"}
 	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
@@ -194,7 +180,12 @@ func cleanupAllGPUPartitions() error {
 }
 
 func createGPUPartitions(partitionSize string) error {
-	p, err := buildPartitionStr(partitionSize)
+	profiles, err := discoverPossibleGPUPartitions()
+	if err != nil {
+		return err
+	}
+
+	p, err := buildPartitionStr(partitionSize, profiles)
 	if err != nil {
 		return err
 	}
@@ -219,19 +210,19 @@ func createGPUPartitions(partitionSize string) error {
 
 }
 
-func buildPartitionStr(partitionSize string) (string, error) {
+func buildPartitionStr(partitionSize string, profiles GPUAvailableProfiles) (string, error) {
 	if partitionSize == "" {
 		return "", nil
 	}
 
-	p, ok := partitionSizeToProfileID[partitionSize]
+	p, ok := profiles.byname[partitionSize]
 	if !ok {
 		return "", fmt.Errorf("%s is not a valid partition size", partitionSize)
 	}
 
-	partitionStr := p
-	for i := 1; i < partitionSizeMaxCount[partitionSize]; i++ {
-		partitionStr += fmt.Sprintf(",%s", p)
+	partitionStr := fmt.Sprint(p.id)
+	for i := 1; i < p.total; i++ {
+		partitionStr += fmt.Sprintf(",%d", p.id)
 	}
 
 	return partitionStr, nil
