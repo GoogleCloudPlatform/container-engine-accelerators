@@ -15,7 +15,7 @@
 FROM golang:1.15 as builder
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
-RUN go build -o gpu_partitioner partition_gpu/partition_gpu.go
+RUN go build -o gpu_partitioner partition_gpu/partition_gpu.go partition_gpu/nvidia_smi_parser.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner
 
 FROM gcr.io/distroless/base-debian10
