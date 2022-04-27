@@ -30,7 +30,7 @@ limitations under the License.
  vectorAddAndTriggerError(const float *A, const float *B, float *C, int numElements)
  {
      // Intentionally triggering out of bounds
-     int i = (blockDim.x * blockIdx.x) + threadIdx.x + 10000000;
+     int i = (blockDim.x * blockIdx.x) + threadIdx.x + 1000000000000;
      C[i] = A[i] + B[i];
  }
 
