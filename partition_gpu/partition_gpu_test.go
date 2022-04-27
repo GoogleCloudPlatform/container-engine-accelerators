@@ -16,6 +16,31 @@ package main
 
 import "testing"
 
+var PROFILES_A100 = GPUAvailableProfiles{
+	byname: map[string]GPUProfile{
+		"1g.5gb": {
+			id: 19,
+			total: 7,
+		},
+		"2g.10gb": {
+			id: 14,
+			total: 3,
+		},
+		"3g.20gb": {
+			id: 9,
+			total: 2,
+		},
+		"4g.20gb": {
+			id: 5,
+			total: 1,
+		},
+		"7g.40gb": {
+			id: 0,
+			total: 1,
+		},
+	},
+}
+
 func Test_buildPartitionStr(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -50,7 +75,7 @@ func Test_buildPartitionStr(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := buildPartitionStr(tt.partitionSize)
+			got, err := buildPartitionStr(tt.partitionSize, PROFILES_A100)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("buildPartitionStr() error = %v, wantErr %v", err, tt.wantErr)
 				return
