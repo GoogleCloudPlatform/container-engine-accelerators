@@ -28,21 +28,6 @@ import (
 
 const nvidiaDeviceRE = `^nvidia[0-9]*$`
 
-// Max number of GPU partitions that can be created for each partition size.
-// Source: https://docs.nvidia.com/datacenter/tesla/mig-user-guide/#partitioning
-var gpuPartitionSizeMaxCount = map[string]int{
-	//nvidia-tesla-a100
-	"1g.5gb":  7,
-	"2g.10gb": 3,
-	"3g.20gb": 2,
-	"7g.40gb": 1,
-	//nvidia-a100-80gb
-	"1g.10gb": 7,
-	"2g.20gb": 3,
-	"3g.40gb": 2,
-	"7g.80gb": 1,
-}
-
 // DeviceManager performs various management operations on mig devices.
 type DeviceManager struct {
 	devDirectory      string
@@ -81,11 +66,6 @@ func (d *DeviceManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, err
 func (d *DeviceManager) Start(partitionSize string) error {
 	if partitionSize == "" {
 		return nil
-	}
-
-	maxPartitionCount, ok := gpuPartitionSizeMaxCount[partitionSize]
-	if !ok {
-		return fmt.Errorf("%s is not a valid GPU partition size", partitionSize)
 	}
 
 	d.gpuPartitionSpecs = make(map[string][]pluginapi.DeviceSpec)
@@ -191,10 +171,6 @@ func (d *DeviceManager) Start(partitionSize string) error {
 				},
 			}
 			d.gpuPartitions[gpuInstanceID] = pluginapi.Device{ID: gpuInstanceID, Health: pluginapi.Healthy}
-		}
-
-		if numPartitions != maxPartitionCount {
-			return fmt.Errorf("Number of partitions (%d) for GPU %s does not match expected partition count (%d)", numPartitions, gpuID, maxPartitionCount)
 		}
 	}
 

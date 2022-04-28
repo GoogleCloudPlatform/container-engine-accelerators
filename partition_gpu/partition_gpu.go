@@ -40,15 +40,13 @@ type GPUConfig struct {
 	GPUPartitionSize string
 }
 
-type GPUPerInstanceProfiles = map[int]GPUAvailableProfiles
-
-type GPUProfile struct{
-	id int
-	total int
-}
-
 type GPUAvailableProfiles struct {
 	byname map[string]GPUProfile
+}
+
+type GPUProfile struct {
+	id int
+	instances_total int
 }
 
 func main() {
@@ -130,13 +128,13 @@ func _nvmlStrToString(rawstr[96] int8) (string) {
 }
 
 // list all available profiles of the requested GPU (using NVML)
-func ListGpuAvailableProfiles(gpu_index int)(GPUPerInstanceProfiles, error) {
+func ListGpuAvailableProfiles(gpu_index int)(GPUAvailableProfiles, error) {
 	if err := nvml.Init(); err != nvml.SUCCESS {
 		glog.Fatalf("failed to initialize nvml: %v", err)
 	}
 	defer nvml.Shutdown()
 
-	profiles := make(map[int]GPUAvailableProfiles)
+	profiles := GPUAvailableProfiles{ byname: make(map[string]GPUProfile) }
 
 	device, ret := nvml.DeviceGetHandleByIndex(gpu_index)
 	if ret != nvml.SUCCESS {
@@ -154,16 +152,11 @@ func ListGpuAvailableProfiles(gpu_index int)(GPUPerInstanceProfiles, error) {
 		}
 		profile_name_raw := _nvmlStrToString(profile.Name)
 		profile_name := strings.Replace(profile_name_raw, "MIG ", "", 1)
-		profile_ := profiles[gpu_index]
-		if profile_.byname == nil {
-			profile_.byname = make(map[string]GPUProfile)
-		}
-		profile_.byname[profile_name] = GPUProfile{
+		profiles.byname[profile_name] = GPUProfile{
 			id: int(profile.Id),
-			total: int(profile.InstanceCount),
+			instances_total: int(profile.InstanceCount),
 		}
-		profiles[gpu_index]= profile_
-		glog.Infof("profile: gpu: %v, profile: %-15.15s, id: %3v, total: %2v",
+		glog.Infof("profile: gpu: %v, name: %-12.12s, id: %3v, instances total: %2v",
 					gpu_index, profile_name, profile.Id, profile.InstanceCount)
 	}
 
@@ -237,7 +230,7 @@ func createGPUPartitions(partitionSize string) error {
 		return err
 	}
 
-	p, err := buildPartitionStr(partitionSize, profiles[gpu_index])
+	p, err := buildPartitionStr(partitionSize, profiles)
 	if err != nil {
 		return err
 	}
@@ -273,7 +266,7 @@ func buildPartitionStr(partitionSize string, profiles GPUAvailableProfiles) (str
 	}
 
 	partitionStr := fmt.Sprint(p.id)
-	for i := 1; i < p.total; i++ {
+	for i := 1; i < p.instances_total; i++ {
 		partitionStr += fmt.Sprintf(",%d", p.id)
 	}
 
