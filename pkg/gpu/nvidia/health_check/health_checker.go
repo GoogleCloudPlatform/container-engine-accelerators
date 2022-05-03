@@ -55,6 +55,7 @@ func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan plugin
 		glog.Infof("reading code %v", c)
 		hc.healthCriticalXid[uint64(c)] = true
 	}
+	// By default, we check Double Bit ECC Error
 	hc.healthCriticalXid[48] = true
 	return hc
 }
@@ -176,12 +177,14 @@ func (gd *GPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error)
 }
 
 func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
+	// Skip the error if it's not Xid critical
 	if e.Etype != nvml.XidCriticalError {
 		return
 	}
-	// Only marking device unhealthy on Double Bit ECC Error
+	// Only marking device unhealthy on Double Bit ECC Error or customer-configured codes
 	// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
 	if _, ok := hc.healthCriticalXid[e.Edata]; !ok {
+		glog.Errorf("Health checker is skipping Xid %v error", e.Edata)
 		return
 	}
 
