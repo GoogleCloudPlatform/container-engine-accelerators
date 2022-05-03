@@ -184,7 +184,7 @@ func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 	// Only marking device unhealthy on Double Bit ECC Error or customer-configured codes
 	// See https://docs.nvidia.com/deploy/xid-errors/index.html#topic_4
 	if _, ok := hc.healthCriticalXid[e.Edata]; !ok {
-		glog.Errorf("Health checker is skipping Xid %v error", e.Edata)
+		glog.Infof("Health checker is skipping Xid %v error", e.Edata)
 		return
 	}
 
