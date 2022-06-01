@@ -50,17 +50,6 @@ func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
 			},
 		},
 		{
-			name: "inconsistent config",
-			fields: fields{
-				MaxTimeSharedClientsPerGPU: 10,
-				GPUSharingConfig: GPUSharingConfig{
-					GPUSharingStrategy:     "mps",
-					MaxSharedClientsPerGPU: 10,
-				},
-			},
-			wantErr: true,
-		},
-		{
 			name: "invalid sharing strategy",
 			fields: fields{
 				GPUSharingConfig: GPUSharingConfig{

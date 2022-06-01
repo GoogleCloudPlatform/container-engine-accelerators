@@ -179,6 +179,7 @@ func (gd *GPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error)
 func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 	// Skip the error if it's not Xid critical
 	if e.Etype != nvml.XidCriticalError {
+		glog.Infof("Skip error Xid=%d as it is not Xid Critical", e.Edata)
 		return
 	}
 	// Only marking device unhealthy on Double Bit ECC Error or customer-configured codes

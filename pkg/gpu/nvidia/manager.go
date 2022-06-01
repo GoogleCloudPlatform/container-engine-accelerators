@@ -75,17 +75,9 @@ type GPUConfig struct {
 	HealthCriticalXid []int
 }
 
-type GPUSharingStrategy string
-
-const (
-	Undefined   GPUSharingStrategy = ""
-	TimeSharing GPUSharingStrategy = "time-sharing"
-	MPS         GPUSharingStrategy = "mps"
-)
-
 type GPUSharingConfig struct {
 	// GPUSharingStrategy is the type of sharing strategy to enable on this node. Values are "time-sharing" or "mps".
-	GPUSharingStrategy GPUSharingStrategy
+	GPUSharingStrategy gpusharing.GPUSharingStrategy
 	// MaxSharedClientsPerGPU is the maximum number of clients that are allowed to share a single GPU.
 	MaxSharedClientsPerGPU int
 }
@@ -96,24 +88,24 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 			glog.Infof("Both MaxTimeSharedClientsPerGPU and GPUSharingConfig are set, use the value of MaxTimeSharedClientsPerGPU")
 		}
 
-		config.GPUSharingConfig.GPUSharingStrategy = TimeSharing
+		config.GPUSharingConfig.GPUSharingStrategy = gpusharing.TimeSharing
 		config.GPUSharingConfig.MaxSharedClientsPerGPU = config.MaxTimeSharedClientsPerGPU
 	} else {
 		switch config.GPUSharingConfig.GPUSharingStrategy {
-		case TimeSharing, MPS:
+		case gpusharing.TimeSharing, gpusharing.MPS:
 			if config.GPUSharingConfig.MaxSharedClientsPerGPU <= 0 {
 				return fmt.Errorf("MaxSharedClientsPerGPU should be > 0 for time-sharing or mps GPU sharing strategies")
 			}
 			break
-		case Undefined:
+		case gpusharing.Undefined:
 			if config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
 				return fmt.Errorf("GPU sharing strategy needs to be specified when MaxSharedClientsPerGPU > 0")
 			}
 		default:
 			return fmt.Errorf("invalid GPU Sharing strategy: %v, should be one of time-sharing or mps", config.GPUSharingConfig.GPUSharingStrategy)
-
 		}
 	}
+	gpusharing.SharingStrategy = config.GPUSharingConfig.GPUSharingStrategy
 	return nil
 }
 
@@ -295,7 +287,7 @@ func (ngm *nvidiaGPUManager) isMpsHealthy() error {
 }
 
 func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
-	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == MPS {
+	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == gpusharing.MPS {
 		activeThreadLimit := numDevicesRequested * 100 / ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU
 		memoryLimit := uint64(numDevicesRequested) * ngm.totalMemPerGPU / uint64(ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU)
 

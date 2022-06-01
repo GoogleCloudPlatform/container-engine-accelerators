@@ -137,7 +137,6 @@ var (
 func TestMetricsUpdate(t *testing.T) {
 	gmc = &mockCollector{}
 	ms := MetricServer{}
-	t.Setenv("NODE_NAME", "node1")
 	ms.updateMetrics(containerDevicesMock, gpuDevicesMock)
 
 	if testutil.ToFloat64(
@@ -187,46 +186,46 @@ func TestMetricsUpdate(t *testing.T) {
 
 	if testutil.ToFloat64(
 		DutyCycleNodeGpu.WithLabelValues(
-			"node1", "nvidia", "656547758", "model1")) != 78 ||
+			"nvidia", "656547758", "model1")) != 78 ||
 		testutil.ToFloat64(
 			DutyCycleNodeGpu.WithLabelValues(
-				"node1", "nvidia", "850729563", "model2")) != 32 ||
+				"nvidia", "850729563", "model2")) != 32 ||
 		testutil.ToFloat64(
 			DutyCycleNodeGpu.WithLabelValues(
-				"node1", "nvidia", "3572375710", "model1")) != 13 ||
+				"nvidia", "3572375710", "model1")) != 13 ||
 		testutil.ToFloat64(
 			DutyCycleNodeGpu.WithLabelValues(
-				"node1", "nvidia", "8732906554", "model1")) != 1 {
+				"nvidia", "8732906554", "model1")) != 1 {
 		t.Fatalf("Wrong Result in DutyCycleNodeGpu")
 	}
 
 	if testutil.ToFloat64(
 		MemoryTotalNodeGpu.WithLabelValues(
-			"node1", "nvidia", "656547758", "model1")) != 200*1024*1024 ||
+			"nvidia", "656547758", "model1")) != 200*1024*1024 ||
 		testutil.ToFloat64(
 			MemoryTotalNodeGpu.WithLabelValues(
-				"node1", "nvidia", "850729563", "model2")) != 200*1024*1024 ||
+				"nvidia", "850729563", "model2")) != 200*1024*1024 ||
 		testutil.ToFloat64(
 			MemoryTotalNodeGpu.WithLabelValues(
-				"node1", "nvidia", "3572375710", "model1")) != 350*1024*1024 ||
+				"nvidia", "3572375710", "model1")) != 350*1024*1024 ||
 		testutil.ToFloat64(
 			MemoryTotalNodeGpu.WithLabelValues(
-				"node1", "nvidia", "8732906554", "model1")) != 700*1024*1024 {
+				"nvidia", "8732906554", "model1")) != 700*1024*1024 {
 		t.Fatalf("Wrong Result in MemoryTotalNodeGpu")
 	}
 
 	if testutil.ToFloat64(
 		MemoryUsedNodeGpu.WithLabelValues(
-			"node1", "nvidia", "656547758", "model1")) != 50*1024*1024 ||
+			"nvidia", "656547758", "model1")) != 50*1024*1024 ||
 		testutil.ToFloat64(
 			MemoryUsedNodeGpu.WithLabelValues(
-				"node1", "nvidia", "850729563", "model2")) != 150*1024*1024 ||
+				"nvidia", "850729563", "model2")) != 150*1024*1024 ||
 		testutil.ToFloat64(
 			MemoryUsedNodeGpu.WithLabelValues(
-				"node1", "nvidia", "3572375710", "model1")) != 100*1024*1024 ||
+				"nvidia", "3572375710", "model1")) != 100*1024*1024 ||
 		testutil.ToFloat64(
 			MemoryUsedNodeGpu.WithLabelValues(
-				"node1", "nvidia", "8732906554", "model1")) != 375*1024*1024 {
+				"nvidia", "8732906554", "model1")) != 375*1024*1024 {
 		t.Fatalf("Wrong Result in MemoryUsedNodeGpu")
 	}
 }
