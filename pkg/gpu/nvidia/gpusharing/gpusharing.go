@@ -20,14 +20,30 @@ import (
 	"regexp"
 )
 
+type GPUSharingStrategy string
+
+const (
+	Undefined   GPUSharingStrategy = ""
+	TimeSharing GPUSharingStrategy = "time-sharing"
+	MPS         GPUSharingStrategy = "mps"
+)
+
+var SharingStrategy GPUSharingStrategy
+
 // ValidateRequest will first check if the input device IDs are virtual device IDs, and then validate the request.
-// A valid sharing request should meet the following conditions:
+// A valid sharing request (time-sharing)should meet the following conditions:
+// 1. it is only valid to request one virtual devices in a single request.
+// A valid sharing request (mps) should meet the following conditions:
 // 1. if there is only one physical device, it is valid to request multiple virtual devices in a single request.
 // 2. if there are multiple physical devices, it is only valid to request one virtual device in a single request.
 // Note: in this validation, each MIG partition will be regarded as a physical device.
 func ValidateRequest(requestDevicesIDs []string, deviceCount int) error {
-	if len(requestDevicesIDs) > 1 && IsVirtualDeviceID(requestDevicesIDs[0]) && deviceCount > 1 {
-		return errors.New("invalid request for sharing GPU, at most 1 nvidia.com/gpu can be requested on multi-GPU nodes")
+	if len(requestDevicesIDs) > 1 && IsVirtualDeviceID(requestDevicesIDs[0]) {
+		if SharingStrategy == TimeSharing {
+			return errors.New("invalid request for sharing GPU (time-sharing), at most 1 nvidia.com/gpu can be requested on GPU nodes")
+		} else if SharingStrategy == MPS && deviceCount > 1 {
+			return errors.New("invalid request for sharing GPU (MPS), at most 1 nvidia.com/gpu can be requested on multi-GPU nodes")
+		}
 	}
 
 	return nil

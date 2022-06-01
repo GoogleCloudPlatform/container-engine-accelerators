@@ -26,31 +26,43 @@ func TestValidateRequest(t *testing.T) {
 		name              string
 		requestDevicesIDs []string
 		deviceCount       int
+		sharingStrategy   GPUSharingStrategy
 		wantError         error
 	}{{
-		name:              "don't have virtual device IDs",
+		name:              "don't have virtual device IDs - both timesharing and mps",
 		requestDevicesIDs: []string{"nvidia0", "nvidia1"},
 		deviceCount:       1,
 		wantError:         nil,
 	}, {
-		name:              "only have one physical device",
+		name:              "only have one physical device - mps",
 		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia0/vgpu1"},
 		deviceCount:       1,
+		sharingStrategy:   MPS,
 		wantError:         nil,
 	}, {
-		name:              "only request one  virtual device",
+		name:              "only request one virtual device - both timesharing and mps",
 		requestDevicesIDs: []string{"nvidia0/vgpu0"},
 		deviceCount:       2,
 		wantError:         nil,
 	}, {
-		name:              "request multiple virtual devices and have multiple physical devices",
+		name:              "request multiple virtual devices and have one physical devices - timesharing",
 		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu1"},
+		deviceCount:       1,
+		wantError:         errors.New("invalid request for sharing GPU (time-sharing), at most 1 nvidia.com/gpu can be requested on GPU nodes"),
+	}, {
+		name:              "request multiple virtual devices and have multiple physical devices - mps",
+		requestDevicesIDs: []string{"nvidia0/vgpu0", "nvidia1/vgpu1"},
+		sharingStrategy:   MPS,
 		deviceCount:       2,
-		wantError:         errors.New("invalid request for sharing GPU, at most 1 nvidia.com/gpu can be requested on multi-GPU nodes"),
+		wantError:         errors.New("invalid request for sharing GPU (MPS), at most 1 nvidia.com/gpu can be requested on multi-GPU nodes"),
 	}}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.sharingStrategy != MPS {
+				tc.sharingStrategy = TimeSharing
+			}
+			SharingStrategy = tc.sharingStrategy
 			err := ValidateRequest(tc.requestDevicesIDs, tc.deviceCount)
 			if err != nil && tc.wantError != nil {
 				if diff := cmp.Diff(tc.wantError.Error(), err.Error()); diff != "" {
