@@ -200,6 +200,7 @@ func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 		return
 	}
 
+	founderrordevice := false
 	for _, d := range hc.devices {
 		// Please see https://github.com/NVIDIA/gpu-monitoring-tools/blob/148415f505c96052cb3b7fdf443b34ac853139ec/bindings/go/nvml/nvml.h#L1424
 		// for the rationale why gi and ci can be set as such when the UUID is a full GPU UUID and not a MIG device UUID.
@@ -216,7 +217,11 @@ func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 			d.Health = pluginapi.Unhealthy
 			hc.devices[d.ID] = d
 			hc.health <- d
+			founderrordevice = true
 		}
+	}
+	if !founderrordevice {
+		glog.Errorf("XidCriticalError: Xid=%d on unknown device.", e.Edata)
 	}
 }
 
