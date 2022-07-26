@@ -33,19 +33,33 @@ var (
 )
 
 var partitionSizeToProfileID = map[string]string{
+	//nvidia-tesla-a100
 	"1g.5gb":  "19",
 	"2g.10gb": "14",
 	"3g.20gb": "9",
 	"4g.20gb": "5",
 	"7g.40gb": "0",
+	//nvidia-a100-80gb 
+	"1g.10gb": "19",
+	"2g.20gb": "14",
+	"3g.40gb": "9",
+	"4g.40gb": "5",
+	"7g.80gb": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
+	//nvidia-tesla-a100
 	"1g.5gb":  7,
 	"2g.10gb": 3,
 	"3g.20gb": 2,
 	"4g.20gb": 1,
 	"7g.40gb": 1,
+	//nvidia-a100-80gb 
+	"1g.10gb": 7,
+	"2g.20gb": 3,
+	"3g.40gb": 2,
+	"4g.40gb": 1,
+	"7g.80gb": 1,
 }
 
 const SIGRTMIN = 34
