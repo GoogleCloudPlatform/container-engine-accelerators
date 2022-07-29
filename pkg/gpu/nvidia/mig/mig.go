@@ -31,10 +31,16 @@ const nvidiaDeviceRE = `^nvidia[0-9]*$`
 // Max number of GPU partitions that can be created for each partition size.
 // Source: https://docs.nvidia.com/datacenter/tesla/mig-user-guide/#partitioning
 var gpuPartitionSizeMaxCount = map[string]int{
+	//nvidia-tesla-a100
 	"1g.5gb":  7,
 	"2g.10gb": 3,
 	"3g.20gb": 2,
 	"7g.40gb": 1,
+	//nvidia-a100-80gb 
+	"1g.10gb": 7,
+	"2g.20gb": 3,
+	"3g.40gb": 2,
+	"7g.80gb": 1,
 }
 
 // DeviceManager performs various management operations on mig devices.
