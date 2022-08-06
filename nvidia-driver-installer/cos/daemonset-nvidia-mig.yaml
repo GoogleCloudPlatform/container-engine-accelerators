@@ -100,7 +100,7 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
-      - image: "gcr.io/gke-release-staging/nvidia-gpu-device-plugin@sha256:ff311379bfc87732d924ab2e45f736843f2b1430c503d9f996b2182403267c80"
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:99afc7583991ac3fdb06c5aabb92f619abf19bad84761a57d34719f68c35e7ba"
         name: partition-gpus
         env:
         - name: LD_LIBRARY_PATH
