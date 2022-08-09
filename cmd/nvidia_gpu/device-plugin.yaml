@@ -1,3 +1,4 @@
+# NOTE: This file is not the source of truth for GKE device plugins. Modifying this file would have no effect on GKE clusters.
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -5,7 +6,7 @@ metadata:
   namespace: kube-system
   labels:
     k8s-app: nvidia-gpu-device-plugin
-    addonmanager.kubernetes.io/mode: EnsureExists
+    addonmanager.kubernetes.io/mode: Reconcile
 spec:
   selector:
     matchLabels:
@@ -48,13 +49,17 @@ spec:
         hostPath:
             path: /etc/nvidia
       containers:
-      - image: "gcr.io/gke-release-staging/nvidia-gpu-device-plugin@sha256:d6cb575b0d8a436066a0d3a783bbaf84697e0d5a68857edfe5fd5d1183133c7d"
+      - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:d6cb575b0d8a436066a0d3a783bbaf84697e0d5a68857edfe5fd5d1183133c7d"
         command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics"]
         name: nvidia-gpu-device-plugin
         ports:
         - name: "metrics"
           containerPort: 2112
         env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
         resources:

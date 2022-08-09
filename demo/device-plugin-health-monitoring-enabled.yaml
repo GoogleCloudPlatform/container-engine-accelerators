@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-gpu-device-plugin
+  namespace: kube-system
+  labels:
+    k8s-app: nvidia-gpu-device-plugin
+    addonmanager.kubernetes.io/mode: EnsureExists
+spec:
+  selector:
+    matchLabels:
+      k8s-app: nvidia-gpu-device-plugin
+  template:
+    metadata:
+      labels:
+        k8s-app: nvidia-gpu-device-plugin
+    spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: cloud.google.com/gke-accelerator
+                operator: Exists
+      tolerations:
+      - operator: "Exists"
+        effect: "NoExecute"
+      - operator: "Exists"
+        effect: "NoSchedule"
+      volumes:
+      - name: device-plugin
+        hostPath:
+          path: /var/lib/kubelet/device-plugins
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: nvidia
+        hostPath:
+            path: /home/kubernetes/bin/nvidia
+            type: Directory
+      - name: pod-resources
+        hostPath:
+            path: /var/lib/kubelet/pod-resources
+      containers:
+      - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:622d701b1ccebbb25c01e4326a3a6c2aa001b2507f66c89a3d65b9778e6b02ee"
+        command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-health-monitoring"]
+        name: nvidia-gpu-device-plugin
+        ports:
+        - name: "metrics"
+          containerPort: 2112
+        env:
+        - name: LD_LIBRARY_PATH
+          value: /usr/local/nvidia/lib64
+        resources:
+          requests:
+            cpu: 50m
+            memory: 20Mi
+          limits:
+            cpu: 50m
+            memory: 20Mi
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: device-plugin
+          mountPath: /device-plugin
+        - name: dev
+          mountPath: /dev
+        - name: nvidia
+          mountPath: /usr/local/nvidia
+        - name: pod-resources
+          mountPath: /var/lib/kubelet/pod-resources
+  updateStrategy:
+    type: RollingUpdate

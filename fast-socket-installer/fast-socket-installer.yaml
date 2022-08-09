@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nccl-fastsocket-installer
+  namespace: kube-system
+  labels:
+    k8s-app: nccl-fastsocket-installer
+spec:
+  selector:
+    matchLabels:
+      k8s-app: nccl-fastsocket-installer
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: nccl-fastsocket-installer
+        k8s-app: nccl-fastsocket-installer
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: cloud.google.com/gke-accelerator
+                operator: Exists
+              - key: cloud.google.com/gke-nccl-fastsocket
+                operator: Exists
+      tolerations:
+      - operator: "Exists"
+      hostNetwork: true
+      hostPID: true
+      volumes:
+      - name: nvidia-install-dir-host
+        hostPath:
+          path: /home/kubernetes/bin/nvidia
+      initContainers:
+      - image: gcr.io/gke-release/fastsocket-installer@sha256:cb8dca70b5611769fd2e0e8eb9aebf81a89d4378537cff104775c873abf2d9c5
+        name: nccl-fastsocket-installer
+        command:
+        - bash
+        - -c
+        - |
+          cp /usr/lib/libnccl-net.so $NCCL_INSTALL_DIR
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            memory: 100Mi
+        env:
+        - name: NCCL_INSTALL_DIR
+          value: /usr/local/nvidia/lib64
+        volumeMounts:
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
+      containers:
+      - image: "gcr.io/google-containers/pause:2.0"
+        name: pause

@@ -26,6 +26,7 @@ import (
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/metrics"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 const (
@@ -33,6 +34,8 @@ const (
 	kubeletEndpoint      = "kubelet.sock"
 	pluginEndpointPrefix = "nvidiaGPU"
 	devDirectory         = "/dev"
+	// Proc directory is used to lookup the access files for each GPU partition.
+	procDirectory = "/proc"
 )
 
 var (
@@ -59,15 +62,20 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 	if err = json.Unmarshal(gpuConfigContent, &gpuConfig); err != nil {
 		return gpuConfig, fmt.Errorf("failed to parse GPU config file contents: %s, error: %v", gpuConfigContent, err)
 	}
+
+	err = gpuConfig.AddDefaultsAndValidate()
+	if err != nil {
+		return gpumanager.GPUConfig{}, err
+	}
 	return gpuConfig, nil
 }
 
 func main() {
 	flag.Parse()
 	glog.Infoln("device-plugin started")
-	mountPaths := []gpumanager.MountPath{
-		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix},
-		{HostPath: *hostVulkanICDPathPrefix, ContainerPath: *containerVulkanICDPathPrefix}}
+	mountPaths := []pluginapi.Mount{
+		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix, ReadOnly: true},
+		{HostPath: *hostVulkanICDPathPrefix, ContainerPath: *containerVulkanICDPathPrefix, ReadOnly: true}}
 
 	var gpuConfig gpumanager.GPUConfig
 	if *gpuConfigFile != "" {
@@ -81,16 +89,14 @@ func main() {
 		}
 	}
 	glog.Infof("Using gpu config: %v", gpuConfig)
-	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, mountPaths, gpuConfig)
+	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, procDirectory, mountPaths, gpuConfig)
 
 	// Retry until nvidiactl and nvidia-uvm are detected. This is required
 	// because Nvidia drivers may not be installed initially.
 	for {
 		err := ngm.CheckDevicePaths()
 		if err == nil {
-			if err = ngm.Start(); err == nil {
-				break
-			}
+			break
 		}
 		// Use non-default level to avoid log spam.
 		glog.V(3).Infof("nvidiaGPUManager.CheckDevicePaths() failed: %v", err)
@@ -98,10 +104,19 @@ func main() {
 	}
 
 	if err := nvml.Init(); err != nil {
-		glog.Errorf("failed to initialize nvml: %v", err)
-		return
+		glog.Fatalf("failed to initialize nvml: %v", err)
 	}
 	defer nvml.Shutdown()
+
+	for {
+		err := ngm.Start()
+		if err == nil {
+			break
+		}
+
+		glog.Errorf("failed to start GPU device manager: %v", err)
+		time.Sleep(5 * time.Second)
+	}
 
 	if *enableContainerGPUMetrics {
 		glog.Infof("Starting metrics server on port: %d, endpoint path: %s, collection frequency: %d", *gpuMetricsPort, "/metrics", *gpuMetricsCollectionIntervalMs)
@@ -115,7 +130,7 @@ func main() {
 	}
 
 	if *enableHealthMonitoring {
-		hc := healthcheck.NewGPUHealthChecker(ngm.ListDevices(), ngm.Health)
+		hc := healthcheck.NewGPUHealthChecker(ngm.ListPhysicalDevices(), ngm.Health, ngm.ListHealthCriticalXid())
 		if err := hc.Start(); err != nil {
 			glog.Infof("Failed to start GPU Health Checker: %v", err)
 			return

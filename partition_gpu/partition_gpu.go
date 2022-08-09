@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"syscall"
 
 	"github.com/golang/glog"
 )
@@ -32,20 +33,36 @@ var (
 )
 
 var partitionSizeToProfileID = map[string]string{
+	//nvidia-tesla-a100
 	"1g.5gb":  "19",
 	"2g.10gb": "14",
 	"3g.20gb": "9",
 	"4g.20gb": "5",
 	"7g.40gb": "0",
+	//nvidia-a100-80gb 
+	"1g.10gb": "19",
+	"2g.20gb": "14",
+	"3g.40gb": "9",
+	"4g.40gb": "5",
+	"7g.80gb": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
+	//nvidia-tesla-a100
 	"1g.5gb":  7,
 	"2g.10gb": 3,
 	"3g.20gb": 2,
 	"4g.20gb": 1,
 	"7g.40gb": 1,
+	//nvidia-a100-80gb 
+	"1g.10gb": 7,
+	"2g.20gb": 3,
+	"3g.40gb": 2,
+	"4g.40gb": 1,
+	"7g.80gb": 1,
 }
+
+const SIGRTMIN = 34
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
 type GPUConfig struct {
@@ -153,7 +170,8 @@ func enableMigMode() error {
 }
 
 func rebootNode() error {
-	return ioutil.WriteFile("/proc/sysrq-trigger", []byte("b"), 0644)
+	// Gracefully reboot systemd: https://man7.org/linux/man-pages/man1/systemd.1.html#SIGNALS
+	return syscall.Kill(1, SIGRTMIN+5)
 }
 
 func cleanupAllGPUPartitions() error {

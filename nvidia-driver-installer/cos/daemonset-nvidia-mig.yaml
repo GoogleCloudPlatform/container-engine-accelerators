@@ -67,7 +67,6 @@ spec:
           path: /etc/nvidia
       initContainers:
       - image: "cos-nvidia-installer:fixed"
-        command: ["./cos-gpu-installer", "install", "--version=450.80.02"]
         imagePullPolicy: Never
         name: nvidia-driver-installer
         resources:

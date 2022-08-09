@@ -24,6 +24,8 @@ import (
 	"google.golang.org/grpc"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
+
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
 )
 
 type pluginServiceV1Beta1 struct {
@@ -43,7 +45,7 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 		select {
 		case d := <-s.ngm.Health:
 			glog.Infof("device-plugin: %s device marked as %s", d.ID, d.Health)
-			s.ngm.devices[d.ID] = d
+			s.ngm.SetDeviceHealth(d.ID, d.Health)
 			if err := s.sendDevices(stream); err != nil {
 				return err
 			}
@@ -54,6 +56,11 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi.AllocateRequest) (*pluginapi.AllocateResponse, error) {
 	resps := new(pluginapi.AllocateResponse)
 	for _, rqt := range requests.ContainerRequests {
+		// Validate if the request is for shared GPUs and check if the request meets the GPU sharing conditions.
+		if err := gpusharing.ValidateRequest(rqt.DevicesIDs, len(s.ngm.ListPhysicalDevices())); err != nil {
+			return nil, err
+		}
+
 		resp := new(pluginapi.ContainerAllocateResponse)
 		// Add all requested devices to Allocate Response
 		for _, id := range rqt.DevicesIDs {
@@ -75,13 +82,11 @@ func (s *pluginServiceV1Beta1) Allocate(ctx context.Context, requests *pluginapi
 			})
 		}
 
-		for _, mountPath := range s.ngm.mountPaths {
-			resp.Mounts = append(resp.Mounts, &pluginapi.Mount{
-				HostPath:      mountPath.HostPath,
-				ContainerPath: mountPath.ContainerPath,
-				ReadOnly:      true,
-			})
+		for i := range s.ngm.mountPaths {
+			resp.Mounts = append(resp.Mounts, &s.ngm.mountPaths[i])
 		}
+
+		resp.Envs = s.ngm.Envs(len(rqt.DevicesIDs))
 		resps.ContainerResponses = append(resps.ContainerResponses, resp)
 	}
 	return resps, nil

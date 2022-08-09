@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # The Dockerfile and other source for this daemonset are in
-# https://github.com/GoogleCloudPlatform/cos-gpu-installer
+# https://cos.googlesource.com/cos/tools/+/refs/heads/master/src/cmd/cos_gpu_installer/
 #
 # This is the same as ../../daemonset.yaml except that it assumes that the
 # docker image is present on the node instead of downloading from GCR. This

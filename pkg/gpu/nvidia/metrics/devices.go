@@ -21,8 +21,10 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -47,6 +49,7 @@ type ContainerID struct {
 }
 
 // GetDevicesForAllContainers returns a map with container as the key and the list of devices allocated to that container as the value.
+// It will skip time-shared GPU devices when time-sharing solution is enabled.
 func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 	containerDevices := make(map[ContainerID][]string)
 	conn, err := grpc.Dial(
@@ -86,6 +89,9 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 				}
 				containerDevices[container] = make([]string, 0)
 				for _, deviceID := range d.DeviceIds {
+					if gpusharing.IsVirtualDeviceID(deviceID) {
+						continue
+					}
 					containerDevices[container] = append(containerDevices[container], deviceID)
 				}
 			}
@@ -95,6 +101,10 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 	return containerDevices, nil
 }
 
+func GetAllGpuDevices() map[string]*nvml.Device {
+	return gpuDevices
+}
+
 // DiscoverGPUDevices discovers GPUs attached to the node, and updates `gpuDevices` map.
 func DiscoverGPUDevices() error {
 	count, err := nvml.GetDeviceCount()
@@ -102,7 +112,7 @@ func DiscoverGPUDevices() error {
 		return fmt.Errorf("failed to get device count: %s", err)
 	}
 
-	glog.Infof("Foud %d GPU devices", count)
+	glog.Infof("Found %d GPU devices", count)
 	gpuDevices = make(map[string]*nvml.Device)
 	for i := uint(0); i < count; i++ {
 		device, err := nvml.NewDevice(i)
