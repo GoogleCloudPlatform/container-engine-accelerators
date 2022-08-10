@@ -56,7 +56,7 @@ spec:
         hostPath:
           path: /etc/nvidia
       initContainers:
-      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:4238017c76b48ef82aa9e59f17469017f311a65945c3cd3aea6a96e0c3e143b4"
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:c54fd003948fac687c2a93a55ea6e4d47ffbd641278a9191e75e822fe72471c2"
         name: partition-gpus
         env:
         - name: LD_LIBRARY_PATH

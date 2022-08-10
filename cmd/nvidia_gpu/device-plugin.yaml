@@ -49,7 +49,7 @@ spec:
         hostPath:
             path: /etc/nvidia
       containers:
-      - image: "gcr.io/gke-release-staging/nvidia-gpu-device-plugin@sha256:ff311379bfc87732d924ab2e45f736843f2b1430c503d9f996b2182403267c80"
+      - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:d6cb575b0d8a436066a0d3a783bbaf84697e0d5a68857edfe5fd5d1183133c7d"
         command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics"]
         name: nvidia-gpu-device-plugin
         ports:
