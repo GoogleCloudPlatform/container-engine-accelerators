@@ -36,7 +36,7 @@ var gpuPartitionSizeMaxCount = map[string]int{
 	"2g.10gb": 3,
 	"3g.20gb": 2,
 	"7g.40gb": 1,
-	//nvidia-a100-80gb 
+	//nvidia-a100-80gb
 	"1g.10gb": 7,
 	"2g.20gb": 3,
 	"3g.40gb": 2,
