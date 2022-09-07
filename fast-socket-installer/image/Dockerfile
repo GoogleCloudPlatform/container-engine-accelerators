@@ -1,4 +1,4 @@
-FROM gcr.io/gke-release/debian-base:latest
+FROM gcr.io/gke-release/debian-base:bullseye-v1.4.2-gke.3
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends --allow-change-held-packages apt-transport-https ca-certificates curl gnupg && \
