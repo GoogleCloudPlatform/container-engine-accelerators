@@ -71,19 +71,13 @@ type GPUConfig struct {
 	MaxTimeSharedClientsPerGPU int
 	// GPUSharingConfig informs how GPUs on this node can be shared between containers.
 	GPUSharingConfig GPUSharingConfig
+	// Xid error codes that will set the node to unhealthy
+	HealthCriticalXid []int
 }
-
-type GPUSharingStrategy string
-
-const (
-	Undefined   GPUSharingStrategy = ""
-	TimeSharing GPUSharingStrategy = "time-sharing"
-	MPS         GPUSharingStrategy = "mps"
-)
 
 type GPUSharingConfig struct {
 	// GPUSharingStrategy is the type of sharing strategy to enable on this node. Values are "time-sharing" or "mps".
-	GPUSharingStrategy GPUSharingStrategy
+	GPUSharingStrategy gpusharing.GPUSharingStrategy
 	// MaxSharedClientsPerGPU is the maximum number of clients that are allowed to share a single GPU.
 	MaxSharedClientsPerGPU int
 }
@@ -91,27 +85,27 @@ type GPUSharingConfig struct {
 func (config *GPUConfig) AddDefaultsAndValidate() error {
 	if config.MaxTimeSharedClientsPerGPU > 0 {
 		if config.GPUSharingConfig.GPUSharingStrategy != "" || config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
-			return fmt.Errorf("invalid GPUConfig, only one of MaxTimeSharedClientsPerGPU or GPUSharingConfig should be set")
+			glog.Infof("Both MaxTimeSharedClientsPerGPU and GPUSharingConfig are set, use the value of MaxTimeSharedClientsPerGPU")
 		}
 
-		config.GPUSharingConfig.GPUSharingStrategy = TimeSharing
+		config.GPUSharingConfig.GPUSharingStrategy = gpusharing.TimeSharing
 		config.GPUSharingConfig.MaxSharedClientsPerGPU = config.MaxTimeSharedClientsPerGPU
 	} else {
 		switch config.GPUSharingConfig.GPUSharingStrategy {
-		case TimeSharing, MPS:
+		case gpusharing.TimeSharing, gpusharing.MPS:
 			if config.GPUSharingConfig.MaxSharedClientsPerGPU <= 0 {
 				return fmt.Errorf("MaxSharedClientsPerGPU should be > 0 for time-sharing or mps GPU sharing strategies")
 			}
 			break
-		case Undefined:
+		case gpusharing.Undefined:
 			if config.GPUSharingConfig.MaxSharedClientsPerGPU > 0 {
 				return fmt.Errorf("GPU sharing strategy needs to be specified when MaxSharedClientsPerGPU > 0")
 			}
 		default:
 			return fmt.Errorf("invalid GPU Sharing strategy: %v, should be one of time-sharing or mps", config.GPUSharingConfig.GPUSharingStrategy)
-
 		}
 	}
+	gpusharing.SharingStrategy = config.GPUSharingConfig.GPUSharingStrategy
 	return nil
 }
 
@@ -154,6 +148,10 @@ func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 		return ngm.devices
 	}
 	return ngm.migDeviceManager.ListGPUPartitionDevices()
+}
+
+func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []int {
+	return ngm.gpuConfig.HealthCriticalXid
 }
 
 // ListDevices lists all GPU devices available on this node.
@@ -289,7 +287,7 @@ func (ngm *nvidiaGPUManager) isMpsHealthy() error {
 }
 
 func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
-	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == MPS {
+	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == gpusharing.MPS {
 		activeThreadLimit := numDevicesRequested * 100 / ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU
 		memoryLimit := uint64(numDevicesRequested) * ngm.totalMemPerGPU / uint64(ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU)
 
@@ -362,7 +360,6 @@ func (ngm *nvidiaGPUManager) Start() error {
 			return fmt.Errorf("failed to query total memory available per GPU: %v", err)
 		}
 	}
-
 	return nil
 }
 

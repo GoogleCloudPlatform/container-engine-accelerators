@@ -1,0 +1,24 @@
+name: Go lint and test
+on:
+  push:
+    branches: 
+      - master
+  pull_request:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+    - name: Setup Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+    - name: Setup Python # boilerplate.py needs this
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10' 
+    - name: Run presubmit lint
+      run: make presubmit
+    - name: Run go test
+      run: make test

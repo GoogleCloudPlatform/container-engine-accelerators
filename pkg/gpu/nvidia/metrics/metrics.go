@@ -17,7 +17,6 @@ package metrics
 import (
 	"fmt"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
@@ -60,7 +59,7 @@ var (
 			Name: "duty_cycle_gpu_node",
 			Help: "Percent of time when the GPU was actively processing",
 		},
-		[]string{"node_name", "make", "accelerator_id", "model"})
+		[]string{"make", "accelerator_id", "model"})
 
 	// MemoryTotalNodeGpu reports the total memory available on the GPU per Node.
 	MemoryTotalNodeGpu = promauto.NewGaugeVec(
@@ -68,7 +67,7 @@ var (
 			Name: "memory_total_gpu_node",
 			Help: "Total memory available on the GPU in bytes",
 		},
-		[]string{"node_name", "make", "accelerator_id", "model"})
+		[]string{"make", "accelerator_id", "model"})
 
 	// MemoryUsedNodeGpu reports GPU memory allocated per Node.
 	MemoryUsedNodeGpu = promauto.NewGaugeVec(
@@ -76,7 +75,7 @@ var (
 			Name: "memory_used_gpu_node",
 			Help: "Allocated GPU memory in bytes",
 		},
-		[]string{"node_name", "make", "accelerator_id", "model"})
+		[]string{"make", "accelerator_id", "model"})
 
 	// DutyCycle reports the percent of time when the GPU was actively processing per container.
 	DutyCycle = promauto.NewGaugeVec(
@@ -212,7 +211,6 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
 		}
 	}
-	nodeName := os.Getenv("NODE_NAME")
 	for device, d := range gpuDevices {
 		dutyCycle, usedMemory, err := getGpuMetrics(device, d)
 		if err != nil {
@@ -220,9 +218,9 @@ func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, 
 			continue
 		}
 
-		DutyCycleNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-		MemoryTotalNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
-		MemoryUsedNodeGpu.WithLabelValues(nodeName, "nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
+		DutyCycleNodeGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
+		MemoryTotalNodeGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
+		MemoryUsedNodeGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
 	}
 }
 

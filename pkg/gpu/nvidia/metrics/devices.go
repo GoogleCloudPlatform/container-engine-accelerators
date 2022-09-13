@@ -112,7 +112,7 @@ func DiscoverGPUDevices() error {
 		return fmt.Errorf("failed to get device count: %s", err)
 	}
 
-	glog.Infof("Foud %d GPU devices", count)
+	glog.Infof("Found %d GPU devices", count)
 	gpuDevices = make(map[string]*nvml.Device)
 	for i := uint(0); i < count; i++ {
 		device, err := nvml.NewDevice(i)
