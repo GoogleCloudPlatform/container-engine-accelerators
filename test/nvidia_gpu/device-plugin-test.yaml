@@ -47,9 +47,13 @@ spec:
         - name: nvidia-config
           hostPath:
             path: /etc/nvidia
+        - name: mps
+          hostPath:
+            path: /tmp/nvidia-mps
+            type: Directory
       containers:
-        - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:aaaac2d45598d8480fdb42dc6d277299d1cde8a19084502cda2f1b909852d615"
-          command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics"]
+        - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:d6cb575b0d8a436066a0d3a783bbaf84697e0d5a68857edfe5fd5d1183133c7d"
+          command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics", "--enable-health-monitoring"]
           name: nvidia-gpu-device-plugin
           ports:
             - name: "metrics"
@@ -79,5 +83,7 @@ spec:
               mountPath: /proc
             - name: nvidia-config
               mountPath: /etc/nvidia
+            - name: mps
+              mountPath: /tmp/nvidia-mps
   updateStrategy:
     type: RollingUpdate
