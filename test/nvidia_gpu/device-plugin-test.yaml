@@ -21,7 +21,7 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: cloud.google.com/gke-accelerator-test
+                  - key: cloud.google.com/gke-accelerator
                     operator: Exists
       tolerations:
         - operator: "Exists"
