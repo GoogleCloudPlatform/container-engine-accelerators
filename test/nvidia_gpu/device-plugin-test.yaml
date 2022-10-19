@@ -4,16 +4,16 @@ metadata:
   name: nvidia-gpu-device-plugin-test
   namespace: kube-system
   labels:
-    k8s-app: nvidia-gpu-device-plugin-test
+    k8s-app: nvidia-gpu-device-plugin
     addonmanager.kubernetes.io/mode: EnsureExists
 spec:
   selector:
     matchLabels:
-      k8s-app: nvidia-gpu-device-plugin-test
+      k8s-app: nvidia-gpu-device-plugin
   template:
     metadata:
       labels:
-        k8s-app: nvidia-gpu-device-plugin-test
+        k8s-app: nvidia-gpu-device-plugin
     spec:
       priorityClassName: system-node-critical
       affinity:
