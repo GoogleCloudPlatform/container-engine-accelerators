@@ -179,6 +179,7 @@ func getGpuMetrics(device string, d *nvml.Device) (uint, uint64, error) {
 	status, err := gmc.collectStatus(d)
 	if err != nil {
 		glog.Errorf("Failed to get device status for %s: %v", device, err)
+		return 0, 0, err
 	}
 	mem := status.Memory
 	dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
