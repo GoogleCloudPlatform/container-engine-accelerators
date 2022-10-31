@@ -18,7 +18,10 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
+	"path/filepath"
+	"strings"
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
@@ -36,6 +39,11 @@ const (
 	devDirectory         = "/dev"
 	// Proc directory is used to lookup the access files for each GPU partition.
 	procDirectory = "/proc"
+	// path where nvidia tools are mounted inside the container
+	containerToolPrefix = "/usr/bin"
+	// only allow these tools to be mounted into the container
+	// keep in sync with https://github.com/NVIDIA/libnvidia-container/blob/master/src/nvc_info.c#L61
+	nvidiaToolsAllowed = "nvidia-smi nvidia-debugdump nvidia-persistenced nv-fabricmanager"
 )
 
 var (
@@ -43,6 +51,7 @@ var (
 	containerPathPrefix            = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts '-host-path'")
 	hostVulkanICDPathPrefix        = flag.String("host-vulkan-icd-path", "/home/kubernetes/bin/nvidia/vulkan/icd.d", "Path on the host that contains the Nvidia Vulkan installable client driver. This will be mounted inside the container as '-container-vulkan-icd-path'")
 	containerVulkanICDPathPrefix   = flag.String("container-vulkan-icd-path", "/etc/vulkan/icd.d", "Path on the container that mounts '-host-vulkan-icd-path'")
+	hostToolPrefix                 = flag.String("host-tool-path", "", "Path on the host that contains nvidia tools (like nvidia-smi). The binaries will be mounted inside the container under "+containerToolPrefix)
 	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
 	enableHealthMonitoring         = flag.Bool("enable-health-monitoring", false, "If true, the device plugin will detect critical Xid errors and mark the GPUs unallocatable")
@@ -70,12 +79,42 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 	return gpuConfig, nil
 }
 
+func get_nvidia_tool_mountpts(hostPathPrefix string, containerPathPrefix string) []pluginapi.Mount {
+	mountPath := []pluginapi.Mount{}
+
+	err := filepath.WalkDir(hostPathPrefix,
+		func(path string, d fs.DirEntry, err error) error {
+			// only setup mounts for executables
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			if d.Type().IsRegular() && strings.Contains(nvidiaToolsAllowed, d.Name()) && info.Mode()&0111 != 0 {
+				mpoint := pluginapi.Mount{
+					HostPath:      path,
+					ContainerPath: filepath.Join(containerPathPrefix, d.Name()),
+					ReadOnly:      true}
+				mountPath = append(mountPath, mpoint)
+			}
+			return nil
+		},
+	)
+	if err != nil {
+		glog.Infof("Error traversing host-tool-path %s : %v", hostPathPrefix, err)
+	}
+	return mountPath
+}
+
 func main() {
 	flag.Parse()
 	glog.Infoln("device-plugin started")
 	mountPaths := []pluginapi.Mount{
 		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix, ReadOnly: true},
 		{HostPath: *hostVulkanICDPathPrefix, ContainerPath: *containerVulkanICDPathPrefix, ReadOnly: true}}
+
+	if len(*hostToolPrefix) != 0 {
+		mountPaths = append(mountPaths, get_nvidia_tool_mountpts(*hostToolPrefix, containerToolPrefix)...)
+	}
 
 	var gpuConfig gpumanager.GPUConfig
 	if *gpuConfigFile != "" {
