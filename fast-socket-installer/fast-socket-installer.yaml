@@ -34,6 +34,7 @@ spec:
       - name: nvidia-install-dir-host
         hostPath:
           path: /home/kubernetes/bin/nvidia
+          type: Directory
       initContainers:
       - image: gcr.io/gke-release/fastsocket-installer@sha256:cb8dca70b5611769fd2e0e8eb9aebf81a89d4378537cff104775c873abf2d9c5
         name: nccl-fastsocket-installer
