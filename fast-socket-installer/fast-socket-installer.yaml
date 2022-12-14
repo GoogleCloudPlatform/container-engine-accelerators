@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: nccl-fastsocket-installer
+  name: nccl-fastsocket-installer2
   namespace: kube-system
   labels:
-    k8s-app: nccl-fastsocket-installer
+    k8s-app: nccl-fastsocket-installer2
 spec:
   selector:
     matchLabels:
-      k8s-app: nccl-fastsocket-installer
+      k8s-app: nccl-fastsocket-installer2
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: nccl-fastsocket-installer
-        k8s-app: nccl-fastsocket-installer
+        name: nccl-fastsocket-installer2
+        k8s-app: nccl-fastsocket-installer2
     spec:
       affinity:
         nodeAffinity:
