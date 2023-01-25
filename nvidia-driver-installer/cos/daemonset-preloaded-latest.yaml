@@ -47,6 +47,8 @@ spec:
             - matchExpressions:
               - key: cloud.google.com/gke-accelerator
                 operator: Exists
+              - key: cloud.google.com/gke-gpu-driver-version
+                operator: DoesNotExist
       tolerations:
       - operator: "Exists"
       hostNetwork: true
