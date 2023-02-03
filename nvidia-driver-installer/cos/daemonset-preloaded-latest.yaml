@@ -78,7 +78,7 @@ spec:
         name: nvidia-driver-installer
         resources:
           requests:
-            cpu: "0.15"
+            cpu: 150m
         securityContext:
           privileged: true
         env:
@@ -115,7 +115,7 @@ spec:
             value: /usr/local/nvidia/lib64
         resources:
           requests:
-            cpu: "0.15"
+            cpu: 150m
         securityContext:
           privileged: true
         volumeMounts:
