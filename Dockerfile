@@ -13,13 +13,13 @@
 # limitations under the License.
 
 FROM golang:1.19 as builder
-WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
+WORKDIR /go/src/github.com/melody789/container-engine-accelerators
 COPY . .
 RUN go build cmd/nvidia_gpu/nvidia_gpu.go
-RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu
+RUN chmod a+x /go/src/github.com/melody789/container-engine-accelerators/nvidia_gpu
 
 FROM gcr.io/distroless/base:latest
-COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/nvidia-gpu-device-plugin
+COPY --from=builder /go/src/github.com/melody789/container-engine-accelerators/nvidia_gpu /usr/bin/nvidia-gpu-device-plugin
 CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr"]
 # Use the CMD below to make the device plugin expose prometheus endpoint with container level GPU metrics
 #CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "-v=10", "--enable-container-gpu-metrics"]
