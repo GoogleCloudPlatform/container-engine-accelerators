@@ -67,6 +67,7 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 	if err != nil {
 		return gpumanager.GPUConfig{}, err
 	}
+
 	return gpuConfig, nil
 }
 
@@ -88,7 +89,7 @@ func main() {
 			gpuConfig = gpumanager.GPUConfig{}
 		}
 	}
-	err = gpuConfig.AddXidConfig()
+	err = gpuConfig.AddHealthCriticalXid()
 	if err != nill {
 		glog.Infof("Failed to add Xid Config into GPU Cconfig.")
 	}
