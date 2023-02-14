@@ -175,7 +175,7 @@ func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 
 func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []int {
 	xidConfig := os.Getenv("XID_CONFIG")
-	glog.Infof("hahahhaha insdie ListHealthCriticalXid function)
+	glog.Infof("hahahhaha insdie ListHealthCriticalXid function")
 	fmt.Println("hahahhaha ListHealthCriticalXid xidConfig print %s", xidConfig)
 	glog.Infof("hahahahhahaha ListHealthCriticalXid ngm.gpuConfig.HealthCriticlXid %v", ngm.gpuConfig.HealthCriticalXid)
 	return ngm.gpuConfig.HealthCriticalXid
