@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"strings"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
@@ -106,6 +107,27 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 		}
 	}
 	gpusharing.SharingStrategy = config.GPUSharingConfig.GPUSharingStrategy
+	return nil
+}
+
+
+func (config *GPUConfig) AddHealthCriticalXid() error {
+	xidConfig := os.Getenv("XID_CONFIG")
+	if len(xidConfig) == 0 {
+		glog.Infof("There is no Xid config specified ")
+		return nil
+	}
+	glog.Infof("log list health critical xid")
+	fmt.Println("hahahhaha xidConfig print %s", xidConfig)
+	xidStrs := strings.Split(xidConfig, ",")
+        xidArry := make([]int, len(xidStrs))
+        for i := range xidArry {
+	    xidArry[i], _ = strconv.Atoi(xidStrs[i])
+	}
+	config.HealthCriticalXid = xidArry
+	glog.Infof("hahahhaha log after ary  print %v", xidArry)
+	fmt.Println("hahahahhahaha after ngm.gpuConfig.HealthCriticlXid %v", config.HealthCriticalXid)
+	glog.Infof("hahahahhahaha log after ngm.gpuConfig.HealthCriticlXid %v", config.HealthCriticalXid)
 	return nil
 }
 
