@@ -113,11 +113,12 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 
 func (config *GPUConfig) AddHealthCriticalXid() error {
 	xidConfig := os.Getenv("XID_CONFIG")
+	fmt.Println("hahahhaha insde AddHealthCriticalXid xidConfig print %s", xidConfig)
 	if len(xidConfig) == 0 {
 		glog.Infof("There is no Xid config specified ")
 		return nil
 	}
-	glog.Infof("log list health critical xid")
+	glog.Infof("hahha AddHealthCriticalXid log list health critical xid")
 	fmt.Println("hahahhaha xidConfig print %s", xidConfig)
 	xidStrs := strings.Split(xidConfig, ",")
         xidArry := make([]int, len(xidStrs))
@@ -173,6 +174,10 @@ func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 }
 
 func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []int {
+	xidConfig := os.Getenv("XID_CONFIG")
+	glog.Infof("hahahhaha insdie ListHealthCriticalXid function)
+	fmt.Println("hahahhaha ListHealthCriticalXid xidConfig print %s", xidConfig)
+	glog.Infof("hahahahhahaha ListHealthCriticalXid ngm.gpuConfig.HealthCriticlXid %v", ngm.gpuConfig.HealthCriticalXid)
 	return ngm.gpuConfig.HealthCriticalXid
 }
 
