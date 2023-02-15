@@ -64,6 +64,8 @@ spec:
               name: nvidia-config
             - mountPath: /tmp/nvidia-mps
               name: mps
+            - mountPath: /etc/config
+              name: xid-config
       priorityClassName: system-node-critical
       securityContext:
         seccompProfile:
@@ -101,5 +103,9 @@ spec:
         - hostPath:
             path: /tmp/nvidia-mps
           name: mps
+        - name: xid-config
+          configMap:
+            name: xid-config
+            optional: true
   updateStrategy:
     type: RollingUpdate
