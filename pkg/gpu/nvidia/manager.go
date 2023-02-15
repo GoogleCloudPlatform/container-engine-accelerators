@@ -111,7 +111,7 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 }
 
 
-func (config *GPUConfig) AddHealthCriticalXid() {
+func (config *GPUConfig) AddHealthCriticalXid() error{
 	xidConfig := os.Getenv("XID_CONFIG")
 	if len(xidConfig) == 0 {
 		glog.Infof("There is no Xid config specified ")
