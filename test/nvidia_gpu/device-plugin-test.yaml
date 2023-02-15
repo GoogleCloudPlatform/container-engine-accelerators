@@ -36,7 +36,7 @@ spec:
                    name: xid-config
                    key: HealthCriticalXid
                    optional: true
-          image: gcr.io/melodyma-gke-dev/xid-image:5.0
+          image: gcr.io/melodyma-gke-dev/xid-image:6.0
           name: nvidia-gpu-device-plugin
           ports:
             - containerPort: 2112
