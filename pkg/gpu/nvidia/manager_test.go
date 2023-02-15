@@ -82,6 +82,49 @@ func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
 	}
 }
 
+func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
+	type fields struct {
+		HealthCriticalXid []int
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		wantErr    bool
+		wantFields fields
+	}{
+		{
+			name:       "valid config, no HealthCriticalXid",
+			fields:     fields{},
+			wantErr:    false,
+			wantFields: fields{},
+		},
+		{
+			name:    "valid config, HealthCriticalXid",
+			fields:  fields{HealthCriticalXid: [61]},
+			wantErr: false,
+			wantFields: fields{
+				HealthCriticalXid: [61],
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &GPUConfig{
+				HealthCriticalXid:          tt.fields.HealthCriticalXid,
+			}
+			if err := config.AddHealthCriticalXid(); (err != nil) != tt.wantErr {
+				t.Errorf("GPUConfig.AddHealthCriticalXid() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			wantConfig := &GPUConfig{
+				HealthCriticalXid:          tt.fields.HealthCriticalXid,
+			}
+			if !tt.wantErr && !reflect.DeepEqual(config, wantConfig) {
+				t.Errorf("GPUConfig was not defaulted correctly, got = %v, want = %v", config, wantConfig)
+			}
+		})
+	}
+}
+
 func Test_nvidiaGPUManager_Envs(t *testing.T) {
 	tests := []struct {
 		name                string
