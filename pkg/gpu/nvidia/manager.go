@@ -123,7 +123,8 @@ func (config *GPUConfig) AddHealthCriticalXid() error {
         xidArry := make([]int, len(xidStrs))
 	var err error
         for i := range xidArry {
-	    xidArry[i], err = strconv.Atoi(xidStrs[i])
+	    xidStr := strings.TrimSpace(xidStrs[i])
+	    xidArry[i], err = strconv.Atoi(xidStr)
 		if err != nil {
 			return fmt.Errorf("Invalid HealthCriticalXid input : %v",  err)
 		}
