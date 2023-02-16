@@ -100,7 +100,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 		},
 		{
 			name:    "valid config, HealthCriticalXid",
-			fields:  fields{HealthCriticalXid: [61]},
+			fields:  fields{HealthCriticalXid: []int {61}},
 			wantErr: false,
 			wantFields: fields{
 				HealthCriticalXid: [61],
