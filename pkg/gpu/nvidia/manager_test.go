@@ -98,9 +98,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 			name:       "valid config, no HealthCriticalXid",
 			fields:     fields{},
 			wantErr:    false,
-			wantXids:   fields{
-				HealthCriticalXid: []int {},
-			},
+			wantXids:   fields{},
 		},
 		{
 			name:     "valid config, HealthCriticalXid",
@@ -111,7 +109,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 			},
 		},
 		{
-			name:    "invalid config, HealthCriticalXid",
+			name:    "valid config with empty space HealthCriticalXid",
 			fields:  fields{XID_CONFIG: "31,  32,34"},
 			wantErr: false,
 			wantXids: fields{
