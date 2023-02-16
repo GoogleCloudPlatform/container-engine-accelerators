@@ -89,7 +89,10 @@ func main() {
 			gpuConfig = gpumanager.GPUConfig{}
 		}
 	}
-	gpuConfig.AddHealthCriticalXid()
+	err = gpuConfig.AddHealthCriticalXid()
+	if err != nil {
+		glog.Infof("Failed to Add HealthCriticalXid %s: %v", *gpuConfigFile, err)
+	}
 	
 	glog.Infof("Using gpu config: %v", gpuConfig)
 	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, procDirectory, mountPaths, gpuConfig)
