@@ -112,7 +112,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 		},
 		{
 			name:    "invalid config, HealthCriticalXid",
-			fields:  fields{HealthCriticalXid: "31,  32,34"},
+			fields:  fields{XID_CONFIG: "31,  32,34"},
 			wantErr: false,
 			wantXids: fields{
 				HealthCriticalXid: []int {31, 32, 34},
@@ -120,7 +120,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 		},
 		{
 			name:    "invalid config, HealthCriticalXid",
-			fields:  fields{HealthCriticalXid: "31,32,x"},
+			fields:  fields{XID_CONFIG: "31,32,x"},
 			wantErr: true,
 		},
 	}
