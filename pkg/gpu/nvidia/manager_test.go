@@ -122,7 +122,6 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 			name:    "invalid config, HealthCriticalXid",
 			fields:  fields{HealthCriticalXid: "31,32,x"},
 			wantErr: true,
-			},
 		},
 	}
 	for _, tt := range tests {
