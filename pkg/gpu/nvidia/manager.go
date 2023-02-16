@@ -25,9 +25,9 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
-	"strings"
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
@@ -110,7 +110,6 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 	return nil
 }
 
-
 func (config *GPUConfig) AddHealthCriticalXid() error {
 	xidConfig := os.Getenv("XID_CONFIG")
 	if len(xidConfig) == 0 {
@@ -120,13 +119,13 @@ func (config *GPUConfig) AddHealthCriticalXid() error {
 
 	glog.Infof("Detect HealthCriticalXid : %s ", xidConfig)
 	xidStrs := strings.Split(xidConfig, ",")
-        xidArry := make([]int, len(xidStrs))
+	xidArry := make([]int, len(xidStrs))
 	var err error
-        for i := range xidArry {
-	    xidStr := strings.TrimSpace(xidStrs[i])
-	    xidArry[i], err = strconv.Atoi(xidStr)
+	for i := range xidArry {
+		xidStr := strings.TrimSpace(xidStrs[i])
+		xidArry[i], err = strconv.Atoi(xidStr)
 		if err != nil {
-			return fmt.Errorf("Invalid HealthCriticalXid input : %v",  err)
+			return fmt.Errorf("Invalid HealthCriticalXid input : %v", err)
 		}
 	}
 	config.HealthCriticalXid = xidArry
