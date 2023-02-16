@@ -91,7 +91,7 @@ func main() {
 	}
 	err := gpuConfig.AddHealthCriticalXid()
 	if err != nil {
-		glog.Infof("Failed to Add HealthCriticalXid %s: %v", *gpuConfigFile, err)
+		glog.Infof("Failed to Add HealthCriticalXid : %v", err)
 	}
 	
 	glog.Infof("Using gpu config: %v", gpuConfig)
