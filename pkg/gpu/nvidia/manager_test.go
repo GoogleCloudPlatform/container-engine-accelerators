@@ -86,30 +86,36 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 	t.disableParallel = true
 	type fields struct {
 		XID_CONFIG string
+		HealthCriticalXid []int
 	}
 	tests := []struct {
 		name       string
 		fields     fields
 		wantErr    bool
-		wantXids    []int
+		wantXids   fields
 	}{
 		{
 			name:       "valid config, no HealthCriticalXid",
 			fields:     fields{},
 			wantErr:    false,
-			wantXids: fields{},
+			wantXids:   fields{
+				HealthCriticalXid: []int {},
+			},
 		},
 		{
-			name:    "valid config, HealthCriticalXid",
-			fields:  fields{XID_CONFIG: "61, 31"},
-			wantErr: false,
-			wantXids: []int {61,31},
+			name:     "valid config, HealthCriticalXid",
+			fields:   fields{XID_CONFIG: "61, 31"},
+			wantErr:  false,
+			wantXids: fields{
+				HealthCriticalXid: []int {61,31},
+			},
 		},
 		{
 			name:    "invalid config, HealthCriticalXid",
 			fields:  fields{HealthCriticalXid: "31,  32,34"},
 			wantErr: false,
-			wantXids: []int {31,32,34},
+			wantXids: fields{
+				HealthCriticalXid: []int {31, 32, 34},
 			},
 		},
 		{
@@ -127,7 +133,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 				t.Errorf("GPUConfig.AddHealthCriticalXid() error = %v, wantErr %v", err, tt.wantErr)
 			}
 			wantConfig := &GPUConfig{
-				HealthCriticalXid:          tt.fields.HealthCriticalXid,
+				HealthCriticalXid:          tt.wantXids.HealthCriticalXid,
 			}
 			if !tt.wantErr && !reflect.DeepEqual(config, wantConfig) {
 				t.Errorf("GPUConfig was not defaulted correctly, got = %v, want = %v", config, wantConfig)
