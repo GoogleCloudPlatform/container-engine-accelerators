@@ -67,7 +67,6 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 	if err != nil {
 		return gpumanager.GPUConfig{}, err
 	}
-
 	return gpuConfig, nil
 }
 
@@ -93,7 +92,7 @@ func main() {
 	if err != nil {
 		glog.Infof("Failed to Add HealthCriticalXid : %v", err)
 	}
-	
+
 	glog.Infof("Using gpu config: %v", gpuConfig)
 	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, procDirectory, mountPaths, gpuConfig)
 
