@@ -89,7 +89,7 @@ func main() {
 			gpuConfig = gpumanager.GPUConfig{}
 		}
 	}
-	err = gpuConfig.AddHealthCriticalXid()
+	err := gpuConfig.AddHealthCriticalXid()
 	if err != nil {
 		glog.Infof("Failed to Add HealthCriticalXid %s: %v", *gpuConfigFile, err)
 	}
