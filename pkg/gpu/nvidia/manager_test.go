@@ -128,7 +128,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			config := &GPUConfig{}
-			t.Setenv("XID_CONFIG", tt.fields.XID_CONFIG)
+			os.Setenv("XID_CONFIG", tt.fields.XID_CONFIG)
 			if err := config.AddHealthCriticalXid(); (err != nil) != tt.wantErr {
 				t.Errorf("GPUConfig.AddHealthCriticalXid() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -138,7 +138,7 @@ func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 			if !tt.wantErr && !reflect.DeepEqual(config, wantConfig) {
 				t.Errorf("GPUConfig was not defaulted correctly, got = %v, want = %v", config, wantConfig)
 			}
-			t.Unsetenv("XID_CONFIG")
+			os.Unsetenv("XID_CONFIG")
 		})
 	}
 }
