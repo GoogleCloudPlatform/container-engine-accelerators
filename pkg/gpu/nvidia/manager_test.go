@@ -17,6 +17,7 @@ package nvidia
 import (
 	"reflect"
 	"testing"
+	"os"
 )
 
 func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
