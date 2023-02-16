@@ -118,7 +118,7 @@ func (config *GPUConfig) AddHealthCriticalXid() error {
 		return nil
 	}
 
-	glog.Infof("Detected HealthCriticalXid")
+	glog.Infof("Detect HealthCriticalXid : %s ", xidConfig)
 	xidStrs := strings.Split(xidConfig, ",")
         xidArry := make([]int, len(xidStrs))
 	
