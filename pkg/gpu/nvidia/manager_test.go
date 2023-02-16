@@ -85,7 +85,7 @@ func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
 func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
 	t.disableParallel = true
 	type fields struct {
-		XID_CONFIG string
+		XID_CONFIG        string
 		HealthCriticalXid []int
 	}
 	tests := []struct {
