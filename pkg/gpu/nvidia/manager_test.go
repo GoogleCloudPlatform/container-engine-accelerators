@@ -15,6 +15,7 @@
 package nvidia
 
 import (
+	"os"
 	"reflect"
 	"testing"
 )
@@ -78,6 +79,63 @@ func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
 			if !tt.wantErr && !reflect.DeepEqual(config, wantConfig) {
 				t.Errorf("GPUConfig was not defaulted correctly, got = %v, want = %v", config, wantConfig)
 			}
+		})
+	}
+}
+
+func TestGPUConfig_AddHealthCriticalXid(t *testing.T) {
+	type fields struct {
+		XID_CONFIG        string
+		HealthCriticalXid []int
+	}
+	tests := []struct {
+		name     string
+		fields   fields
+		wantErr  bool
+		wantXids fields
+	}{
+		{
+			name:     "valid config, no HealthCriticalXid",
+			fields:   fields{},
+			wantErr:  false,
+			wantXids: fields{},
+		},
+		{
+			name:    "valid config, HealthCriticalXid",
+			fields:  fields{XID_CONFIG: "61, 31"},
+			wantErr: false,
+			wantXids: fields{
+				HealthCriticalXid: []int{61, 31},
+			},
+		},
+		{
+			name:    "valid config with empty space HealthCriticalXid",
+			fields:  fields{XID_CONFIG: "31,  32,34"},
+			wantErr: false,
+			wantXids: fields{
+				HealthCriticalXid: []int{31, 32, 34},
+			},
+		},
+		{
+			name:    "invalid config, HealthCriticalXid",
+			fields:  fields{XID_CONFIG: "31,32,x"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := &GPUConfig{}
+			os.Setenv("XID_CONFIG", tt.fields.XID_CONFIG)
+			if err := config.AddHealthCriticalXid(); (err != nil) != tt.wantErr {
+				t.Errorf("GPUConfig.AddHealthCriticalXid() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			wantConfig := &GPUConfig{
+				HealthCriticalXid: tt.wantXids.HealthCriticalXid,
+			}
+			if !tt.wantErr && !reflect.DeepEqual(config, wantConfig) {
+				t.Errorf("GPUConfig was not defaulted correctly, got = %v, want = %v", config, wantConfig)
+			}
+			os.Unsetenv("XID_CONFIG")
 		})
 	}
 }

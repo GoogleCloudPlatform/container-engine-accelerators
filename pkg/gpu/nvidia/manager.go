@@ -25,6 +25,7 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -106,6 +107,28 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 		}
 	}
 	gpusharing.SharingStrategy = config.GPUSharingConfig.GPUSharingStrategy
+	return nil
+}
+
+func (config *GPUConfig) AddHealthCriticalXid() error {
+	xidConfig := os.Getenv("XID_CONFIG")
+	if len(xidConfig) == 0 {
+		glog.Infof("There is no Xid config specified ")
+		return nil
+	}
+
+	glog.Infof("Detect HealthCriticalXid : %s ", xidConfig)
+	xidStrs := strings.Split(xidConfig, ",")
+	xidArry := make([]int, len(xidStrs))
+	var err error
+	for i := range xidArry {
+		xidStr := strings.TrimSpace(xidStrs[i])
+		xidArry[i], err = strconv.Atoi(xidStr)
+		if err != nil {
+			return fmt.Errorf("Invalid HealthCriticalXid input : %v", err)
+		}
+	}
+	config.HealthCriticalXid = xidArry
 	return nil
 }
 
