@@ -24,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 )
 
@@ -32,41 +33,20 @@ var (
 	gpuConfigFile = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
 )
 
-var partitionSizeToProfileID = map[string]string{
-	//nvidia-tesla-a100
-	"1g.5gb":  "19",
-	"2g.10gb": "14",
-	"3g.20gb": "9",
-	"4g.20gb": "5",
-	"7g.40gb": "0",
-	//nvidia-a100-80gb
-	"1g.10gb": "19",
-	"2g.20gb": "14",
-	"3g.40gb": "9",
-	"4g.40gb": "5",
-	"7g.80gb": "0",
-}
-
-var partitionSizeMaxCount = map[string]int{
-	//nvidia-tesla-a100
-	"1g.5gb":  7,
-	"2g.10gb": 3,
-	"3g.20gb": 2,
-	"4g.20gb": 1,
-	"7g.40gb": 1,
-	//nvidia-a100-80gb
-	"1g.10gb": 7,
-	"2g.20gb": 3,
-	"3g.40gb": 2,
-	"4g.40gb": 1,
-	"7g.80gb": 1,
-}
-
 const SIGRTMIN = 34
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
 type GPUConfig struct {
 	GPUPartitionSize string
+}
+
+type GPUAvailableProfiles struct {
+	byname map[string]GPUProfile
+}
+
+type GPUProfile struct {
+	id int
+	instances_total int
 }
 
 func main() {
@@ -135,6 +115,55 @@ func main() {
 
 }
 
+// convert a nvml response byte array to a string
+func _nvmlStrToString(rawstr[96] int8) (string) {
+	ba := []byte{}
+	for _, b := range(rawstr) {
+		if b == 0 {
+			return string(ba)
+		}
+		ba = append(ba, byte(b))
+	}
+	return string(ba)
+}
+
+// list all available profiles of the requested GPU (using NVML)
+func ListGpuAvailableProfiles(gpu_index int)(GPUAvailableProfiles, error) {
+	if err := nvml.Init(); err != nvml.SUCCESS {
+		glog.Fatalf("failed to initialize nvml: %v", err)
+	}
+	defer nvml.Shutdown()
+
+	profiles := GPUAvailableProfiles{ byname: make(map[string]GPUProfile) }
+
+	device, ret := nvml.DeviceGetHandleByIndex(gpu_index)
+	if ret != nvml.SUCCESS {
+		return profiles, fmt.Errorf("error getting device info: %v", nvml.ErrorString(ret))
+	}
+
+	for profile_id := nvml.GPU_INSTANCE_PROFILE_1_SLICE; profile_id < nvml.GPU_INSTANCE_PROFILE_COUNT; profile_id++ {
+		profile_v := nvml.DeviceGetGpuInstanceProfileInfoV(device, profile_id)
+		profile, ret := profile_v.V2()
+		if ret != nvml.SUCCESS {
+			if ret == nvml.ERROR_NOT_SUPPORTED {
+				continue
+			}
+			return profiles, fmt.Errorf("error getting profile info: %s", nvml.ErrorString(ret))
+		}
+		profile_name_raw := _nvmlStrToString(profile.Name)
+		profile_name := strings.Replace(profile_name_raw, "MIG ", "", 1)
+		profiles.byname[profile_name] = GPUProfile{
+			id: int(profile.Id),
+			instances_total: int(profile.InstanceCount),
+		}
+		glog.Infof("profile: gpu: %v, name: %-12.12s, id: %3v, instances total: %2v",
+					gpu_index, profile_name, profile.Id, profile.InstanceCount)
+	}
+
+	return profiles, nil
+}
+
+
 func parseGPUConfig(gpuConfigFile string) (GPUConfig, error) {
 	var gpuConfig GPUConfig
 
@@ -194,7 +223,14 @@ func cleanupAllGPUPartitions() error {
 }
 
 func createGPUPartitions(partitionSize string) error {
-	p, err := buildPartitionStr(partitionSize)
+	// currently only single-gpu systems are supported
+	gpu_index := 0
+	profiles, err := ListGpuAvailableProfiles(gpu_index)
+	if err != nil {
+		return err
+	}
+
+	p, err := buildPartitionStr(partitionSize, profiles)
 	if err != nil {
 		return err
 	}
@@ -219,19 +255,19 @@ func createGPUPartitions(partitionSize string) error {
 
 }
 
-func buildPartitionStr(partitionSize string) (string, error) {
+func buildPartitionStr(partitionSize string, profiles GPUAvailableProfiles) (string, error) {
 	if partitionSize == "" {
 		return "", nil
 	}
 
-	p, ok := partitionSizeToProfileID[partitionSize]
+	p, ok := profiles.byname[partitionSize]
 	if !ok {
 		return "", fmt.Errorf("%s is not a valid partition size", partitionSize)
 	}
 
-	partitionStr := p
-	for i := 1; i < partitionSizeMaxCount[partitionSize]; i++ {
-		partitionStr += fmt.Sprintf(",%s", p)
+	partitionStr := fmt.Sprint(p.id)
+	for i := 1; i < p.instances_total; i++ {
+		partitionStr += fmt.Sprintf(",%d", p.id)
 	}
 
 	return partitionStr, nil

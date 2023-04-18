@@ -3,6 +3,7 @@ module github.com/GoogleCloudPlatform/container-engine-accelerators
 go 1.18
 
 require (
+	github.com/NVIDIA/go-nvml v0.11.6-0.0.20220823120812-7e2082095e82
 	github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20201006233419-a544dbcaacb0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/google/go-cmp v0.5.6
