@@ -12,12 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.15 as builder
+FROM golang:1.19 as builder
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
 RUN go build -o gpu_partitioner partition_gpu/partition_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner
 
-FROM gcr.io/distroless/base-debian10
+FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.0
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner /usr/bin/gpu_partitioner
 CMD ["/usr/bin/gpu_partitioner", "-logtostderr"]
