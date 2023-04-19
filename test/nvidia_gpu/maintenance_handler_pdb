@@ -1,0 +1,9 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: deployment-pdb
+spec:
+  maxUnavailable: 2
+  selector:
+    matchLabels:
+      deployment: deployment
