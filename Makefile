@@ -53,6 +53,6 @@ partition-gpu:
 	docker build --pull -t ${REGISTRY}/${PARTITION_GPU_IMAGE}:${TAG} -f partition_gpu/Dockerfile .
 
 fastsocket_installer:
-	docker build --pull -t ${REGISTRY}/${FASTSOCKET_INSTALLER_IMAGE}:${TAG} -f fast-socket-installer/Dockerfile .
+	docker build --pull -t ${REGISTRY}/${FASTSOCKET_INSTALLER_IMAGE}:${TAG} -f fast-socket-installer/image/Dockerfile .
 
 .PHONY: all format test vet presubmit build container push partition-gpu

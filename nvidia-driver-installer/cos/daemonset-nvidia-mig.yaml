@@ -35,6 +35,7 @@ spec:
         name: nvidia-driver-installer
         k8s-app: nvidia-driver-installer
     spec:
+      priorityClassName: system-node-critical
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -71,7 +72,7 @@ spec:
         name: nvidia-driver-installer
         resources:
           requests:
-            cpu: "0.15"
+            cpu: 150m
         securityContext:
           privileged: true
         env:
@@ -100,14 +101,14 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
-      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:99afc7583991ac3fdb06c5aabb92f619abf19bad84761a57d34719f68c35e7ba"
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:c54fd003948fac687c2a93a55ea6e4d47ffbd641278a9191e75e822fe72471c2"
         name: partition-gpus
         env:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
         resources:
           requests:
-            cpu: "0.15"
+            cpu: 150m
         securityContext:
           privileged: true
         volumeMounts:

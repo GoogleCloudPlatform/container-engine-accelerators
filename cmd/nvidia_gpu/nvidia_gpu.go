@@ -46,8 +46,8 @@ var (
 	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
 	enableHealthMonitoring         = flag.Bool("enable-health-monitoring", false, "If true, the device plugin will detect critical Xid errors and mark the GPUs unallocatable")
-	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "POrt on which GPU metrics for containers are exposed")
-	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Colection interval (in milli seconds) for container GPU metrics")
+	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
+	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Collection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
 )
 
@@ -88,6 +88,11 @@ func main() {
 			gpuConfig = gpumanager.GPUConfig{}
 		}
 	}
+	err := gpuConfig.AddHealthCriticalXid()
+	if err != nil {
+		glog.Infof("Failed to Add HealthCriticalXid : %v", err)
+	}
+
 	glog.Infof("Using gpu config: %v", gpuConfig)
 	ngm := gpumanager.NewNvidiaGPUManager(devDirectory, procDirectory, mountPaths, gpuConfig)
 

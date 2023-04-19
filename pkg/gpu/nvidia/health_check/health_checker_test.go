@@ -1,3 +1,17 @@
+// Copyright 2017 Google Inc. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package healthcheck
 
 import (
@@ -91,7 +105,7 @@ func TestCatchError(t *testing.T) {
 					"device2": {
 						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
 					},
-			        },
+				},
 				healthCriticalXid: map[uint64]bool{
 					72: true,
 					48: true,
@@ -129,34 +143,34 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []v1beta1.Device{udevice1},
 		},
 		{
-                        name: "unknown device",
-                        event: nvml.Event{
-                                UUID:              pointer("GPU-f053fce6-90ae-037069703604"),
-                                GpuInstanceId:     pointer(uint(3173334309191009974)),
-                                ComputeInstanceId: pointer(uint(1015241)),
-                                Etype:             nvml.XidCriticalError,
-                                Edata:             uint64(72),
-                        },
-                        hc: GPUHealthChecker{
-                                devices: map[string]v1beta1.Device{
-                                        "device1": device1,
-                                        "device2": device2,
-                                },
-                                nvmlDevices: map[string]*nvml.Device{
-                                        "device1": {
-                                                UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-                                        },
-                                        "device2": {
-                                                UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
-                                        },
-                                },
+			name: "unknown device",
+			event: nvml.Event{
+				UUID:              pointer("GPU-f053fce6-90ae-037069703604"),
+				GpuInstanceId:     pointer(uint(3173334309191009974)),
+				ComputeInstanceId: pointer(uint(1015241)),
+				Etype:             nvml.XidCriticalError,
+				Edata:             uint64(72),
+			},
+			hc: GPUHealthChecker{
+				devices: map[string]v1beta1.Device{
+					"device1": device1,
+					"device2": device2,
+				},
+				nvmlDevices: map[string]*nvml.Device{
+					"device1": {
+						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
+					},
+					"device2": {
+						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
+					},
+				},
 				healthCriticalXid: map[uint64]bool{
-                                        72: true,
-                                        48: true,
-                                },
-                        },
-                        wantErrorDevices: []v1beta1.Device{},
-                },
+					72: true,
+					48: true,
+				},
+			},
+			wantErrorDevices: []v1beta1.Device{},
+		},
 		{
 			name: "not catching xid 72",
 			event: nvml.Event{
