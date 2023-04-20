@@ -7,3 +7,4 @@ spec:
   selector:
     matchLabels:
       deployment: deployment
+      app : deployment
