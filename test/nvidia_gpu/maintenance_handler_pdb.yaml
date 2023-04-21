@@ -6,4 +6,4 @@ spec:
   maxUnavailable: 2
   selector:
     matchLabels:
-      app : deployment
+      app: deployment
