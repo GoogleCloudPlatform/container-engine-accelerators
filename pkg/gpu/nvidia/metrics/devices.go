@@ -21,11 +21,9 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/gpusharing"
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
-
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 	podresources "k8s.io/kubernetes/pkg/kubelet/apis/podresources/v1alpha1"
@@ -107,26 +105,26 @@ func GetAllGpuDevices() map[string]*nvml.Device {
 
 // DiscoverGPUDevices discovers GPUs attached to the node, and updates `gpuDevices` map.
 func DiscoverGPUDevices() error {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return fmt.Errorf("failed to get device count: %s", err)
+	count, ret := nvml.DeviceGetCount()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("failed to get device count: %s", nvml.ErrorString(ret))
 	}
 
 	glog.Infof("Found %d GPU devices", count)
 	gpuDevices = make(map[string]*nvml.Device)
-	for i := uint(0); i < count; i++ {
-		device, err := nvml.NewDevice(i)
-		if err != nil {
-			return fmt.Errorf("failed to read device with index %d: %v", i, err)
+	for i := int(0); i < count; i++ {
+		device, ret := nvml.DeviceGetHandleByIndex(i)
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("failed to read device with index %d: %v", i, nvml.ErrorString(ret))
 		}
-		deviceName, err := util.DeviceNameFromPath(device.Path)
-		if err != nil {
-			glog.Errorf("Invalid GPU device path found: %s. Skipping this device", device.Path)
+		minor, ret := device.GetMinorNumber()
+		if ret != nvml.SUCCESS {
+			glog.Errorf("Invalid GPU device minor number found. Skipping this device")
 		}
+		deviceName := fmt.Sprintf("nvidia%d", minor)
 		glog.Infof("Found device %s for metrics collection", deviceName)
-		gpuDevices[deviceName] = device
+		gpuDevices[deviceName] = &device
 	}
-
 	return nil
 }
 

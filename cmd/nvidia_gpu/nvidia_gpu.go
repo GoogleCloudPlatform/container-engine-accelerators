@@ -24,7 +24,7 @@ import (
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
 	healthcheck "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/health_check"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/metrics"
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
@@ -108,8 +108,8 @@ func main() {
 		time.Sleep(5 * time.Second)
 	}
 
-	if err := nvml.Init(); err != nil {
-		glog.Fatalf("failed to initialize nvml: %v", err)
+	if ret := nvml.Init(); ret != nvml.SUCCESS {
+		glog.Fatalf("failed to initialize nvml: %v", nvml.ErrorString(ret))
 	}
 	defer nvml.Shutdown()
 

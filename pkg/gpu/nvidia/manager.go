@@ -29,7 +29,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
@@ -388,18 +388,22 @@ func (ngm *nvidiaGPUManager) Start() error {
 
 // totalMemPerGPU returns the GPU memory available on each GPU device.
 func totalMemPerGPU() (uint64, error) {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0, fmt.Errorf("failed to enumerate devices: %v", err)
+	count, ret := nvml.DeviceGetCount()
+	if ret != nvml.SUCCESS {
+		return 0, fmt.Errorf("failed to enumerate devices: %v", nvml.ErrorString(ret))
 	}
 	if count <= 0 {
 		return 0, fmt.Errorf("no GPUs on node, count: %d", count)
 	}
-	device, err := nvml.NewDevice(0)
-	if err != nil {
-		return 0, fmt.Errorf("failed to query GPU with nvml: %v", err)
+	device, ret := nvml.DeviceGetHandleByIndex(0)
+	if ret != nvml.SUCCESS {
+		return 0, fmt.Errorf("failed to query GPU with nvml: %v", nvml.ErrorString(ret))
 	}
-	return *device.Memory, nil
+	memory, ret := device.GetMemoryInfo()
+	if ret != nvml.SUCCESS {
+		return 0, fmt.Errorf("failed to get GPU memory: %v", nvml.ErrorString(ret))
+	}
+	return memory.Total, nil
 }
 
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {
