@@ -19,20 +19,17 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-type device interface{}
-type deviceStatus interface{}
-
 type metricsCollector interface {
 	collectGPUDevice(deviceName string) (*nvml.Device, error)
-	collectStatus(*nvml.Device) (status *nvml.DeviceStatus, err error)
 	collectDutyCycle(string, time.Duration) (uint, error)
+	collectGpuMetricsInfo(device string, d *nvml.Device) (uint, uint64, uint64, string, string, error)
 }
 
 var gmc metricsCollector
@@ -43,13 +40,12 @@ func (t *mCollector) collectGPUDevice(deviceName string) (*nvml.Device, error) {
 	return DeviceFromName(deviceName)
 }
 
-func (t *mCollector) collectStatus(d *nvml.Device) (status *nvml.DeviceStatus, err error) {
-	status, err = d.Status()
-	return status, err
-}
-
 func (t *mCollector) collectDutyCycle(uuid string, since time.Duration) (uint, error) {
 	return AverageGPUUtilization(uuid, since)
+}
+
+func (t *mCollector) collectGpuMetricsInfo(device string, d *nvml.Device) (uint, uint64, uint64, string, string, error) {
+	return getGpuMetricsInfo(device, d)
 }
 
 var (
@@ -133,13 +129,13 @@ func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *
 func (m *MetricServer) Start() error {
 	glog.Infoln("Starting metrics server")
 
-	driverVersion, err := nvml.GetDriverVersion()
-	if err != nil {
-		return fmt.Errorf("failed to query nvml: %v", err)
+	driverVersion, ret := nvml.SystemGetDriverVersion()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("failed to query nvml: %v", nvml.ErrorString(ret))
 	}
 	glog.Infof("nvml initialized successfully. Driver version: %s", driverVersion)
 
-	err = DiscoverGPUDevices()
+	err := DiscoverGPUDevices()
 	if err != nil {
 		return fmt.Errorf("failed to discover GPU devices: %v", err)
 	}
@@ -175,53 +171,58 @@ func (m *MetricServer) collectMetrics() {
 	}
 }
 
-func getGpuMetrics(device string, d *nvml.Device) (uint, uint64, error) {
-	status, err := gmc.collectStatus(d)
-	if err != nil {
-		glog.Errorf("Failed to get device status for %s: %v", device, err)
-		return 0, 0, err
+// getGpuMetricsInfo returns dutyCycle, usedMemory, totalMemory, uuid and deviceModel.
+func getGpuMetricsInfo(device string, d *nvml.Device) (uint, uint64, uint64, string, string, error) {
+	uuid, ret := d.GetUUID()
+	if ret != nvml.SUCCESS {
+		return 0, 0, 0, "", "", fmt.Errorf("failed to get GPU UUID: %v", nvml.ErrorString(ret))
 	}
-	mem := status.Memory
-	dutyCycle, err := gmc.collectDutyCycle(d.UUID, time.Second*10)
-	if err != nil {
-		return 0, 0, fmt.Errorf("Failed to get dutyCycle: %v", err)
+	deviceModel, ret := d.GetName()
+	if ret != nvml.SUCCESS {
+		return 0, 0, 0, "", "", fmt.Errorf("failed to get GPU device model: %v", nvml.ErrorString(ret))
 	}
-	return dutyCycle, *mem.Global.Used, nil
+
+	mem, ret := d.GetMemoryInfo()
+	if ret != nvml.SUCCESS {
+		return 0, 0, 0, "", "", fmt.Errorf("failed to get GPU memory: %v", nvml.ErrorString(ret))
+	}
+	dutyCycle, err := gmc.collectDutyCycle(uuid, time.Second*10)
+	if err != nil {
+		return 0, 0, 0, "", "", fmt.Errorf("failed to get dutyCycle: %v", err)
+	}
+	return dutyCycle, mem.Used / (1024 * 1024), mem.Total / (1024 * 1024), uuid, deviceModel, nil
 }
 
 func (m *MetricServer) updateMetrics(containerDevices map[ContainerID][]string, gpuDevices map[string]*nvml.Device) {
 	m.resetMetricsIfNeeded()
-
 	for container, devices := range containerDevices {
 		AcceleratorRequests.WithLabelValues(container.namespace, container.pod, container.container, gpuResourceName).Set(float64(len(devices)))
-
 		for _, device := range devices {
 			d, err := gmc.collectGPUDevice(device)
 			if err != nil {
 				glog.Errorf("Failed to get device for %s: %v", device, err)
 				continue
 			}
-			dutyCycle, usedMemory, err := getGpuMetrics(device, d)
+			dutyCycle, usedMemory, totalMemory, uuid, deviceModel, err := gmc.collectGpuMetricsInfo(device, d)
 			if err != nil {
 				glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 				continue
 			}
-
-			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
-			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
+			DutyCycle.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", uuid, deviceModel).Set(float64(dutyCycle))
+			MemoryTotal.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", uuid, deviceModel).Set(float64(totalMemory) * 1024 * 1024) // memory reported in bytes
+			MemoryUsed.WithLabelValues(container.namespace, container.pod, container.container, "nvidia", uuid, deviceModel).Set(float64(usedMemory) * 1024 * 1024)   // memory reported in bytes
 		}
 	}
 	for device, d := range gpuDevices {
-		dutyCycle, usedMemory, err := getGpuMetrics(device, d)
+		dutyCycle, usedMemory, totalMemory, uuid, deviceModel, err := gmc.collectGpuMetricsInfo(device, d)
 		if err != nil {
 			glog.Infof("Error calculating duty cycle for device: %s: %v. Skipping this device", device, err)
 			continue
 		}
 
-		DutyCycleNodeGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(dutyCycle))
-		MemoryTotalNodeGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(*d.Memory) * 1024 * 1024) // memory reported in bytes
-		MemoryUsedNodeGpu.WithLabelValues("nvidia", d.UUID, *d.Model).Set(float64(usedMemory) * 1024 * 1024) // memory reported in bytes
+		DutyCycleNodeGpu.WithLabelValues("nvidia", uuid, deviceModel).Set(float64(dutyCycle))
+		MemoryTotalNodeGpu.WithLabelValues("nvidia", uuid, deviceModel).Set(float64(totalMemory) * 1024 * 1024) // memory reported in bytes
+		MemoryUsedNodeGpu.WithLabelValues("nvidia", uuid, deviceModel).Set(float64(usedMemory) * 1024 * 1024)   // memory reported in bytes
 	}
 }
 
