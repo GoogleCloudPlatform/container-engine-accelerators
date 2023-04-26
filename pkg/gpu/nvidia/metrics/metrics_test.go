@@ -23,14 +23,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
-type metricsInfo struct {
-	dutyCycle   uint
-	usedMemory  uint64
-	totalMemory uint64
-	uuid        string
-	deviceModel string
-}
-
 type mockCollector struct{}
 
 func (t *mockCollector) collectGPUDevice(deviceName string) (*nvml.Device, error) {
@@ -45,9 +37,14 @@ func (t *mockCollector) collectDutyCycle(uuid string, since time.Duration) (uint
 	return dutyCycle, nil
 }
 
-func (t *mockCollector) collectGpuMetricsInfo(device string, d *nvml.Device) (uint, uint64, uint64, string, string, error) {
+func (t *mockCollector) collectGpuMetricsInfo(device string, d *nvml.Device) (metricsInfo, error) {
 	info := metricsInfoMock[device]
-	return info.dutyCycle, info.usedMemory, info.totalMemory, info.uuid, info.deviceModel, nil
+	return metricsInfo{
+		dutyCycle:   info.dutyCycle,
+		usedMemory:  info.usedMemory,
+		totalMemory: info.totalMemory,
+		uuid:        info.uuid,
+		deviceModel: info.deviceModel}, nil
 }
 
 var (
@@ -143,25 +140,25 @@ func TestMetricsUpdate(t *testing.T) {
 
 	if testutil.ToFloat64(
 		MemoryTotal.WithLabelValues(
-			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 200*1024*1024 ||
+			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 200 ||
 		testutil.ToFloat64(
 			MemoryTotal.WithLabelValues(
-				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 200*1024*1024 ||
+				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 200 ||
 		testutil.ToFloat64(
 			MemoryTotal.WithLabelValues(
-				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 350*1024*1024 {
+				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 350 {
 		t.Fatalf("Wrong Result in MemoryTotal")
 	}
 
 	if testutil.ToFloat64(
 		MemoryUsed.WithLabelValues(
-			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 50*1024*1024 ||
+			"default", "pod1", "container1", "nvidia", "656547758", "model1")) != 50 ||
 		testutil.ToFloat64(
 			MemoryUsed.WithLabelValues(
-				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 150*1024*1024 ||
+				"non-default", "pod2", "container2", "nvidia", "850729563", "model2")) != 150 ||
 		testutil.ToFloat64(
 			MemoryUsed.WithLabelValues(
-				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 100*1024*1024 {
+				"non-default", "pod2", "container2", "nvidia", "3572375710", "model1")) != 100 {
 		t.Fatalf("Wrong Result in MemoryTotal")
 	}
 
@@ -182,31 +179,31 @@ func TestMetricsUpdate(t *testing.T) {
 
 	if testutil.ToFloat64(
 		MemoryTotalNodeGpu.WithLabelValues(
-			"nvidia", "656547758", "model1")) != 200*1024*1024 ||
+			"nvidia", "656547758", "model1")) != 200 ||
 		testutil.ToFloat64(
 			MemoryTotalNodeGpu.WithLabelValues(
-				"nvidia", "850729563", "model2")) != 200*1024*1024 ||
+				"nvidia", "850729563", "model2")) != 200 ||
 		testutil.ToFloat64(
 			MemoryTotalNodeGpu.WithLabelValues(
-				"nvidia", "3572375710", "model1")) != 350*1024*1024 ||
+				"nvidia", "3572375710", "model1")) != 350 ||
 		testutil.ToFloat64(
 			MemoryTotalNodeGpu.WithLabelValues(
-				"nvidia", "8732906554", "model1")) != 700*1024*1024 {
+				"nvidia", "8732906554", "model1")) != 700 {
 		t.Fatalf("Wrong Result in MemoryTotalNodeGpu")
 	}
 
 	if testutil.ToFloat64(
 		MemoryUsedNodeGpu.WithLabelValues(
-			"nvidia", "656547758", "model1")) != 50*1024*1024 ||
+			"nvidia", "656547758", "model1")) != 50 ||
 		testutil.ToFloat64(
 			MemoryUsedNodeGpu.WithLabelValues(
-				"nvidia", "850729563", "model2")) != 150*1024*1024 ||
+				"nvidia", "850729563", "model2")) != 150 ||
 		testutil.ToFloat64(
 			MemoryUsedNodeGpu.WithLabelValues(
-				"nvidia", "3572375710", "model1")) != 100*1024*1024 ||
+				"nvidia", "3572375710", "model1")) != 100 ||
 		testutil.ToFloat64(
 			MemoryUsedNodeGpu.WithLabelValues(
-				"nvidia", "8732906554", "model1")) != 375*1024*1024 {
+				"nvidia", "8732906554", "model1")) != 375 {
 		t.Fatalf("Wrong Result in MemoryUsedNodeGpu")
 	}
 }
