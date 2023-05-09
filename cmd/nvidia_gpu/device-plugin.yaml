@@ -39,7 +39,7 @@ spec:
               value: /usr/local/nvidia/lib64
             - name: GOMAXPROCS
               value: "1"
-          image: gcr.io/gke-release-staging/nvidia-gpu-device-plugin@sha256:6b25281cd0fa3ca55f3e837a18be4a14b44952105568f466530dd85bcebde62f
+          image: gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:6b25281cd0fa3ca55f3e837a18be4a14b44952105568f466530dd85bcebde62f
           name: nvidia-gpu-device-plugin
           ports:
             - containerPort: 2112
