@@ -39,6 +39,10 @@ spec:
             - matchExpressions:
               - key: cloud.google.com/gke-accelerator
                 operator: Exists
+              - key: cloud.google.com/gke-os-distribution
+                operator: In
+                values:
+                - ubuntu
       tolerations:
       - operator: "Exists"
       volumes:
