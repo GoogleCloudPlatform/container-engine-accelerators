@@ -18,6 +18,6 @@ COPY . .
 RUN go build -o gpu_partitioner partition_gpu/partition_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner
 
-FROM gcr.io/gke-release/debian-base:bullseye-v1.4.3-gke.0
+FROM  gcr.io/distroless/base:latest
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner /usr/bin/gpu_partitioner
 CMD ["/usr/bin/gpu_partitioner", "-logtostderr"]
