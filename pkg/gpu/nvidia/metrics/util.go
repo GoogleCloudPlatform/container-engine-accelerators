@@ -22,7 +22,7 @@ package metrics
 #include <dlfcn.h>
 #include <stdlib.h>
 
-#include "../../../../vendor/github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml/nvml.h"
+#include "../../../../vendor/github.com/NVIDIA/go-nvml/pkg/nvml/nvml.h"
 
 // This function is here because the API provided by NVML is not very user
 // friendly. This function can be used to get average utilization for a gpu.

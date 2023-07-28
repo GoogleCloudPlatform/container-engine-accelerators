@@ -31,42 +31,46 @@ spec:
         name: nvidia-driver-installer
         k8s-app: nvidia-driver-installer
     spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: cloud.google.com/gke-accelerator
+                operator: Exists
+              - key: cloud.google.com/gke-gpu-driver-version
+                operator: DoesNotExist
       tolerations:
-      - key: "nvidia.com/gpu"
-        effect: "NoSchedule"
-        operator: "Exists"
+      - operator: "Exists"
       volumes:
       - name: dev
         hostPath:
           path: /dev
-      - name: nvidia-install-dir-host
+      - name: boot
         hostPath:
-          path: /home/kubernetes/bin/nvidia
+          path: /boot
       - name: root-mount
         hostPath:
           path: /
       initContainers:
-      - image: k8s.gcr.io/minikube-nvidia-driver-installer@sha256:492d46f2bc768d6610ec5940b6c3c33c75e03e201cc8786e04cc488659fd6342
+      - image: gke-nvidia-installer:fixed
         name: nvidia-driver-installer
         resources:
           requests:
             cpu: 150m
         securityContext:
           privileged: true
-        env:
-          - name: NVIDIA_INSTALL_DIR_HOST
-            value: /home/kubernetes/bin/nvidia
-          - name: NVIDIA_INSTALL_DIR_CONTAINER
-            value: /usr/local/nvidia
-          - name: ROOT_MOUNT_DIR
-            value: /root
         volumeMounts:
-        - name: nvidia-install-dir-host
-          mountPath: /usr/local/nvidia
+        - name: boot
+          mountPath: /boot
         - name: dev
           mountPath: /dev
         - name: root-mount
           mountPath: /root
+        env:
+        - name: NVIDIA_DRIVER_VERSION
+          value: "525.105.17"
       containers:
       - image: "gcr.io/google-containers/pause:2.0"
         name: pause

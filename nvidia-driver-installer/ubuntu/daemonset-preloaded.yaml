@@ -31,6 +31,7 @@ spec:
         name: nvidia-driver-installer
         k8s-app: nvidia-driver-installer
     spec:
+      priorityClassName: system-node-critical
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
@@ -38,6 +39,8 @@ spec:
             - matchExpressions:
               - key: cloud.google.com/gke-accelerator
                 operator: Exists
+              - key: cloud.google.com/gke-gpu-driver-version
+                operator: DoesNotExist
       tolerations:
       - operator: "Exists"
       volumes:
@@ -55,7 +58,7 @@ spec:
         name: nvidia-driver-installer
         resources:
           requests:
-            cpu: 0.15
+            cpu: 150m
         securityContext:
           privileged: true
         volumeMounts:

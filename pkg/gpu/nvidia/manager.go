@@ -25,11 +25,11 @@ import (
 	"path"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
@@ -107,6 +107,28 @@ func (config *GPUConfig) AddDefaultsAndValidate() error {
 		}
 	}
 	gpusharing.SharingStrategy = config.GPUSharingConfig.GPUSharingStrategy
+	return nil
+}
+
+func (config *GPUConfig) AddHealthCriticalXid() error {
+	xidConfig := os.Getenv("XID_CONFIG")
+	if len(xidConfig) == 0 {
+		glog.Infof("There is no Xid config specified ")
+		return nil
+	}
+
+	glog.Infof("Detect HealthCriticalXid : %s ", xidConfig)
+	xidStrs := strings.Split(xidConfig, ",")
+	xidArry := make([]int, len(xidStrs))
+	var err error
+	for i := range xidArry {
+		xidStr := strings.TrimSpace(xidStrs[i])
+		xidArry[i], err = strconv.Atoi(xidStr)
+		if err != nil {
+			return fmt.Errorf("Invalid HealthCriticalXid input : %v", err)
+		}
+	}
+	config.HealthCriticalXid = xidArry
 	return nil
 }
 
@@ -294,7 +316,7 @@ func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 
 		return map[string]string{
 			mpsThreadLimitEnv: strconv.Itoa(activeThreadLimit),
-			mpsMemLimitEnv:    util.MpsPinnedDeviceMemLimit(len(ngm.devices), memoryLimit),
+			mpsMemLimitEnv:    fmt.Sprintf("%dMB", memoryLimit),
 		}
 
 	}
@@ -366,18 +388,22 @@ func (ngm *nvidiaGPUManager) Start() error {
 
 // totalMemPerGPU returns the GPU memory available on each GPU device.
 func totalMemPerGPU() (uint64, error) {
-	count, err := nvml.GetDeviceCount()
-	if err != nil {
-		return 0, fmt.Errorf("failed to enumerate devices: %v", err)
+	count, ret := nvml.DeviceGetCount()
+	if ret != nvml.SUCCESS {
+		return 0, fmt.Errorf("failed to enumerate devices: %v", nvml.ErrorString(ret))
 	}
 	if count <= 0 {
 		return 0, fmt.Errorf("no GPUs on node, count: %d", count)
 	}
-	device, err := nvml.NewDevice(0)
-	if err != nil {
-		return 0, fmt.Errorf("failed to query GPU with nvml: %v", err)
+	device, ret := nvml.DeviceGetHandleByIndex(0)
+	if ret != nvml.SUCCESS {
+		return 0, fmt.Errorf("failed to query GPU with nvml: %v", nvml.ErrorString(ret))
 	}
-	return *device.Memory, nil
+	memory, ret := device.GetMemoryInfo()
+	if ret != nvml.SUCCESS {
+		return 0, fmt.Errorf("failed to get GPU memory: %v", nvml.ErrorString(ret))
+	}
+	return memory.Total, nil
 }
 
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {

@@ -2,11 +2,10 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: nvidia-gpu-device-plugin
-  namespace: kube-system
   labels:
     k8s-app: nvidia-gpu-device-plugin
-    addonmanager.kubernetes.io/mode: Reconcile
+  name: nvidia-gpu-device-plugin
+  namespace: kube-system
 spec:
   selector:
     matchLabels:
@@ -16,73 +15,90 @@ spec:
       labels:
         k8s-app: nvidia-gpu-device-plugin
     spec:
-      priorityClassName: system-node-critical
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-            - matchExpressions:
-              - key: cloud.google.com/gke-accelerator
-                operator: Exists
-      tolerations:
-      - operator: "Exists"
-        effect: "NoExecute"
-      - operator: "Exists"
-        effect: "NoSchedule"
-      volumes:
-      - name: device-plugin
-        hostPath:
-          path: /var/lib/kubelet/device-plugins
-      - name: dev
-        hostPath:
-          path: /dev
-      - name: nvidia
-        hostPath:
-            path: /home/kubernetes/bin/nvidia
-      - name: pod-resources
-        hostPath:
-            path: /var/lib/kubelet/pod-resources
-      - name: proc
-        hostPath:
-          path: /proc
-      - name: nvidia-config
-        hostPath:
-            path: /etc/nvidia
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator
+                    operator: Exists
       containers:
-      - image: "gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:d6cb575b0d8a436066a0d3a783bbaf84697e0d5a68857edfe5fd5d1183133c7d"
-        command: ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "--enable-container-gpu-metrics"]
-        name: nvidia-gpu-device-plugin
-        ports:
-        - name: "metrics"
-          containerPort: 2112
-        env:
-        - name: NODE_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: spec.nodeName
-        - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64
-        resources:
-          requests:
-            cpu: 50m
-            memory: 20Mi
-          limits:
-            cpu: 50m
-            memory: 20Mi
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: device-plugin
-          mountPath: /device-plugin
-        - name: dev
-          mountPath: /dev
-        - name: nvidia
-          mountPath: /usr/local/nvidia
-        - name: pod-resources
-          mountPath: /var/lib/kubelet/pod-resources
-        - name: proc
-          mountPath: /proc
-        - name: nvidia-config
-          mountPath: /etc/nvidia
+        - command:
+            - /usr/bin/nvidia-gpu-device-plugin
+            - -logtostderr
+            - --enable-container-gpu-metrics
+            - --enable-health-monitoring
+          env:
+            - name: XID_CONFIG
+              valueFrom:
+                configMapKeyRef:
+                  key: HealthCriticalXid
+                  name: xid-config
+                  optional: true
+            - name: LD_LIBRARY_PATH
+              value: /usr/local/nvidia/lib64
+            - name: GOMAXPROCS
+              value: "1"
+          image: gcr.io/gke-release/nvidia-gpu-device-plugin@sha256:6b25281cd0fa3ca55f3e837a18be4a14b44952105568f466530dd85bcebde62f
+          name: nvidia-gpu-device-plugin
+          ports:
+            - containerPort: 2112
+              name: metrics
+          resources:
+            limits:
+              memory: 100Mi
+            requests:
+              cpu: 50m
+              memory: 100Mi
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - mountPath: /device-plugin
+              name: device-plugin
+            - mountPath: /dev
+              name: dev
+            - mountPath: /usr/local/nvidia
+              name: nvidia
+            - mountPath: /var/lib/kubelet/pod-resources
+              name: pod-resources
+            - mountPath: /proc
+              name: proc
+            - mountPath: /etc/nvidia
+              name: nvidia-config
+      priorityClassName: system-node-critical
+      restartPolicy: Always
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+      volumes:
+        - hostPath:
+            path: /var/lib/kubelet/device-plugins
+            type: Directory
+          name: device-plugin
+        - hostPath:
+            path: /dev
+            type: Directory
+          name: dev
+        - hostPath:
+            path: /var/lib/kubelet/pod-resources
+            type: Directory
+          name: pod-resources
+        - hostPath:
+            path: /proc
+            type: Directory
+          name: proc
+        - hostPath:
+            path: /etc/nvidia
+            type: DirectoryOrCreate
+          name: nvidia-config
+        - hostPath:
+            path: /home/kubernetes/bin/nvidia
+            type: Directory
+          name: nvidia
   updateStrategy:
     type: RollingUpdate
