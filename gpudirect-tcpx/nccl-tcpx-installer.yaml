@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nccl-tcpx-installer
+  namespace: kube-system
+  labels:
+    k8s-app: nccl-tcpx-installer
+spec:
+  selector:
+    matchLabels:
+      k8s-app: nccl-tcpx-installer
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: nccl-tcpx-installer
+        k8s-app: nccl-tcpx-installer
+    spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator
+                    operator: In
+                    values:
+                      - nvidia-h100-80gb
+      tolerations:
+        - operator: "Exists"
+      hostNetwork: true
+      hostPID: true
+      volumes:
+        - name: var-lib
+          hostPath:
+            path: /var/lib
+        - name: tcpx
+          hostPath:
+            path: /var/lib/tcpx
+        - name: nvidia-install-dir-host
+          hostPath:
+            path: /home/kubernetes/bin/nvidia
+      initContainers:
+        - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx:latest
+          name: nccl-tcpx-installer
+          resources:
+            requests:
+              cpu: 150m
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: var-lib
+              mountPath: /var/lib
+          command:
+            - /bin/sh
+            - -c
+            - /scripts/container_entry.sh install --install-nccl
+      containers:
+        - image: "gcr.io/google-containers/pause:2.0"
+          name: pause
