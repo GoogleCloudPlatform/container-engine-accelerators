@@ -17,6 +17,7 @@ package util
 import (
 	"fmt"
 	"regexp"
+	"strings"
 )
 
 func DeviceNameFromPath(path string) (string, error) {
@@ -26,4 +27,12 @@ func DeviceNameFromPath(path string) (string, error) {
 		return "", fmt.Errorf("path (%s) is not a valid GPU device path", path)
 	}
 	return m[1], nil
+}
+
+func MpsPinnedDeviceMemLimit(deviceCount int, memoryLimit uint64) string {
+	var limits []string
+	for i := 0; i < deviceCount; i++ {
+		limits = append(limits, fmt.Sprintf("%d=%dMB", i, memoryLimit))
+	}
+	return strings.Join(limits, ",")
 }

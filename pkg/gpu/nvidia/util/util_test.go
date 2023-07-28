@@ -30,3 +30,10 @@ func TestDeviceNameFromPath(t *testing.T) {
 	as.Error(err)
 	as.Contains(err.Error(), "is not a valid GPU device path")
 }
+
+func TestMpsPinnedDeviceMemLimit(t *testing.T) {
+	as := assert.New(t)
+	limits := MpsPinnedDeviceMemLimit(3, uint64(900))
+
+	as.Equal("0=900MB,1=900MB,2=900MB", limits)
+}

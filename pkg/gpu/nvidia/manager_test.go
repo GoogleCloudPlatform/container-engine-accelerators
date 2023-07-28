@@ -17,6 +17,8 @@ package nvidia
 import (
 	"reflect"
 	"testing"
+
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
@@ -88,6 +90,7 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 		totalMemPerGPU      uint64
 		gpuConfig           GPUConfig
 		numDevicesRequested int
+		devices             map[string]pluginapi.Device
 		want                map[string]string
 	}{
 		{
@@ -95,6 +98,7 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			totalMemPerGPU:      80 * 1024,
 			gpuConfig:           GPUConfig{},
 			numDevicesRequested: 1,
+			devices:             map[string]pluginapi.Device{"device1": {}},
 			want:                map[string]string{},
 		},
 		{
@@ -107,6 +111,7 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 				},
 			},
 			numDevicesRequested: 1,
+			devices:             map[string]pluginapi.Device{"device1": {}},
 			want:                map[string]string{},
 		},
 		{
@@ -119,9 +124,10 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 				},
 			},
 			numDevicesRequested: 1,
+			devices:             map[string]pluginapi.Device{"device1": {}, "device2": {}},
 			want: map[string]string{
 				mpsThreadLimitEnv: "10",
-				mpsMemLimitEnv:    "8192MB",
+				mpsMemLimitEnv:    "0=8192MB,1=8192MB",
 			},
 		},
 		{
@@ -134,9 +140,10 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 				},
 			},
 			numDevicesRequested: 5,
+			devices:             map[string]pluginapi.Device{"device1": {}},
 			want: map[string]string{
 				mpsThreadLimitEnv: "50",
-				mpsMemLimitEnv:    "40960MB",
+				mpsMemLimitEnv:    "0=40960MB",
 			},
 		},
 	}
@@ -145,6 +152,7 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			ngm := &nvidiaGPUManager{
 				gpuConfig:      tt.gpuConfig,
 				totalMemPerGPU: tt.totalMemPerGPU,
+				devices:        tt.devices,
 			}
 			if got := ngm.Envs(tt.numDevicesRequested); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("nvidiaGPUManager.Envs() = %v, want %v", got, tt.want)

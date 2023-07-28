@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
@@ -293,7 +294,7 @@ func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 
 		return map[string]string{
 			mpsThreadLimitEnv: strconv.Itoa(activeThreadLimit),
-			mpsMemLimitEnv:    fmt.Sprintf("%dMB", memoryLimit),
+			mpsMemLimitEnv:    util.MpsPinnedDeviceMemLimit(len(ngm.devices), memoryLimit),
 		}
 
 	}
