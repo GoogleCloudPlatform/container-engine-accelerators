@@ -56,6 +56,19 @@ spec:
             - /bin/sh
             - -c
             - /scripts/container_entry.sh install --install-nccl
+        - image: ubuntu
+          name: mount-update
+          securityContext:
+            privileged: true
+          volumeMounts:
+          command:
+            - nsenter
+            - -at
+            - '1'
+            - --
+            - sh
+            - -c
+            - "sudo mount --bind /var/lib/tcpx /var/lib/tcpx && sudo mount -o remount,exec /var/lib/tcpx"
       containers:
         - image: "gcr.io/google-containers/pause:2.0"
           name: pause
