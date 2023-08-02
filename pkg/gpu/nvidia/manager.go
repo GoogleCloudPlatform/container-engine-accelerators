@@ -313,12 +313,10 @@ func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == gpusharing.MPS {
 		activeThreadLimit := numDevicesRequested * 100 / ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU
 		memoryLimit := uint64(numDevicesRequested) * ngm.totalMemPerGPU / uint64(ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU)
-
 		return map[string]string{
 			mpsThreadLimitEnv: strconv.Itoa(activeThreadLimit),
-			mpsMemLimitEnv:    fmt.Sprintf("%dMB", memoryLimit),
+			mpsMemLimitEnv:    fmt.Sprintf("0=%dM", memoryLimit/(1024*1024)),
 		}
-
 	}
 	return map[string]string{}
 }
