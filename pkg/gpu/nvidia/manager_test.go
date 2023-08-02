@@ -168,8 +168,9 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			want:                map[string]string{},
 		},
 		{
-			name:           "MPS enabled, single GPU request",
-			totalMemPerGPU: 80 * 1024,
+			name: "MPS enabled, single GPU request",
+			// totalMemPerGPU is 80G.
+			totalMemPerGPU: 80 * 1024 * 1024 * 1024,
 			gpuConfig: GPUConfig{
 				GPUSharingConfig: GPUSharingConfig{
 					GPUSharingStrategy:     "mps",
@@ -179,12 +180,13 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			numDevicesRequested: 1,
 			want: map[string]string{
 				mpsThreadLimitEnv: "10",
-				mpsMemLimitEnv:    "8192MB",
+				mpsMemLimitEnv:    "0=8192M",
 			},
 		},
 		{
-			name:           "MPS enabled, multiple GPU request",
-			totalMemPerGPU: 80 * 1024,
+			name: "MPS enabled, multiple GPU request",
+			// totalMemPerGPU is 80G.
+			totalMemPerGPU: 80 * 1024 * 1024 * 1024,
 			gpuConfig: GPUConfig{
 				GPUSharingConfig: GPUSharingConfig{
 					GPUSharingStrategy:     "mps",
@@ -194,7 +196,7 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			numDevicesRequested: 5,
 			want: map[string]string{
 				mpsThreadLimitEnv: "50",
-				mpsMemLimitEnv:    "40960MB",
+				mpsMemLimitEnv:    "0=40960M",
 			},
 		},
 	}

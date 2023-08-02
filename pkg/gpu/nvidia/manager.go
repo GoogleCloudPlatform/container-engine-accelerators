@@ -312,13 +312,14 @@ func (ngm *nvidiaGPUManager) isMpsHealthy() error {
 func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == gpusharing.MPS {
 		activeThreadLimit := numDevicesRequested * 100 / ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU
-		memoryLimit := uint64(numDevicesRequested) * ngm.totalMemPerGPU / uint64(ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU)
-
+		memoryLimitBytes := uint64(numDevicesRequested) * ngm.totalMemPerGPU / uint64(ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU)
 		return map[string]string{
 			mpsThreadLimitEnv: strconv.Itoa(activeThreadLimit),
-			mpsMemLimitEnv:    fmt.Sprintf("%dMB", memoryLimit),
+			// The mpsMemLimitEnv is the GPU memory limit per container, e.g. 0=8192M.
+			// 0 represents the device ID which this container resides.
+			// Since MPS container can only land in one GPU, it is always device 0 relatively.
+			mpsMemLimitEnv: fmt.Sprintf("0=%dM", memoryLimitBytes/(1024*1024)),
 		}
-
 	}
 	return map[string]string{}
 }
