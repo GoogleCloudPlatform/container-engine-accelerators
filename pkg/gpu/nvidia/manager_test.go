@@ -168,7 +168,8 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			want:                map[string]string{},
 		},
 		{
-			name:           "MPS enabled, single GPU request",
+			name: "MPS enabled, single GPU request",
+			// totalMemPerGPU is 80G.
 			totalMemPerGPU: 80 * 1024 * 1024 * 1024,
 			gpuConfig: GPUConfig{
 				GPUSharingConfig: GPUSharingConfig{
@@ -183,7 +184,8 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			},
 		},
 		{
-			name:           "MPS enabled, multiple GPU request",
+			name: "MPS enabled, multiple GPU request",
+			// totalMemPerGPU is 80G.
 			totalMemPerGPU: 80 * 1024 * 1024 * 1024,
 			gpuConfig: GPUConfig{
 				GPUSharingConfig: GPUSharingConfig{
