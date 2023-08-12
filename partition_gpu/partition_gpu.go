@@ -39,12 +39,14 @@ var partitionSizeToProfileID = map[string]string{
 	"3g.20gb": "9",
 	"4g.20gb": "5",
 	"7g.40gb": "0",
-	//nvidia-a100-80gb
+	//nvidia-a100-80gb, nvidia-h100-80gb
 	"1g.10gb": "19",
 	"2g.20gb": "14",
 	"3g.40gb": "9",
 	"4g.40gb": "5",
 	"7g.80gb": "0",
+	//nvidia-h100-80gb
+	"1g.20gb": "15",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -54,15 +56,22 @@ var partitionSizeMaxCount = map[string]int{
 	"3g.20gb": 2,
 	"4g.20gb": 1,
 	"7g.40gb": 1,
-	//nvidia-a100-80gb
+	//nvidia-a100-80gb, nvidia-h100-80gb
 	"1g.10gb": 7,
 	"2g.20gb": 3,
 	"3g.40gb": 2,
 	"4g.40gb": 1,
 	"7g.80gb": 1,
+	//nvidia-h100-80gb
+	"1g.20gb": 4,
 }
 
-const SIGRTMIN = 34
+const (
+	SIGRTMIN       = 34
+	Nvidia80gbH100 = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
+	Nvidia40gbA100 = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
+	Nvidia80gbA100 = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+)
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
 type GPUConfig struct {
@@ -99,17 +108,28 @@ func main() {
 	}
 	if !migModeEnabled {
 		glog.Infof("MIG mode is not enabled. Enabling now.")
+		glog.Infof("Checking the GPU type now.")
+		gpuType, err := checkGpuType()
+		if err != nil {
+			glog.Errorf("Failed to check GPU Type: %v", err)
+			os.Exit(1)
+		}
+		glog.Infof("Got GPU type used: %s", gpuType)
 		if err := enableMigMode(); err != nil {
 			glog.Errorf("Failed to enable MIG mode: %v", err)
 			os.Exit(1)
 		}
-		glog.Infof("Rebooting node to enable MIG mode")
-		if err := rebootNode(); err != nil {
-			glog.Errorf("Failed to trigger node reboot after enabling MIG mode: %v", err)
+		// On NVIDIA Ampere GPUs, when MIG mode is enabled, the driver will attempt to reset the GPU so that MIG mode can take effect.
+		// Starting with the Hopper generation of GPUs, enabling MIG mode no longer requires a GPU reset to take effect.
+		// See https://docs.nvidia.com/datacenter/tesla/mig-user-guide/#enable-mig-mode for more information
+		if gpuType == Nvidia40gbA100 || gpuType == Nvidia80gbA100 {
+			glog.Infof("Rebooting node to enable MIG mode")
+			if err := rebootNode(); err != nil {
+				glog.Errorf("Failed to trigger node reboot after enabling MIG mode: %v", err)
+			}
+			// Exit, since we cannot proceed until node has rebooted, for MIG changes to take effect on NVIDIA Ampere GPUs.
+			os.Exit(1)
 		}
-
-		// Exit, since we cannot proceed until node has rebooted, for MIG changes to take effect.
-		os.Exit(1)
 	}
 
 	glog.Infof("MIG mode is enabled on all GPUs, proceeding to create GPU partitions.")
@@ -167,6 +187,23 @@ func currentMigMode() (bool, error) {
 // enableMigMode enables MIG mode on all GPUs attached to the node. Requires node restart to take effect.
 func enableMigMode() error {
 	return exec.Command(*nvidiaSmiPath, "-mig", "1").Run()
+}
+
+// checkGpuType checkes the GPU type used
+func checkGpuType() (string, error) {
+	gpuType, err := exec.Command(*nvidiaSmiPath, "--query-gpu=gpu_name", "--format=csv,noheader").Output()
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case strings.HasPrefix(string(gpuType), Nvidia80gbH100):
+		return Nvidia80gbH100, nil
+	case strings.HasPrefix(string(gpuType), Nvidia40gbA100):
+		return Nvidia40gbA100, nil
+	case strings.HasPrefix(string(gpuType), Nvidia80gbA100):
+		return Nvidia80gbA100, nil
+	}
+	return "", fmt.Errorf("nvidia-smi returned invalid GPU type for MIG: %s", gpuType)
 }
 
 func rebootNode() error {

@@ -107,8 +107,8 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
-        command: ['bash', '-c', '/cos-gpu-installer install --version=latest; chmod 755 /root/home/kubernetes/bin/nvidia']
-      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:c54fd003948fac687c2a93a55ea6e4d47ffbd641278a9191e75e822fe72471c2"
+        command: ['/cos-gpu-installer', 'install', '--version=latest']
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:e226275da6c45816959fe43cde907ee9a85c6a2aa8a429418a4cadef8ecdb86a"
         name: partition-gpus
         env:
           - name: LD_LIBRARY_PATH
