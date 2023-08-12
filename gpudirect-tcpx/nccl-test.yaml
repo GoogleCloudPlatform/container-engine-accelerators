@@ -7,7 +7,15 @@ spec:
     name:  nccl-host-1
   clusterIP: None
 ---
-
+apiVersion: v1
+kind: Service
+metadata:
+  name: nccl-host-2
+spec:
+  selector:
+    name: nccl-host-2
+  clusterIP: None
+---
 apiVersion: v1
 kind: Pod
 metadata:
@@ -29,13 +37,15 @@ spec:
         - a3vm
         - --gpu_shmem_type
         - fd
+        - --uds_path
+        - /run/tcpx
       securityContext:
         privileged: true
       volumeMounts:
         - name: nvidia
           mountPath: /usr/local/nvidia/lib64
         - name: tcpx-socket
-          mountPath: /tmp
+          mountPath: /run/tcpx
       env:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
@@ -68,17 +78,6 @@ spec:
     - name: tcpx-socket
       hostPath:
         path: /run/tcpx
-
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nccl-host-2
-spec:
-  selector:
-    name: nccl-host-2
-  clusterIP: None
-
 ---
 apiVersion: v1
 kind: Pod
@@ -101,13 +100,15 @@ spec:
         - a3vm
         - --gpu_shmem_type
         - fd
+        - --uds_path
+        - /run/tcpx
       securityContext:
         privileged: true
       volumeMounts:
         - name: nvidia
           mountPath: /usr/local/nvidia/lib64
         - name: tcpx-socket
-          mountPath: /tmp
+          mountPath: /run/tcpx
       env:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
