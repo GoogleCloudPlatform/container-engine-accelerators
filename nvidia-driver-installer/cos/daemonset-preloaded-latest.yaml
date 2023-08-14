@@ -107,7 +107,7 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
-        command: 
+        command:
         - bash
         - -c
         - | 
@@ -116,6 +116,7 @@ spec:
             exit 0
           else
             /cos-gpu-installer install --version=latest
+            chmod 755 /root/home/kubernetes/bin/nvidia
           fi
       - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:e226275da6c45816959fe43cde907ee9a85c6a2aa8a429418a4cadef8ecdb86a"
         name: partition-gpus
