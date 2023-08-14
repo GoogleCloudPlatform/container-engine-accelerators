@@ -107,6 +107,16 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
+        command:
+        - bash
+        - -c
+        - | 
+          if [ -f /usr/local/nvidia/lib64/libcuda.so ]; then
+            echo "GPU driver is already installed, skipping installation"
+            exit 0
+          else
+            /cos-gpu-installer install
+          fi
       - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:e226275da6c45816959fe43cde907ee9a85c6a2aa8a429418a4cadef8ecdb86a"
         name: partition-gpus
         env:
