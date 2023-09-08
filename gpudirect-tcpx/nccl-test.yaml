@@ -29,7 +29,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd:v1.1.5
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd:v2.0.3
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -50,7 +50,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx:latest
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx:v3.1.2
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -92,7 +92,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd:v1.1.5
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd:v2.0.3
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -113,7 +113,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx:latest
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx:v3.1.2
       imagePullPolicy: Always
       command:
         - /bin/sh
