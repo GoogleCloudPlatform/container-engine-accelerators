@@ -68,6 +68,8 @@ spec:
           mountPath: /tmp
         - name: nvidia
           mountPath: /usr/local/nvidia/lib64
+        - name: tcpx-library
+          mountPath: /usr/local/tcpx/lib64
       resources:
         limits:
           nvidia.com/gpu: 8
@@ -78,6 +80,9 @@ spec:
     - name: tcpx-socket
       hostPath:
         path: /run/tcpx
+    - name: tcpx-library
+      hostPath:
+        path: /home/kubernetes/bin/tcpx/lib64
 ---
 apiVersion: v1
 kind: Pod
@@ -131,6 +136,8 @@ spec:
           mountPath: /tmp
         - name: nvidia
           mountPath: /usr/local/nvidia/lib64
+        - name: tcpx-library
+          mountPath: /usr/local/tcpx/lib64
       resources:
         limits:
           nvidia.com/gpu: 8
@@ -141,3 +148,6 @@ spec:
     - name: tcpx-socket
       hostPath:
         path: /run/tcpx
+    - name: tcpx-library
+      hostPath:
+        path: /home/kubernetes/bin/tcpx/lib64
