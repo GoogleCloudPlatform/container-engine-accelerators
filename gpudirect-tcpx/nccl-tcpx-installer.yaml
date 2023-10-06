@@ -57,9 +57,8 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
-              mkdir -p /usr/local/tcpx/lib64
               /scripts/container_entry.sh install --install-nccl
-              cp -r /var/lib/tcpx/lib64/. /usr/local/tcpx/lib64
+              cp -r /var/lib/tcpx/lib64/. /usr/local/nvidia/lib64
               echo "installation finishes"
       containers:
         - image: "gcr.io/google-containers/pause:2.0"
