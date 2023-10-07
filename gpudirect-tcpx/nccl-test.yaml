@@ -66,13 +66,13 @@ spec:
       volumeMounts:
         - name: tcpx-socket
           mountPath: /tmp
-        - name: nvidia
+        - name: libraries
           mountPath: /usr/local/nvidia/lib64
       resources:
         limits:
           nvidia.com/gpu: 8
   volumes:
-    - name: nvidia
+    - name: libraries
       hostPath:
         path: /home/kubernetes/bin/nvidia/lib64
     - name: tcpx-socket
@@ -129,13 +129,13 @@ spec:
       volumeMounts:
         - name: tcpx-socket
           mountPath: /tmp
-        - name: nvidia
+        - name: libraries
           mountPath: /usr/local/nvidia/lib64
       resources:
         limits:
           nvidia.com/gpu: 8
   volumes:
-    - name: nvidia
+    - name: libraries
       hostPath:
         path: /home/kubernetes/bin/nvidia/lib64
     - name: tcpx-socket
