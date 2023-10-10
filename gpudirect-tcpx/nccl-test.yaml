@@ -42,7 +42,7 @@ spec:
       securityContext:
         privileged: true
       volumeMounts:
-        - name: nvidia
+        - name: libraries
           mountPath: /usr/local/nvidia/lib64
         - name: tcpx-socket
           mountPath: /run/tcpx
@@ -105,7 +105,7 @@ spec:
       securityContext:
         privileged: true
       volumeMounts:
-        - name: nvidia
+        - name: libraries
           mountPath: /usr/local/nvidia/lib64
         - name: tcpx-socket
           mountPath: /run/tcpx
