@@ -40,7 +40,7 @@ spec:
         - --uds_path
         - /run/tcpx
         - --setup_param
-        - \"--verbose 128 5 0 \"
+        - \"--verbose 128 2 0 \"
       securityContext:
         privileged: true
       volumeMounts:
@@ -105,7 +105,7 @@ spec:
         - --uds_path
         - /run/tcpx
         - --setup_param
-        - \"--verbose 128 5 0 \"
+        - \"--verbose 128 2 0 \"
       securityContext:
         privileged: true
       volumeMounts:
