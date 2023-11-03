@@ -29,7 +29,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.7
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.9
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -39,8 +39,6 @@ spec:
         - fd
         - --uds_path
         - /run/tcpx
-        - --setup_param
-        - \"--verbose 128 2 0 \"
       securityContext:
         privileged: true
       volumeMounts:
@@ -94,7 +92,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.7
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.9
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -104,8 +102,6 @@ spec:
         - fd
         - --uds_path
         - /run/tcpx
-        - --setup_param
-        - \"--verbose 128 2 0 \"
       securityContext:
         privileged: true
       volumeMounts:
