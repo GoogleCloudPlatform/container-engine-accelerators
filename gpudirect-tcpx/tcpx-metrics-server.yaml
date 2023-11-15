@@ -56,3 +56,4 @@ spec:
                   fieldPath: spec.nodeName
             - name: CONTAINER_NAME
               value: "tcpx_metrics"
+              
