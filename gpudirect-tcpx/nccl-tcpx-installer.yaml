@@ -57,7 +57,9 @@ spec:
           command: ["/bin/sh", "-c"]
           args:
             - |
+              set -ex
               /scripts/container_entry.sh install --install-nccl
+              mkdir -p /usr/local/nvidia/lib64
               cp -r /var/lib/tcpx/lib64/. /usr/local/nvidia/lib64
               echo "installation finishes"
       containers:
