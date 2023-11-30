@@ -62,7 +62,6 @@ spec:
               EOF
 
               chmod +x /scripts/allgather.sh
-              chmod +x /scripts/run-nccl.sh
               service ssh restart;
               sleep infinity;
           env:
