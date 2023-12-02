@@ -68,7 +68,6 @@ spec:
             - name: LD_LIBRARY_PATH
               value: /usr/local/nvidia/lib64
           securityContext:
-            privileged: true
             capabilities:
               add:
                 - IPC_LOCK
