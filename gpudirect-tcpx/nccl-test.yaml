@@ -67,10 +67,6 @@ spec:
           env:
             - name: LD_LIBRARY_PATH
               value: /usr/local/nvidia/lib64
-          securityContext:
-            capabilities:
-              add:
-                - IPC_LOCK
           volumeMounts:
             - name: tcpx-socket
               mountPath: /tmp
