@@ -1,143 +1,84 @@
-apiVersion: v1
-kind: Service
+apiVersion: apps/v1
+kind: Deployment
 metadata:
-  name:  nccl-host-1
-spec:
-  selector:
-    name:  nccl-host-1
-  clusterIP: None
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: nccl-host-2
-spec:
-  selector:
-    name: nccl-host-2
-  clusterIP: None
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nccl-test-host-1
+  name: nccl-test
   labels:
-    name: nccl-host-1
+    app: nccl-test
 spec:
-  hostname: host1
-  subdomain: nccl-host-1
-  hostNetwork: true
-  dnsPolicy: ClusterFirstWithHostNet
-  containers:
-    - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.9
-      imagePullPolicy: Always
-      command:
-        - /tcpgpudmarxd/build/app/tcpgpudmarxd
-        - --gpu_nic_preset
-        - a3vm
-        - --gpu_shmem_type
-        - fd
-        - --uds_path
-        - /run/tcpx
-      securityContext:
-        privileged: true
-      volumeMounts:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nccl-test
+  template:
+    metadata:
+      labels:
+        app: nccl-test
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: nccl-test
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      containers:
+        - name: tcpx-daemon
+          image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.9
+          imagePullPolicy: Always
+          command:
+            - /tcpgpudmarxd/build/app/tcpgpudmarxd
+            - --gpu_nic_preset
+            - a3vm
+            - --gpu_shmem_type
+            - fd
+            - --uds_path
+            - /run/tcpx
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: libraries
+              mountPath: /usr/local/nvidia/lib64
+            - name: tcpx-socket
+              mountPath: /run/tcpx
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /usr/local/nvidia/lib64
+        - name: nccl-test
+          image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.6_2023_10_06
+          imagePullPolicy: Always
+          command:
+            - /bin/sh
+            - -c
+            - |
+              cat >/scripts/allgather.sh <<EOF
+              #!/bin/bash
+              /scripts/init_ssh.sh \${@};
+              pushd /scripts;
+              /scripts/gen_hostfiles.sh \${@};
+              popd;
+              /scripts/run-allgather.sh 8 eth1,eth2,eth3,eth4 1M 512M 2 \${#};
+              EOF
+
+              chmod +x /scripts/allgather.sh
+              service ssh restart;
+              sleep infinity;
+          env:
+            - name: LD_LIBRARY_PATH
+              value: /usr/local/nvidia/lib64
+          volumeMounts:
+            - name: tcpx-socket
+              mountPath: /tmp
+            - name: libraries
+              mountPath: /usr/local/nvidia/lib64
+          resources:
+            limits:
+              nvidia.com/gpu: 8
+      volumes:
         - name: libraries
-          mountPath: /usr/local/nvidia/lib64
+          hostPath:
+            path: /home/kubernetes/bin/nvidia/lib64
         - name: tcpx-socket
-          mountPath: /run/tcpx
-      env:
-        - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64
-    - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.6_2023_10_06
-      imagePullPolicy: Always
-      command:
-        - /bin/sh
-        - -c
-        - "while true; do echo hello; sleep 1; done"
-      env:
-        - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64
-      securityContext:
-        capabilities:
-          add:
-            - IPC_LOCK
-      volumeMounts:
-        - name: tcpx-socket
-          mountPath: /tmp
-        - name: libraries
-          mountPath: /usr/local/nvidia/lib64
-      resources:
-        limits:
-          nvidia.com/gpu: 8
-  volumes:
-    - name: libraries
-      hostPath:
-        path: /home/kubernetes/bin/nvidia/lib64
-    - name: tcpx-socket
-      hostPath:
-        path: /run/tcpx
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nccl-test-host-2
-  labels:
-    name: nccl-host-2
-spec:
-  hostname: host2
-  subdomain: nccl-host-2
-  hostNetwork: true
-  dnsPolicy: ClusterFirstWithHostNet
-  containers:
-    - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.9
-      imagePullPolicy: Always
-      command:
-        - /tcpgpudmarxd/build/app/tcpgpudmarxd
-        - --gpu_nic_preset
-        - a3vm
-        - --gpu_shmem_type
-        - fd
-        - --uds_path
-        - /run/tcpx
-      securityContext:
-        privileged: true
-      volumeMounts:
-        - name: libraries
-          mountPath: /usr/local/nvidia/lib64
-        - name: tcpx-socket
-          mountPath: /run/tcpx
-      env:
-        - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64
-    - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.6_2023_10_06
-      imagePullPolicy: Always
-      command:
-        - /bin/sh
-        - -c
-        - "while true; do echo hello; sleep 1; done"
-      env:
-        - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64
-      securityContext:
-        capabilities:
-          add:
-            - IPC_LOCK
-      volumeMounts:
-        - name: tcpx-socket
-          mountPath: /tmp
-        - name: libraries
-          mountPath: /usr/local/nvidia/lib64
-      resources:
-        limits:
-          nvidia.com/gpu: 8
-  volumes:
-    - name: libraries
-      hostPath:
-        path: /home/kubernetes/bin/nvidia/lib64
-    - name: tcpx-socket
-      hostPath:
-        path: /run/tcpx
+          hostPath:
+            path: /run/tcpx
