@@ -35,6 +35,8 @@ spec:
             - fd
             - --uds_path
             - /run/tcpx
+            - --setup_param
+            - \"--verbose 128 2 0 \"
           securityContext:
             privileged: true
           volumeMounts:
@@ -58,7 +60,7 @@ spec:
               pushd /scripts;
               /scripts/gen_hostfiles.sh \${@};
               popd;
-              /scripts/run-allgather.sh 8 eth1,eth2,eth3,eth4 1M 512M 2 \${#};
+              /scripts/run-allgather.sh 8 eth1,eth2,eth3,eth4 1M 512M \${#};
               EOF
 
               chmod +x /scripts/allgather.sh
