@@ -31,10 +31,10 @@ spec:
       hostNetwork: true
       hostPID: true
       volumes:
-      - name: nvidia-install-dir-host
+      - name: nvidia-install-lib64-dir-host
         hostPath:
-          path: /home/kubernetes/bin/nvidia
-          type: Directory
+          path: /home/kubernetes/bin/nvidia/lib64
+          type: DirectoryOrCreate
       initContainers:
       - image: gcr.io/gke-release/fastsocket-installer@sha256:cb8dca70b5611769fd2e0e8eb9aebf81a89d4378537cff104775c873abf2d9c5
         name: nccl-fastsocket-installer
@@ -42,7 +42,7 @@ spec:
         - bash
         - -c
         - |
-          cp /usr/lib/libnccl-net.so $NCCL_INSTALL_DIR
+          cp /usr/lib/libnccl-net.so $NCCL_INSTALL_DIR/
         securityContext:
           privileged: true
         resources:
@@ -52,8 +52,8 @@ spec:
         - name: NCCL_INSTALL_DIR
           value: /usr/local/nvidia/lib64
         volumeMounts:
-        - name: nvidia-install-dir-host
-          mountPath: /usr/local/nvidia
+        - name: nvidia-install-lib64-dir-host
+          mountPath: /usr/local/nvidia/lib64
       containers:
       - image: "gcr.io/google-containers/pause:2.0"
         name: pause
