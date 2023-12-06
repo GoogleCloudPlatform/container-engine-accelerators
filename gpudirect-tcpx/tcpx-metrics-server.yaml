@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: tcpx-metrics
+  name: tcpx-metrics-server
   namespace: kube-system
   labels:
-    k8s-app: tcpx-metrics
+    k8s-app: tcpx-metrics-server
 spec:
   selector:
     matchLabels:
-      k8s-app: tcpx-metrics
+      k8s-app: tcpx-metrics-server
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        name: tcpx-metrics
-        k8s-app: tcpx-metrics
+        name: tcpx-metrics-server
+        k8s-app: tcpx-metrics-server
     spec:
       priorityClassName: system-node-critical
       affinity:
@@ -32,7 +32,7 @@ spec:
       hostNetwork: true
       containers:
         - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpx-metrics:latest
-          name: tcpx-metrics
+          name: tcpx-metrics-server
           resources:
             requests:
               cpu: 150m
@@ -53,6 +53,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: spec.nodeName
+            - name: CLOUD_MONITORING_ENDPOINT
+              value: "monitoring.googleapis.com:443"
             - name: CONTAINER_NAME
-              value: "tcpx_metrics"
+              value: "tcpx-metrics-server"
               
