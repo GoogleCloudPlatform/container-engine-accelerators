@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: script-configmap
+  name: nccl-configmap
 data:
   allgather.sh: |-
     #!/bin/bash
@@ -55,7 +55,6 @@ data:
     -x NCCL_PROTO=Simple \
     -x NCCL_NET_GDR_LEVEL=PIX \
     -x NCCL_P2P_PXN_LEVEL=0 \
-    -x NCCL_GPUDIRECTTCPX_UNIX_CLIENT_PREFIX="/run/tcpx" \
     taskset -c 0-7,104-111,52-59,156-163 \
     /third_party/nccl-tests-mpi/build/"${benchmark}" \
     -b "${data_b}" -e "${data_e}" -f 2 -g 1 -w 5 --iters 100 -c 0 2>&1 \
