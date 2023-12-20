@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: optmem-max-ds
+  namespace: kube-system
+  labels:
+    k8s-app: optmem-max-ds
+spec:
+  selector:
+    matchLabels:
+      k8s-app: optmem-max-ds
+  template:
+    metadata:
+      labels:
+        name: optmem-max-ds
+        k8s-app: optmem-max-ds
+    spec:
+      hostNetwork: true
+      initContainers:
+      - name: optmem-max
+        image: gke.gcr.io/gke-distroless/bash
+        securityContext:
+          privileged: true
+        command:
+          - /bin/bash
+          - -c
+          - "set -x; cat /proc/sys/net/core/optmem_max; echo 131072 > /proc/sys/net/core/optmem_max"
+      containers:
+      - name: pause
+        image: registry.k8s.io/pause:3.9
+        securityContext:
+          runAsUser: 2023
+          runAsGroup: 2023
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["all"]
+          seccompProfile:
+            type: RuntimeDefault
+          readOnlyRootFilesystem: true
