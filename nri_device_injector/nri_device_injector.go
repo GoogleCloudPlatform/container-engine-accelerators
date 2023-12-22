@@ -28,9 +28,7 @@ import (
 )
 
 const (
-	// Keys for device injection annotations to all containers in a pod.
 	deviceKeyPrefix = "devices.gke.io"
-	podDeviceKey    = deviceKeyPrefix + "/pod"
 	// Key prefix for device injection to a container, followed by container name
 	ctrDeviceKeyPrefix = deviceKeyPrefix + "/container."
 	pluginName         = "device_injector_nri"
@@ -83,8 +81,7 @@ func (p *plugin) onClose() {
 }
 
 // CreateContainer handles CreateContainer requests relayed to the plugin by containerd NRI.
-// The plugin makes adjustment on containers with device injection annotations
-// and injects devices to a specific containr or all containers in a pod.
+// The plugin makes adjustment on containers with device injection annotations.
 func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, container *api.Container) (*api.ContainerAdjustment, []*api.ContainerUpdate, error) {
 	var (
 		ctrName string
@@ -123,32 +120,22 @@ func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, contain
 // getDevices returns parsed devices from pod annotations of device injections.
 func getDevices(ctrName string, podAnnotations map[string]string) ([]device, error) {
 	var (
-		key        string
+		deviceKey string = ctrDeviceKeyPrefix + ctrName
+
 		annotation []byte
 		devices    []device
 	)
 
-	// Container level injection will be prioritized, and other pod level injection
-	// will be ommited if container level injections exist.
-	for _, key = range []string{
-		ctrDeviceKeyPrefix + ctrName,
-		podDeviceKey,
-		deviceKeyPrefix,
-	} {
-		if value, ok := podAnnotations[key]; ok {
-			annotation = []byte(value)
-			break
-		}
+	if value, ok := podAnnotations[deviceKey]; ok {
+		annotation = []byte(value)
 	}
-
 	if annotation == nil {
 		return nil, nil
 	}
 
 	if err := yaml.Unmarshal(annotation, &devices); err != nil {
-		return nil, fmt.Errorf("invalid device annotation %q: %w", key, err)
+		return nil, fmt.Errorf("invalid device annotation %q: %w", deviceKey, err)
 	}
-
 	return devices, nil
 }
 

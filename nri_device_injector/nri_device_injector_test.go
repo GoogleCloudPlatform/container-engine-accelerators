@@ -43,19 +43,6 @@ func TestParseDevices(t *testing.T) {
 				Path: "/dev/test",
 			}},
 		},
-		"One valid device annotation injecting to pod": {
-			container: "test",
-			annotations: map[string]string{
-				"devices.gke.io/pod": `
-- path: /dev/test
-  major: 123
-  minor: 456
-`}, want: []device{{
-				Path:  "/dev/test",
-				Major: 123,
-				Minor: 456,
-			}},
-		},
 		"Multiple valid device annotation injecting to container": {
 			container: "test",
 			annotations: map[string]string{
