@@ -20,4 +20,4 @@ RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerato
 
 FROM gke.gcr.io/gke-distroless/bash:gke_distroless_20230307.00_p0@sha256:f75e30785119d31e209cdc60dde2681a8519021936c31b3f1fcdf6a82ca798d3
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/device_injector /usr/bin/device_injector
-CMD ["/usr/bin/device_injector", "-logtostderr"]
+CMD ["/usr/bin/device_injector"]

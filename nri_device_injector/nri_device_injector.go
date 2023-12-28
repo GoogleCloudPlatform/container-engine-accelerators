@@ -83,37 +83,39 @@ func (p *plugin) onClose() {
 // CreateContainer handles CreateContainer requests relayed to the plugin by containerd NRI.
 // The plugin makes adjustment on containers with device injection annotations.
 func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, container *api.Container) (*api.ContainerAdjustment, []*api.ContainerUpdate, error) {
+	if pod == nil {
+		return nil, nil, nil
+	}
+
 	var (
-		ctrName string
+		ctrName = container.Name
+		l       = log.WithFields(log.Fields{"container": ctrName, "pod": pod.Name, "namespace": pod.Namespace})
+
 		devices []device
 		err     error
 	)
 
-	ctrName = container.Name
-	log.Infof("Started CreateContainer on container: %v, pod: %v, namespace: %v", ctrName, pod.Name, pod.Namespace)
-	if pod != nil {
-		ctrName = pod.Name + "/" + ctrName
-	}
-
-	devices, err = getDevices(container.Name, pod.Annotations)
+	l.Info("Started CreateContainer")
+	devices, err = getDevices(ctrName, pod.Annotations)
 	if err != nil {
 		return nil, nil, err
 	}
 	adjust := &api.ContainerAdjustment{}
 
 	if len(devices) == 0 {
-		log.Infof("Container %s: no devices annotated...", ctrName)
+		l.Debug("No devices annotated...")
 		return adjust, nil, nil
 	}
 	for _, d := range devices {
-		log.Infof("Container %s: annotated device %q...", ctrName, d.Path)
+		l.Infof("Annotated device %q...", d.Path)
 		deviceNRI, err := d.toNRIDevice()
 		if err != nil {
 			return nil, nil, err
 		}
 		adjust.AddDevice(deviceNRI)
-		log.Infof("Container %s: injected device %q...", ctrName, d.Path)
+		l.Infof("Injected device %q...", d.Path)
 	}
+	l.Info("Finished CreateContainer")
 	return adjust, nil, nil
 }
 
@@ -149,7 +151,7 @@ func (d *device) toNRIDevice() (*api.LinuxDevice, error) {
 	}
 
 	var (
-		devNumber = uint64(stat.Rdev) //nolint:nolintlint,unconvert // the type is 32bit on mips.
+		devNumber = uint64(stat.Rdev)
 		major     = unix.Major(devNumber)
 		minor     = unix.Minor(devNumber)
 		mode      = stat.Mode
