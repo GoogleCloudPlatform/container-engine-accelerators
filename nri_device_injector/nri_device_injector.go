@@ -107,13 +107,13 @@ func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, contain
 		return adjust, nil, nil
 	}
 	for _, d := range devices {
-		l.Infof("Annotated device %q...", d.Path)
+		l.WithField("device", d.Path).Info("Annotated device")
 		deviceNRI, err := d.toNRIDevice()
 		if err != nil {
 			return nil, nil, err
 		}
 		adjust.AddDevice(deviceNRI)
-		l.Infof("Injected device %q...", d.Path)
+		l.WithField("device", d.Path).Info("Injected device")
 	}
 	l.Info("Finished CreateContainer")
 	return adjust, nil, nil
