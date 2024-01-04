@@ -35,6 +35,8 @@ spec:
             - fd
             - --uds_path
             - /run/tcpx
+            - --setup_param
+            - \"--verbose 128 2 0 \"
           securityContext:
             privileged: true
           volumeMounts:
@@ -52,16 +54,6 @@ spec:
             - /bin/sh
             - -c
             - |
-              cat >/scripts/allgather.sh <<EOF
-              #!/bin/bash
-              /scripts/init_ssh.sh \${@};
-              pushd /scripts;
-              /scripts/gen_hostfiles.sh \${@};
-              popd;
-              /scripts/run-allgather.sh 8 eth1,eth2,eth3,eth4 1M 512M 2 \${#};
-              EOF
-
-              chmod +x /scripts/allgather.sh
               service ssh restart;
               sleep infinity;
           env:
@@ -72,10 +64,16 @@ spec:
               mountPath: /tmp
             - name: libraries
               mountPath: /usr/local/nvidia/lib64
+            - name: config-volume
+              mountPath: /configs
           resources:
             limits:
               nvidia.com/gpu: 8
       volumes:
+        - name: config-volume
+          configMap:
+            name: nccl-configmap
+            defaultMode: 0777
         - name: libraries
           hostPath:
             path: /home/kubernetes/bin/nvidia/lib64
