@@ -76,12 +76,11 @@ func TestParseDevices(t *testing.T) {
 - path: /dev/test0
   major: 123
   minor: 456
+- path: /dev/test0
+  major: 456
+  minor: 789
 `}, want: []device{{
 				Path: "/dev/test0",
-			}, {
-				Path:  "/dev/test0",
-				Major: 123,
-				Minor: 456,
 			}},
 		},
 		"Invalid device annotation": {

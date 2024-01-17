@@ -82,6 +82,7 @@ func (p *plugin) onClose() {
 
 // CreateContainer handles CreateContainer requests relayed to the plugin by containerd NRI.
 // The plugin makes adjustment on containers with device injection annotations.
+// When multiple annotations annotate devices with the same path, only the first one will be injected.
 func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, container *api.Container) (*api.ContainerAdjustment, []*api.ContainerUpdate, error) {
 	if pod == nil {
 		return nil, nil, nil
@@ -124,8 +125,9 @@ func getDevices(ctrName string, podAnnotations map[string]string) ([]device, err
 	var (
 		deviceKey string = ctrDeviceKeyPrefix + ctrName
 
-		annotation []byte
-		devices    []device
+		annotation    []byte
+		parsedDevices []device
+		devices       []device
 	)
 
 	if value, ok := podAnnotations[deviceKey]; ok {
@@ -135,8 +137,17 @@ func getDevices(ctrName string, podAnnotations map[string]string) ([]device, err
 		return nil, nil
 	}
 
-	if err := yaml.Unmarshal(annotation, &devices); err != nil {
+	if err := yaml.Unmarshal(annotation, &parsedDevices); err != nil {
 		return nil, fmt.Errorf("invalid device annotation %q: %w", deviceKey, err)
+	}
+	paths := make(map[string]bool)
+	for _, d := range parsedDevices {
+		if _, got := paths[d.Path]; got {
+			continue
+		} else {
+			paths[d.Path] = true
+			devices = append(devices, d)
+		}
 	}
 	return devices, nil
 }
