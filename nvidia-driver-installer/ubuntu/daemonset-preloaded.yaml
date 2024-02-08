@@ -41,6 +41,10 @@ spec:
                 operator: Exists
               - key: cloud.google.com/gke-gpu-driver-version
                 operator: DoesNotExist
+              - key: cloud.google.com/gke-os-distribution
+                operator: In
+                values:
+                - ubuntu
       tolerations:
       - operator: "Exists"
       volumes:
