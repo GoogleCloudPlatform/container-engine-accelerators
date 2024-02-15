@@ -1,8 +1,8 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Masterminds/semver v1.5.0/go.mod h1:MB6lktGJrhw8PrUyiEoblNEGEQ+RzHPF078ddwwvV3Y=
-github.com/NVIDIA/go-nvml v0.12.0-1 h1:6mdjtlFo+17dWL7VFPfuRMtf0061TF4DKls9pkSw6uM=
-github.com/NVIDIA/go-nvml v0.12.0-1/go.mod h1:hy7HYeQy335x6nEss0Ne3PYqleRa6Ct+VKD9RQ4nyFs=
+github.com/NVIDIA/go-nvml v0.12.0-2 h1:Sg239yy7jmopu/cuvYauoMj9fOpcGMngxVxxS1EBXeY=
+github.com/NVIDIA/go-nvml v0.12.0-2/go.mod h1:7ruy85eOM73muOc/I37euONSwEyFqZsv5ED9AogD4G0=
 github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20211102125545-5a2c58442e48 h1:JO/JF5CBte9mvATbhoh32swu9erf07ZdLgwFj8u21UQ=
 github.com/NVIDIA/gpu-monitoring-tools v0.0.0-20211102125545-5a2c58442e48/go.mod h1:oKPJa5eOTkWvlT4/Y4D8Nds44Fzmww5HUK+xwO+DwTA=
 github.com/NVIDIA/gpu-monitoring-tools/bindings/go/dcgm v0.0.0-20210325210537-29b4f1784f18/go.mod h1:8qXwltEzU3idjUcVpMOv3FNgxxbDeXZPGMLyc/khWiY=
@@ -71,8 +71,8 @@ github.com/stretchr/objx v0.5.0/go.mod h1:Yh+to48EsGEfYuaHDzXPcE3xhTkx73EhmCGUpE
 github.com/stretchr/testify v1.2.2/go.mod h1:a8OnRcib4nhh0OaRAV+Yts87kKdq0PP7pXfy6kDkUVs=
 github.com/stretchr/testify v1.7.1/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
 github.com/stretchr/testify v1.8.0/go.mod h1:yNjHg4UonilssWZ8iaSj1OCr/vHnekPRkoO+kdMU+MU=
-github.com/stretchr/testify v1.8.2 h1:+h33VjcLVPDHtOdpUCuF+7gSuG3yGIftsP1YvFihtJ8=
-github.com/stretchr/testify v1.8.2/go.mod h1:w2LPCIKwWwSfY2zedu0+kehJoqGctiVI29o6fzry7u4=
+github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcUk=
+github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
