@@ -30,53 +30,5 @@ annotations:
 From root of the repository, run:
   `docker build -f nri_device_injector/Dockerfile .`
 ### Apply device injector manifest
-On nodes that have NRI enabled, run:
-```
-export IMAGE="your-device-injector-image-path"
-
-kubectl apply -f - <<EOF
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: device-injector
-  namespace: kube-system
-  labels:
-    k8s-app: device-injector
-spec:
-  selector:
-    matchLabels:
-      k8s-app: device-injector
-  updateStrategy:
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        name: device-injector
-        k8s-app: device-injector
-    spec:
-      priorityClassName: system-node-critical
-      tolerations:
-        - operator: "Exists"
-      hostNetwork: true
-      containers:
-        - image: ${IMAGE}
-          name: device-injector
-          resources:
-            requests:
-              cpu: 150m
-          securityContext:
-            privileged: true
-          volumeMounts:
-            - name: root
-              mountPath: /host
-            - name: nri
-              mountPath: /var/run/nri
-      volumes:
-        - name: root
-          hostPath:
-            path: /
-        - name: nri
-          hostPath:
-            path: /var/run/nri
-EOF
-```
+  `kubectl apply -f nri-device-injector.yaml`
+The device injector enables NRI on the node and runs the NRI device injector plugin.
