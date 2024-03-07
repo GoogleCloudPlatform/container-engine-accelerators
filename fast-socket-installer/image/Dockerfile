@@ -1,4 +1,4 @@
-FROM gcr.io/gke-release/debian-base:bookworm-v1.0.1-gke.0
+FROM gcr.io/gke-release/debian-base:bookworm-v1.0.1-gke.1
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends --allow-change-held-packages apt-transport-https ca-certificates curl gnupg && \
