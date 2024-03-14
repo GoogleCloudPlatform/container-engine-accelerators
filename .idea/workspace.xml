@@ -1,0 +1,279 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="900a0948-3731-481e-beb5-cb168c083268" name="Changes" comment="update nccl test manifest&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;">
+      <change beforePath="$PROJECT_DIR$/gpudirect-tcpx/nccl-test-without-hostnetwork.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/gpudirect-tcpx/nccl-test-without-hostnetwork.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gpudirect-tcpx/nccl-test.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/gpudirect-tcpx/nccl-test.yaml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gpudirect-tcpx/optmem-max-ds.yaml" beforeDir="false" afterPath="$PROJECT_DIR$/gpudirect-tcpx/optmem-max-ds.yaml" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Go File" />
+      </list>
+    </option>
+  </component>
+  <component name="GOROOT" url="file:///opt/homebrew/Cellar/go/1.19.1/libexec" />
+  <component name="Git.Settings">
+    <branch-grouping />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+    <option name="RESET_MODE" value="HARD" />
+    <option name="SIGN_OFF_COMMIT" value="true" />
+  </component>
+  <component name="HighlightingSettingsPerFile">
+    <setting file="file://$PROJECT_DIR$/Dockerfile" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Gopkg.lock" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/LICENSE" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/Makefile" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/VERSION" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/cmd/nvidia_gpu/device-plugin.yaml" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/cmd/nvidia_gpu/nvidia_gpu.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/demo/gpu-error/illegal-memory-access/Dockerfile" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/demo/gpu-error/illegal-memory-access/README" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/demo/gpu-error/illegal-memory-access/vectorAdd.cu" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/go.mod" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/go.sum" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/nvidia-driver-installer/minikube/Dockerfile" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/partition_gpu/partition_gpu.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/gpu/nvidia/manager.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/gpu/nvidia/metrics/devices.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/gpu/nvidia/metrics/metrics.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/pkg/gpu/nvidia/metrics/util.go" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$PROJECT_DIR$/vendor/github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml/nvml.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/vendor/github.com/prometheus/client_golang/prometheus/gauge.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/vendor/github.com/prometheus/client_golang/prometheus/promauto/auto.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/vendor/github.com/prometheus/client_golang/prometheus/vec.go" root0="SKIP_INSPECTION" />
+    <setting file="file://$PROJECT_DIR$/vendor/modules.txt" root0="SKIP_INSPECTION" />
+    <setting file="file:///opt/homebrew/Cellar/go/1.19.1/libexec/src/os/exec/exec.go" root0="SKIP_INSPECTION" />
+  </component>
+  <component name="MarkdownSettingsMigration">
+    <option name="stateVersion" value="1" />
+  </component>
+  <component name="ProblemsViewState">
+    <option name="selectedTabId" value="ProjectErrors" />
+  </component>
+  <component name="ProjectId" id="2Ox0cnNjWKERYzpgKAa89wsb9TR" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+    <option name="showMembers" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ASKED_SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;DefaultGoTemplateProperty&quot;: &quot;Go File&quot;,
+    &quot;RunOnceActivity.OpenProjectViewOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.format.on.save.advertiser.fired&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.formatter.settings.were.checked&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.migrated.go.modules.settings&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.modules.go.list.on.any.changes.was.set&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.vendoring.notification.had.been.shown&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.go.watchers.conflict.with.on.save.actions.check.performed&quot;: &quot;true&quot;,
+    &quot;TF_FMT&quot;: &quot;false&quot;,
+    &quot;WebServerToolWindowFactoryState&quot;: &quot;false&quot;,
+    &quot;configurable..is.expanded&quot;: &quot;false&quot;,
+    &quot;configurable.GoLibrariesConfigurable.is.expanded&quot;: &quot;true&quot;,
+    &quot;go.import.settings.migrated&quot;: &quot;true&quot;,
+    &quot;go.sdk.automatically.set&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/Users/gracegao/go-workspace/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpx&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;vcs.Git&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/gpudirect-tcpx" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$" />
+    </key>
+  </component>
+  <component name="RunManager" selected="Go Test.Test_nvidiaGPUManager_Envs/time-sharing_enabled in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia">
+    <configuration name="TestGPUConfig_AddDefaultsAndValidate in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="container-engine-accelerators" />
+      <working_directory value="$PROJECT_DIR$/pkg/gpu/nvidia" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTestGPUConfig_AddDefaultsAndValidate\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_nvidiaGPUManager_Envs in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="container-engine-accelerators" />
+      <working_directory value="$PROJECT_DIR$/pkg/gpu/nvidia" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_nvidiaGPUManager_Envs\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_nvidiaGPUManager_Envs/MPS_enabled,_single_GPU_request in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="container-engine-accelerators" />
+      <working_directory value="$PROJECT_DIR$/pkg/gpu/nvidia" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_nvidiaGPUManager_Envs\E$/^\QMPS_enabled,_single_GPU_request\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="Test_nvidiaGPUManager_Envs/time-sharing_enabled in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="container-engine-accelerators" />
+      <working_directory value="$PROJECT_DIR$/pkg/gpu/nvidia" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="PACKAGE" />
+      <package value="github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$" />
+      <framework value="gotest" />
+      <pattern value="^\QTest_nvidiaGPUManager_Envs\E$/^\Qtime-sharing_enabled\E$" />
+      <method v="2" />
+    </configuration>
+    <configuration name="manager_test.go" type="GoTestRunConfiguration" factoryName="Go Test" temporary="true" nameIsGenerated="true">
+      <module name="container-engine-accelerators" />
+      <working_directory value="$PROJECT_DIR$/pkg/gpu/nvidia" />
+      <root_directory value="$PROJECT_DIR$" />
+      <kind value="FILE" />
+      <package value="github.com/GoogleCloudPlatform/container-engine-accelerators" />
+      <directory value="$PROJECT_DIR$" />
+      <filePath value="$PROJECT_DIR$/pkg/gpu/nvidia/manager_test.go" />
+      <framework value="gotest" />
+      <method v="2" />
+    </configuration>
+    <recent_temporary>
+      <list>
+        <item itemvalue="Go Test.Test_nvidiaGPUManager_Envs/time-sharing_enabled in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+        <item itemvalue="Go Test.Test_nvidiaGPUManager_Envs/MPS_enabled,_single_GPU_request in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+        <item itemvalue="Go Test.Test_nvidiaGPUManager_Envs in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+        <item itemvalue="Go Test.manager_test.go" />
+        <item itemvalue="Go Test.TestGPUConfig_AddDefaultsAndValidate in github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia" />
+      </list>
+    </recent_temporary>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.History.Properties">
+    <option name="COLUMN_ID_ORDER">
+      <list>
+        <option value="Default.Root" />
+        <option value="Default.Author" />
+        <option value="Default.Date" />
+        <option value="Default.Subject" />
+        <option value="Space.CommitStatus" />
+      </list>
+    </option>
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State>
+              <option name="CUSTOM_BOOLEAN_PROPERTIES">
+                <map>
+                  <entry key="Show.Git.Branches" value="true" />
+                </map>
+              </option>
+              <option name="FILTERS">
+                <map>
+                  <entry key="branch">
+                    <value>
+                      <list>
+                        <option value="partition-dep" />
+                      </list>
+                    </value>
+                  </entry>
+                </map>
+              </option>
+            </State>
+          </value>
+        </entry>
+      </map>
+    </option>
+    <option name="RECENT_FILTERS">
+      <map>
+        <entry key="Branch">
+          <value>
+            <list>
+              <RecentGroup>
+                <option name="FILTER_VALUES">
+                  <option value="update-installer" />
+                </option>
+              </RecentGroup>
+            </list>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="add GPUDirect-TCPX manifest" />
+    <MESSAGE value="update mps pinned memory" />
+    <MESSAGE value="update memory" />
+    <MESSAGE value="update nccl-plugin manifest" />
+    <MESSAGE value="update nccl-plugin manifest&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="update mps mem limit&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="update mem limit for mps" />
+    <MESSAGE value="update tcpx test manifest" />
+    <MESSAGE value="Merge remote-tracking branch 'upstream/master' into update-installer&#10;&#10;# Conflicts:&#10;#&#9;nvidia-driver-installer/cos/daemonset-preloaded-latest.yaml" />
+    <MESSAGE value="remove mount update" />
+    <MESSAGE value="Update the tcpx manifests" />
+    <MESSAGE value="Add tcpx metrics server manifest" />
+    <MESSAGE value="add tcpx metrics server manifest" />
+    <MESSAGE value="update deps" />
+    <MESSAGE value="update deps&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="update go version for gpu partition&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="bump up version&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="Update nccl-test&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="Update nccl-test-with-env&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="update nccl-test manifest with a new version includes configuration" />
+    <MESSAGE value="update nccl-test manifest with a new version includes configuration&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="update metrics server manifest&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <MESSAGE value="update metrics server manifest" />
+    <MESSAGE value="update nccl test manifest" />
+    <MESSAGE value="update nccl test manifest&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+    <option name="LAST_COMMIT_MESSAGE" value="update nccl test manifest&#10;&#10;Signed-off-by: grac3gao &lt;gracegao@google.com&gt;" />
+  </component>
+  <component name="VgoProject">
+    <settings-migrated>true</settings-migrated>
+  </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/gpu/nvidia/manager.go</url>
+          <line>479</line>
+          <option name="timeStamp" value="1" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" type="DlvLineBreakpoint">
+          <url>file://$PROJECT_DIR$/pkg/gpu/nvidia/beta_plugin_test.go</url>
+          <line>449</line>
+          <option name="timeStamp" value="2" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
+  <component name="com.intellij.coverage.CoverageDataManagerImpl">
+    <SUITE FILE_PATH="coverage/container_engine_accelerators$metrics_test_go.out" NAME="metrics_test.go Coverage Results" MODIFIED="1682486756016" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="GoCoverage" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" />
+  </component>
+</project>
