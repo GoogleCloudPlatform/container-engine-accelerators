@@ -15,25 +15,36 @@ spec:
         name: optmem-max-ds
         k8s-app: optmem-max-ds
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator
+                    operator: In
+                    values:
+                      - nvidia-h100-80gb
       hostNetwork: true
+      tolerations:
+        - operator: "Exists"
       initContainers:
-      - name: optmem-max
-        image: gke.gcr.io/gke-distroless/bash
-        securityContext:
-          privileged: true
-        command:
-          - /bin/bash
-          - -c
-          - "set -x; cat /proc/sys/net/core/optmem_max; echo 131072 > /proc/sys/net/core/optmem_max"
+        - name: optmem-max
+          image: gke.gcr.io/gke-distroless/bash
+          securityContext:
+            privileged: true
+          command:
+            - /bin/bash
+            - -c
+            - "set -x; cat /proc/sys/net/core/optmem_max; echo 131072 > /proc/sys/net/core/optmem_max"
       containers:
-      - name: pause
-        image: registry.k8s.io/pause:3.9
-        securityContext:
-          runAsUser: 2023
-          runAsGroup: 2023
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: ["all"]
-          seccompProfile:
-            type: RuntimeDefault
-          readOnlyRootFilesystem: true
+        - name: pause
+          image: registry.k8s.io/pause:3.9
+          securityContext:
+            runAsUser: 2023
+            runAsGroup: 2023
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["all"]
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
