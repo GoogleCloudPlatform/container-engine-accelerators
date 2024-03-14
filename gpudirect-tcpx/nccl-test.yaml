@@ -62,6 +62,8 @@ spec:
           volumeMounts:
             - name: tcpx-socket
               mountPath: /tmp
+            - name: libraries
+              mountPath: /usr/local/nvidia/lib64
             - name: config-volume
               mountPath: /configs
           resources:
@@ -75,6 +77,6 @@ spec:
         - name: libraries
           hostPath:
             path: /home/kubernetes/bin/nvidia/lib64
-          readOnly: true
-        - name: tcpd-socket
-          emptyDir:
+        - name: tcpx-socket
+          hostPath:
+            path: /run/tcpx
