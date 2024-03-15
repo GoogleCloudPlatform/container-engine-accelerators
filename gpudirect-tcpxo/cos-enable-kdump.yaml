@@ -1,0 +1,99 @@
+# Copyright 2019 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+
+# Deploy this DaemonSet to enable kdump on the COS nodes with the
+# "cloud.google.com/gke-kdump-enabled=true" label.
+#
+# WARNING: Enabling kdump requires node reboot. Therefore, in order to avoid
+# disrupting your workloads, it is recommended to create a new node pool with
+# the "cloud.google.com/gke-kdump-enabled=true" label in your cluster,
+# deploy the DaemonSet to enable kdump in that node pool, and then migrate
+# your workloads to the new node pool.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: enable-kdump
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: enable-kdump
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: enable-kdump
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator
+                    operator: In
+                    values:
+                      - nvidia-h100-80gb
+      tolerations:
+        - operator: "Exists"
+      volumes:
+        - name: host
+          hostPath:
+            path: /
+      initContainers:
+        - name: enable-kdump
+          image: ubuntu
+          command:
+            - /bin/bash
+            - -c
+            - |
+              function verify_base_image {
+                local id="$(grep "^ID=" /host/etc/os-release)"
+                if [[ "${id#*=}" != "cos" ]]; then
+                  echo "This kdump feature switch is designed to run on Container-Optimized OS only"
+                  exit 0
+                fi
+              }
+              function check_kdump_feature {
+                chroot /host /usr/sbin/kdump_helper show
+              }
+              function enable_kdump_feature_and_reboot_if_needed {
+                chroot /host /usr/sbin/kdump_helper enable
+                local -r is_enabled=$(chroot /host /usr/sbin/kdump_helper show | grep "kdump enabled" | sed -rn "s/kdump enabled: (.*)/\1/p")
+                local -r is_ready=$(chroot /host /usr/sbin/kdump_helper show | grep "kdump ready" | sed -rn "s/kdump ready: (.*)/\1/p")
+                if [[ "${is_enabled}" == "true" && "${is_ready}" == "false" ]]; then 
+                  echo "kdump is enabled. Rebooting for it to take effect."
+                  chroot /host systemctl reboot
+                fi
+              }
+              verify_base_image
+              check_kdump_feature
+              enable_kdump_feature_and_reboot_if_needed
+          resources:
+            requests:
+              memory: 5Mi
+              cpu: 5m
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host
+              mountPath: /host
+      containers:
+        - image: gcr.io/google-containers/pause:2.0
+          name: pause
+      nodeSelector:
+        "gke-kdump-enabled": "true"
+        "cloud.google.com/gke-os-distribution": "cos"
