@@ -72,8 +72,8 @@ spec:
               set -ex
               chmod 755 /scripts/container_entry.sh
               /scripts/container_entry.sh install --install-nccl
-              mkdir -p /usr/local/tcpxo/lib64
-              cp -r /var/lib/tcpxo/lib64/. /usr/local/tcpxo/lib64
+              mkdir -p /usr/local/nvidia/lib64
+              cp -r /var/lib/tcpxo/lib64/. /usr/local/nvidia/lib64
               echo "installation finishes"
       containers:
         - image: "gcr.io/google-containers/pause:2.0"

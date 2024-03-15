@@ -30,7 +30,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.4
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.3
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -43,8 +43,6 @@ spec:
       volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
-        - name: tcpxo-nccl-plugin-volume
-          mountPath: /usr/local/tcpxo
       env:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
@@ -68,14 +66,12 @@ spec:
           sleep infinity;
       env:
         - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64:/usr/local/tcpxo/lib64
+          value: /usr/local/nvidia/lib64
       securityContext:
         privileged: true
       volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
-        - name: tcpxo-nccl-plugin-volume
-          mountPath: /usr/local/tcpxo
         - name: shared-memory
           mountPath: /dev/shm
       resources:
@@ -85,9 +81,6 @@ spec:
     - name: nvidia-install-dir-host
       hostPath:
         path: /home/kubernetes/bin/nvidia
-    - name: tcpxo-nccl-plugin-volume
-      hostPath:
-        path: /home/kubernetes/bin/tcpxo
     - name: shared-memory
       emptyDir:
         medium: "Memory"
@@ -107,7 +100,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.4
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.3
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -120,8 +113,6 @@ spec:
       volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
-        - name: tcpxo-nccl-plugin-volume
-          mountPath: /usr/local/tcpxo
       env:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
@@ -145,12 +136,10 @@ spec:
           sleep infinity;
       env:
         - name: LD_LIBRARY_PATH
-          value: /usr/local/nvidia/lib64:/usr/local/tcpxo/lib64
+          value: /usr/local/nvidia/lib64
       securityContext:
         privileged: true
       volumeMounts:
-        - name: tcpxo-nccl-plugin-volume
-          mountPath: /usr/local/tcpxo
         - name: shared-memory
           mountPath: /dev/shm
       resources:
@@ -160,9 +149,6 @@ spec:
     - name: nvidia-install-dir-host
       hostPath:
         path: /home/kubernetes/bin/nvidia
-    - name: tcpxo-nccl-plugin-volume
-      hostPath:
-        path: /home/kubernetes/bin/tcpxo
     - name: shared-memory
       emptyDir:
         medium: "Memory"
