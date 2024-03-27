@@ -42,7 +42,7 @@ spec:
           hostPath:
             path: /home/kubernetes/bin
       initContainers:
-        - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.7
+        - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.8
           name: nccl-tcpx-installer
           resources:
             requests:
