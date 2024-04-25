@@ -30,7 +30,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.3
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.6-sctp
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -47,7 +47,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-nightly-cuda12.0:2024_03_04
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.0
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -59,7 +59,7 @@ spec:
           pushd /scripts;
           /scripts/gen_hostfiles.sh \${@};
           popd;
-          /scripts/run-nccl-fastrak.sh all_gather_perf "${LD_LIBRARY_PATH}" 8 eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8 1M 1G 3 2 10
+          /scripts/run-nccl-tcpxo.sh all_gather_perf "${LD_LIBRARY_PATH}" 8 eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8 1M 2G 3 2 10
           EOF
           chmod +x /scripts/allgather.sh
           service ssh restart;
@@ -100,7 +100,7 @@ spec:
   dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.3
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.6-sctp
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -117,7 +117,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-nightly-cuda12.0:2024_03_04
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.0
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -129,7 +129,7 @@ spec:
           pushd /scripts;
           /scripts/gen_hostfiles.sh \${@};
           popd;
-          /scripts/run-nccl-fastrak.sh all_gather_perf "${LD_LIBRARY_PATH}" 8 eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8 1M 1G 3 2 10
+          /scripts/run-nccl-tcpxo.sh all_gather_perf "${LD_LIBRARY_PATH}" 8 eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8 1M 2G 3 2 10
           EOF
           chmod +x /scripts/allgather.sh
           service ssh restart;
