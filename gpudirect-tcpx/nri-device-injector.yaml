@@ -81,8 +81,8 @@ spec:
           securityContext:
             privileged: true
           volumeMounts:
-            - name: root
-              mountPath: /host
+            - name: dev
+              mountPath: /dev
             - name: nri
               mountPath: /var/run/nri
       volumes:
@@ -92,3 +92,6 @@ spec:
         - name: nri
           hostPath:
             path: /var/run/nri
+        - name: dev
+          hostPath:
+            path: /dev
