@@ -23,6 +23,9 @@ import (
 )
 
 func TestToNRIDevice(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Skipping TestToNRIDevice as it requires root privileges.")
+	}
 	tempDir, err := os.MkdirTemp("", "device-test")
 	if err != nil {
 		t.Fatalf("faield to make temporary device-test directory %s: %v", tempDir, err)

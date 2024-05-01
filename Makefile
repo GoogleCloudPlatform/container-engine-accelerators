@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 
 GO := go
-pkgs  = $(shell $(GO) list ./... | grep -v vendor)
+pkgs  = $(shell $(GO) list ./... | grep -v -e vendor -e nri_device_injector)
 
 all: presubmit
 

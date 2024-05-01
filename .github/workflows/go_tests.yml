@@ -22,3 +22,7 @@ jobs:
       run: make presubmit
     - name: Run go test
       run: make test
+    - name: Run device-injector-test
+      run: |
+        sudo make device-injector-test
+        sudo make clean
