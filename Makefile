@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 
 GO := go
-pkgs  = $(shell $(GO) list ./... | grep -v vendor)
+pkgs  = $(shell $(GO) list ./... | grep -v -e vendor -e nri_device_injector)
 
 all: presubmit
 
@@ -60,3 +60,14 @@ nri-device-injector:
 	docker build --pull -t ${REGISTRY}/${DEVICE_INJECTOR_IMAGE}:${TAG} -f nri_device_injector/Dockerfile .
 
 .PHONY: all format test vet presubmit build container push partition-gpu
+
+bin/device-injector-test:
+	$(GO) test -c ./nri_device_injector -o ./bin/device-injector-test 
+
+.PHONY: device-injector-test
+device-injector-test: bin/device-injector-test
+	sudo ./bin/device-injector-test -test.v 
+
+.PHONY: clean
+clean:
+	@rm -rf bin

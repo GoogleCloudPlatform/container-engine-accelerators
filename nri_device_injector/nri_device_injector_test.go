@@ -15,12 +15,84 @@
 package main
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sys/unix"
 )
 
-func TestParseDevices(t *testing.T) {
+func TestToNRIDevice(t *testing.T) {
+	if os.Getuid() != 0 {
+		t.Skip("Skipping TestToNRIDevice as it requires root privileges.")
+	}
+	tempDir, err := os.MkdirTemp("", "device-test")
+	if err != nil {
+		t.Fatalf("faield to make temporary device-test directory %s: %v", tempDir, err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	tests := map[string]struct {
+		devPath  string
+		devMajor int
+		devMinor int
+		devType  uint32
+	}{
+		"char nvidia0 device": {
+			devPath:  "/nvidia0",
+			devMajor: 195,
+			devMinor: 0,
+			devType:  unix.S_IFCHR,
+		},
+		"char nvidiactl device": {
+			devPath:  "/nvidiactl",
+			devMajor: 195,
+			devMinor: 255,
+			devType:  unix.S_IFCHR,
+		},
+		"char nvidia-uvm device": {
+			devPath:  "/nvidia-uvm",
+			devMajor: 100,
+			devMinor: 100,
+			devType:  unix.S_IFCHR,
+		},
+		"block foo device": {
+			devPath:  "/foo",
+			devMajor: 100,
+			devMinor: 100,
+			devType:  unix.S_IFBLK,
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			devPath := tempDir + tc.devPath
+			devNum := unix.Mkdev(uint32(tc.devMajor), uint32(tc.devMinor))
+			if err := unix.Mknod(devPath, tc.devType|0644, int(devNum)); err != nil {
+				t.Fatalf("failed to mknod for %s: %v ", devPath, err)
+			}
+			dev := device{Path: devPath}
+			nriDevice, err := dev.toNRIDevice()
+
+			wantType := ""
+			switch tc.devType {
+			case unix.S_IFBLK:
+				wantType = blockDevice
+			case unix.S_IFCHR:
+				wantType = charDevice
+			case unix.S_IFIFO:
+				wantType = fifoDevice
+			}
+			assert.NoError(t, err)
+			assert.Equalf(t, devPath, nriDevice.Path, "error asserting device dev path, expected %s, got %s", devPath, nriDevice.Path)
+			assert.Equalf(t, wantType, nriDevice.Type, "error asserting device type, expected %s, got %s", wantType, nriDevice.Type)
+			assert.Equalf(t, int64(tc.devMajor), nriDevice.Major, "error asserting device major, expected %d, got %d", int64(tc.devMajor), nriDevice.Major)
+			assert.Equalf(t, int64(tc.devMinor), nriDevice.Minor, "error asserting device minor, expected %d, got %d", int64(tc.devMinor), nriDevice.Minor)
+		})
+	}
+}
+
+func TestGetDevices(t *testing.T) {
 	tests := map[string]struct {
 		container   string
 		annotations map[string]string
