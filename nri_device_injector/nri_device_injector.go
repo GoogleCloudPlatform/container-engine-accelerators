@@ -96,9 +96,11 @@ func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, contain
 		err     error
 	)
 
+	defer l.Info("Finished CreateContainer")
 	l.Info("Started CreateContainer")
 	devices, err = getDevices(ctrName, pod.Annotations)
 	if err != nil {
+		l.WithError(err).Warn("Failed to get device from pod annotation")
 		return nil, nil, err
 	}
 	adjust := &api.ContainerAdjustment{}
@@ -111,12 +113,12 @@ func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, contain
 		l.WithField("device", d.Path).Info("Annotated device")
 		deviceNRI, err := d.toNRIDevice()
 		if err != nil {
+			l.WithField("device", d.Path).WithError(err).Warn("Failed to get device from path")
 			return nil, nil, err
 		}
 		adjust.AddDevice(deviceNRI)
 		l.WithField("device", d.Path).Info("Injected device")
 	}
-	l.Info("Finished CreateContainer")
 	return adjust, nil, nil
 }
 
@@ -158,7 +160,7 @@ func (d *device) toNRIDevice() (*api.LinuxDevice, error) {
 		stat unix.Stat_t
 	)
 	if err := unix.Lstat(d.Path, &stat); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get info from device path %s: %v", d.Path, err)
 	}
 
 	var (
