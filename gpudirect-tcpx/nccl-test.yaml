@@ -42,6 +42,7 @@ spec:
           volumeMounts:
             - name: libraries
               mountPath: /usr/local/nvidia/lib64
+              readOnly: true
             - name: tcpx-socket
               mountPath: /run/tcpx
           env:
@@ -75,6 +76,5 @@ spec:
         - name: libraries
           hostPath:
             path: /home/kubernetes/bin/nvidia/lib64
-          readOnly: true
-        - name: tcpd-socket
+        - name: tcpx-socket
           emptyDir:
