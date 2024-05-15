@@ -1,0 +1,201 @@
+apiVersion: kubeflow.org/v2beta1
+kind: MPIJob
+metadata:
+  name: test
+spec:
+  slotsPerWorker: 1
+  launcherCreationPolicy: "WaitForWorkersReady"
+  runPolicy:
+    cleanPodPolicy: Running
+    activeDeadlineSeconds: 666
+  mpiReplicaSpecs:
+    Launcher:
+      replicas: 1
+      template:
+        spec:
+          #          nodeSelector:
+          #            cloud.google.com/gke-nodepool: dont-delete-cpu
+          restartPolicy: OnFailure
+          tolerations:
+            - operator: "Exists"
+          containers:
+            - image: gcr.io/supercomputer-testing/nccl-tests@sha256:bfae7bfeebff4a2cdc2ff2920021a77ca7367436ca9095ca8fb6d744d52e2a21
+              name: nccl
+              securityContext:
+                privileged: true
+              env:
+                - name: OMPI_ALLOW_RUN_AS_ROOT
+                  value: "1"
+                - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
+                  value: "1"
+                - name: OMPI_MCA_orte_base_help_aggregate
+                  value: "0"
+              command: ["/bin/bash", "-c"]
+              args:
+                - |
+                  set -xe
+                  export NUM_NODES=2
+                  export SLOTS_PER_WORKER=1
+                  export NCCL_DEBUG_SUBSYS=INIT,GRAPH,ENV,TUNING,NET,VERSION
+                  export NCCL_DEBUG=INFO
+                  export NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING=0
+                  export NCCL_FASTRAK_USE_SNAP=1
+                  export NCCL_FASTRAK_NUM_FLOWS=2
+                  export NCCL_FASTRAK_USE_LLCM=1
+                  export NCCL_FASTRAK_LLCM_DEVICE_DIRECTORY=/dev/aperture_devices
+                  export NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL=0
+                  export NCCL_FASTRAK_DATA_TRANSFER_SLOWNESS_MS=1000
+                  export LD_LIBRARY_PATH="/usr/local/tcpx/lib64:/usr/local/nvidia/lib64:${LD_LIBRARY_PATH}"
+                  export NCCL_FASTRAK_CTRL_DEV=eth0
+                  export NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8
+                  export NCCL_SOCKET_IFNAME=eth0
+                  export NCCL_CROSS_NIC=0
+                  export NCCL_ALGO=Ring
+                  export NCCL_PROTO=Simple
+                  export NCCL_MIN_NCHANNELS=4
+                  export NCCL_DYNAMIC_CHUNK_SIZE=524288
+                  export NCCL_P2P_NET_CHUNKSIZE=524288
+                  export NCCL_P2P_PCI_CHUNKSIZE=524288
+                  export NCCL_P2P_NVL_CHUNKSIZE=1048576
+                  export NCCL_BUFFSIZE=8388608
+                  export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+                  export NCCL_NET_GDR_LEVEL=PIX
+                  export NCCL_TESTS_SPLIT_MASK=0x0
+                  mkdir -p /data/${JOB_NAME}
+                  gcloud auth list
+                  export NUM_NODES=${NUM_NODES}
+                  export SLOTS_PER_WORKER=${SLOTS_PER_WORKER}
+                  export NP=$(( NUM_NODES * SLOTS_PER_WORKER ))
+                  export GPUS_PER_SLOT=$(( NUM_NODES * 8 / NP ))
+                  until mpirun -np ${NP} -x LD_LIBRARY_PATH -bind-to none /usr/local/nvidia/bin/nvidia-smi; do sleep 5; done
+                  mpirun -np ${NP} -bind-to none \
+                      -x NCCL_DEBUG_SUBSYS \
+                      -x NCCL_DEBUG \
+                      -x NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING \
+                      -x NCCL_FASTRAK_USE_SNAP \
+                      -x NCCL_FASTRAK_USE_LLCM \
+                      -x NCCL_FASTRAK_LLCM_DEVICE_DIRECTORY \
+                      -x NCCL_FASTRAK_NUM_FLOWS \
+                      -x NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL \
+                      -x NCCL_FASTRAK_DATA_TRANSFER_SLOWNESS_MS \
+                      -x LD_LIBRARY_PATH \
+                      -x NCCL_FASTRAK_CTRL_DEV \
+                      -x NCCL_FASTRAK_IFNAME \
+                      -x NCCL_SOCKET_IFNAME \
+                      -x NCCL_CROSS_NIC \
+                      -x NCCL_ALGO \
+                      -x NCCL_PROTO \
+                      -x NCCL_MIN_NCHANNELS \
+                      -x NCCL_DYNAMIC_CHUNK_SIZE \
+                      -x NCCL_P2P_NET_CHUNKSIZE \
+                      -x NCCL_P2P_PCI_CHUNKSIZE \
+                      -x NCCL_P2P_NVL_CHUNKSIZE \
+                      -x NCCL_BUFFSIZE \
+                      -x CUDA_VISIBLE_DEVICES \
+                      -x NCCL_NET_GDR_LEVEL \
+                      -x NCCL_TESTS_SPLIT_MASK \
+                      /opt/nccl_tests/build/all_gather_perf -b 1M -e 2G -f 2 -g 1 -w 5 --iters 10
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 128Mi
+          enableServiceLinks: false
+          automountServiceAccountToken: false
+    Worker:
+      replicas: 2
+      template:
+        metadata:
+          annotations:
+            networking.gke.io/default-interface: 'eth0'
+            networking.gke.io/interfaces: |
+              [
+                {"interfaceName":"eth0","network":"default"},
+                {"interfaceName":"eth1","network":"vpc1"},
+                {"interfaceName":"eth2","network":"vpc2"},
+                {"interfaceName":"eth3","network":"vpc3"},
+                {"interfaceName":"eth4","network":"vpc4"},
+                {"interfaceName":"eth5","network":"vpc5"},
+                {"interfaceName":"eth6","network":"vpc6"},
+                {"interfaceName":"eth7","network":"vpc7"},
+                {"interfaceName":"eth8","network":"vpc8"}
+              ]
+            devices.gke.io/container.tcpxo-daemon: |+
+              - path: /dev/nvidia0
+              - path: /dev/nvidia1
+              - path: /dev/nvidia2
+              - path: /dev/nvidia3
+              - path: /dev/nvidia4
+              - path: /dev/nvidia5
+              - path: /dev/nvidia6
+              - path: /dev/nvidia7
+              - path: /dev/dmabuf_import_helper
+              - path: /dev/nvidiactl
+              - path: /dev/nvidia-uvm
+        spec:
+          volumes:
+            - name: nvidia-install-dir-host
+              hostPath:
+                path: /home/kubernetes/bin/nvidia/lib64
+            - name: proc-sys
+              hostPath:
+                path: /proc/sys
+            - name: sys
+              hostPath:
+                path: /sys
+            - name: shared-memory
+              emptyDir:
+                medium: "Memory"
+                sizeLimit: 250Gi
+            - name: tcpx-nccl-plugin-volume
+              emptyDir: {}
+            - name: aperture-devices
+              hostPath:
+                path: /dev/aperture_devices
+          containers:
+            - image: gcr.io/supercomputer-testing/nccl-tests@sha256:bfae7bfeebff4a2cdc2ff2920021a77ca7367436ca9095ca8fb6d744d52e2a21
+              name: nccl
+              securityContext:
+              #                runAsUser: 1000
+              #                privileged: true
+              resources:
+                requests:
+                  cpu: 50
+                  memory: 500Gi
+                  nvidia.com/gpu: 8
+                limits:
+                  nvidia.com/gpu: 8
+              volumeMounts:
+                - name: nvidia-install-dir-host
+                  mountPath: /usr/local/nvidia/lib64
+                - name: shared-memory
+                  mountPath: /dev/shm
+                - name: aperture-devices
+                  mountPath: /dev/aperture_devices
+            - name: tcpxo-daemon
+              image: us-docker.pkg.dev/tcpfastrak-staging/wwchao-rxdm-testing/fastrak-rxdm-test:flag_4
+              imagePullPolicy: Always
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -ex
+                  chmod 755 /fts/entrypoint_rxdm_container.sh
+                  /fts/entrypoint_rxdm_container.sh --enforce_kernel_ipv6_support=false --num_hops=2 --num_nics=8 --uid= --alsologtostderr &
+                  while [ ! -e "/run/tcpx/workload_terminated" ]; do sleep 10; echo "sleeping"; done
+              securityContext:
+                #                privileged: true
+                capabilities:
+                  add:
+                    - CAP_NET_ADMIN
+                    - CAP_NET_BIND_SERVICE
+              volumeMounts:
+                - name: nvidia-install-dir-host
+                  mountPath: /usr/local/nvidia/lib64
+                - name: sys
+                  mountPath: /hostsysfs
+                - name: proc-sys
+                  mountPath: /hostprocsysfs
+              env:
+                - name: LD_LIBRARY_PATH
+                  value: /usr/local/nvidia/lib64
+          enableServiceLinks: false
+          automountServiceAccountToken: false
