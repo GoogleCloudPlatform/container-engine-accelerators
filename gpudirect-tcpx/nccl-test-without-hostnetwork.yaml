@@ -63,7 +63,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.9-2.19.4-12.0
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.9
       imagePullPolicy: Always
       command:
         - /bin/sh
