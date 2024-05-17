@@ -35,7 +35,7 @@ metadata:
 spec:
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.11
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.12
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -63,7 +63,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.7
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.9
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -94,7 +94,7 @@ spec:
     - name: libraries
       hostPath:
         path: /home/kubernetes/bin/nvidia/lib64
-    - name: tcpd-socket
+    - name: tcpx-socket
       emptyDir:
     - name: sys
       hostPath:
@@ -122,7 +122,7 @@ metadata:
 spec:
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.11
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.12
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -150,7 +150,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.7
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.9
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -181,7 +181,7 @@ spec:
     - name: libraries
       hostPath:
         path: /home/kubernetes/bin/nvidia/lib64
-    - name: tcpd-socket
+    - name: tcpx-socket
       emptyDir:
     - name: sys
       hostPath:
