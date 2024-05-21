@@ -55,7 +55,7 @@ spec:
             - -c
             - /sbin/iptables -I INPUT -p tcp -m tcp -j ACCEPT && modprobe import-helper
         - name: nccl-tcpxo-installer
-          image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.0
+          image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.1
           resources:
             requests:
               cpu: 150m
