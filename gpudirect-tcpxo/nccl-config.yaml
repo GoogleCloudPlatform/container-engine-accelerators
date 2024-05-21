@@ -14,7 +14,7 @@ data:
     pushd /scripts;
     /scripts/gen_hostfiles.sh ${@};
     popd;
-    /scripts/run-allgather.sh 8 eth1,eth2,eth3,eth4 1M 512M ${#};
+    /scripts/run-nccl-tcpxo.sh all_gather_perf "${LD_LIBRARY_PATH}" 8 eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8 1M 2G 3 2 10
   run-nccl.sh: |-
     #!/bin/bash
     SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )

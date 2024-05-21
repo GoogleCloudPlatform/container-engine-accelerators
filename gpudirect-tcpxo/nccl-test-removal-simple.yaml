@@ -53,10 +53,10 @@ spec:
   subdomain: nccl-host-1
 #  hostNetwork: true
 #  dnsPolicy: ClusterFirstWithHostNet
-  hostAliases:
-    - ip: "169.254.169.254"
-      hostnames:
-        - "metadata.google.internal"
+#  hostAliases:
+#    - ip: "169.254.169.254"
+#      hostnames:
+#        - "metadata.google.internal"
   containers:
     - name: tcpxo-daemon
       image: us-docker.pkg.dev/kernel-net-team/fts-dev/fts_rxdm:v1.0.8-dev
