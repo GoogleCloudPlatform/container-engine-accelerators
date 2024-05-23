@@ -45,6 +45,7 @@ spec:
                     operator: In
                     values:
                       - nvidia-h100-80gb
+                      - nvidia-h100-mega-80gb
       tolerations:
         - operator: "Exists"
       hostNetwork: true
