@@ -59,7 +59,7 @@ spec:
 #        - "metadata.google.internal"
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/kernel-net-team/fts-dev/fts_rxdm:v1.0.8-dev
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.8
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -88,7 +88,7 @@ spec:
         - name: NCCL_FASTRAK_LLCM_DEVICE_DIRECTORY
           value: /dev/aperture_devices
     - name: nccl-test
-      image: us-docker.pkg.dev/kernel-net-team/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-pre-test-cuda12.2:cl_633696946
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.1
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -172,15 +172,15 @@ metadata:
 spec:
   hostname: host2
   subdomain: nccl-host-2
-  hostAliases:
-    - ip: "169.254.169.254"
-      hostnames:
-        - "metadata.google.internal"
+#  hostAliases:
+#    - ip: "169.254.169.254"
+#      hostnames:
+#        - "metadata.google.internal"
 #  hostNetwork: true
 #  dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/kernel-net-team/fts-dev/fts_rxdm:v1.0.8-dev
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.8
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -205,7 +205,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/kernel-net-team/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-pre-test-cuda12.2:cl_633696946
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.1
       imagePullPolicy: Always
       command:
         - /bin/sh
