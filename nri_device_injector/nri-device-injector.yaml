@@ -36,6 +36,16 @@ spec:
         k8s-app: device-injector
     spec:
       priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: cloud.google.com/gke-accelerator
+                    operator: In
+                    values:
+                      - nvidia-h100-80gb
+                      - nvidia-h100-mega-80gb
       tolerations:
         - operator: "Exists"
       hostNetwork: true
