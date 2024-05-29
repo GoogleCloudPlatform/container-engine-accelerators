@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: topology-scheduler
+  labels:
+    app: topology-scheduler
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: topology-scheduler
+  template:
+    metadata:
+      labels:
+        app: topology-scheduler
+    spec:
+      tolerations:
+      - key: "node-role.kubernetes.io/control-plane"
+        operator: "Exists"
+        effect: "NoSchedule"
+      containers:
+        - name: topology-scheduler-container
+          image: python:3.9
+          command: ["/bin/sh", "-c", "pip install google-auth google-api-python-client kubernetes; python /scripts/schedule-daemon.py --ignored-namespace kube-system gmp-public gmp-system"]
+          volumeMounts:
+            - name: scripts-volume
+              mountPath: /scripts
+      volumes:
+        - name: scripts-volume
+          configMap:
+            name: topology-scheduler-scripts
+      serviceAccount: topology-scheduler
+      restartPolicy: Always
+
