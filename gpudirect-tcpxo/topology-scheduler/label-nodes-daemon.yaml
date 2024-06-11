@@ -15,6 +15,7 @@ spec:
       tolerations:
       - operator: "Exists"
         key: nvidia.com/gpu
+      hostNetwork: true
       containers:
         - name: label-nodes-daemon
           image: python:3.9
