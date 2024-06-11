@@ -74,7 +74,7 @@ spec:
                 chroot /host /usr/sbin/kdump_helper enable
                 local -r is_enabled=$(chroot /host /usr/sbin/kdump_helper show | grep "kdump enabled" | sed -rn "s/kdump enabled: (.*)/\1/p")
                 local -r is_ready=$(chroot /host /usr/sbin/kdump_helper show | grep "kdump ready" | sed -rn "s/kdump ready: (.*)/\1/p")
-                if [[ "${is_enabled}" == "true" && "${is_ready}" == "false" ]]; then 
+                if [[ "${is_enabled}" == "true" && "${is_ready}" == "false" ]]; then
                   echo "kdump is enabled. Rebooting for it to take effect."
                   chroot /host systemctl reboot
                 fi
@@ -92,7 +92,7 @@ spec:
             - name: host
               mountPath: /host
       containers:
-        - image: gcr.io/google-containers/pause:2.0
+        - image: gke.gcr.io/pause:3.8@sha256:880e63f94b145e46f1b1082bb71b85e21f16b99b180b9996407d61240ceb9830
           name: pause
       nodeSelector:
         "gke-kdump-enabled": "true"
