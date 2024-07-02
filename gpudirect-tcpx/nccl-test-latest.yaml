@@ -47,16 +47,16 @@ metadata:
         {"interfaceName":"eth4","network":"vpc4"}
       ]
     devices.gke.io/container.tcpx-daemon: |+
-          - path: /dev/nvidia0
-          - path: /dev/nvidia1
-          - path: /dev/nvidia2
-          - path: /dev/nvidia3
-          - path: /dev/nvidia4
-          - path: /dev/nvidia5
-          - path: /dev/nvidia6
-          - path: /dev/nvidia7
-          - path: /dev/nvidiactl
-          - path: /dev/nvidia-uvm
+      - path: /dev/nvidia0
+      - path: /dev/nvidia1
+      - path: /dev/nvidia2
+      - path: /dev/nvidia3
+      - path: /dev/nvidia4
+      - path: /dev/nvidia5
+      - path: /dev/nvidia6
+      - path: /dev/nvidia7
+      - path: /dev/nvidiactl
+      - path: /dev/nvidia-uvm
 spec:
   containers:
     - name: tcpx-daemon
@@ -149,16 +149,16 @@ metadata:
         {"interfaceName":"eth4","network":"vpc4"}
       ]
     devices.gke.io/container.tcpx-daemon: |+
-          - path: /dev/nvidia0
-          - path: /dev/nvidia1
-          - path: /dev/nvidia2
-          - path: /dev/nvidia3
-          - path: /dev/nvidia4
-          - path: /dev/nvidia5
-          - path: /dev/nvidia6
-          - path: /dev/nvidia7
-          - path: /dev/nvidiactl
-          - path: /dev/nvidia-uvm
+      - path: /dev/nvidia0
+      - path: /dev/nvidia1
+      - path: /dev/nvidia2
+      - path: /dev/nvidia3
+      - path: /dev/nvidia4
+      - path: /dev/nvidia5
+      - path: /dev/nvidia6
+      - path: /dev/nvidia7
+      - path: /dev/nvidiactl
+      - path: /dev/nvidia-uvm
 spec:
   containers:
     - name: tcpx-daemon
