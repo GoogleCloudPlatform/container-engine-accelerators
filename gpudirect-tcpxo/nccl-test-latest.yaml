@@ -81,8 +81,8 @@ spec:
         #        privileged: true
         capabilities:
           add:
-            - CAP_NET_ADMIN
-            - CAP_NET_BIND_SERVICE
+            - NET_ADMIN
+            - NET_BIND_SERVICE
       volumeMounts:
         - name: nvidia
           mountPath: /usr/local/nvidia/lib64
@@ -200,8 +200,8 @@ spec:
         #        privileged: true
         capabilities:
           add:
-            - CAP_NET_ADMIN
-            - CAP_NET_BIND_SERVICE
+            - NET_ADMIN
+            - NET_BIND_SERVICE
       volumeMounts:
         - name: nvidia
           mountPath: /usr/local/nvidia/lib64
