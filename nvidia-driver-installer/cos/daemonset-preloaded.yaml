@@ -117,7 +117,7 @@ spec:
             exit 0
           else
             echo "No GPU driver module detected, installing now"
-            /cos-gpu-installer install
+            /cos-gpu-installer install || exit 1
           fi
       - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:e226275da6c45816959fe43cde907ee9a85c6a2aa8a429418a4cadef8ecdb86a"
         name: partition-gpus
