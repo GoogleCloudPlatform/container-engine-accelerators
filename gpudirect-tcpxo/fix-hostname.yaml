@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fix-hostname
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: fix-hostname
+  template:
+    metadata:
+      labels:
+        app: fix-hostname
+    spec:
+      nodeSelector:
+        "cloud.google.com/gke-gpu": "true"
+      hostNetwork: true
+      containers:
+        - image: gcr.io/google-containers/pause:3.2
+          name: pause
+      initContainers:
+        - name: fix-hostname
+          image: ubuntu
+          env:
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -xeuo pipefail
+              hostname $(NODE_NAME)
+              cat << EOF > /host/etc/systemd/network/97-temp.network
+              [Match]
+              Name=eth* !eth0
+              
+              [Network]
+              DHCP=yes
+              IPv6AcceptRA=yes
+              
+              # non-eth0 modification
+              [DHCPv4]
+              RoutesToDNS=false
+              RoutesToNTP=false
+              
+              [DHCP]
+              UseMTU=true
+              UseDomains=true
+              
+              # non-eth0 modification
+              UseHostname=false
+              EOF
+              chroot /host networkctl reload
+              chroot /host networkctl status eth*
+              echo "Success"
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: host
+              mountPath: /host
+      tolerations:
+        - effect: NoExecute
+          operator: Exists
+        - effect: NoSchedule
+          operator: Exists
+      volumes:
+        - name: host
+          hostPath:
+            path: /
