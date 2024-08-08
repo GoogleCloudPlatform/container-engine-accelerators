@@ -16,20 +16,35 @@
 
 version: 2
 updates:
-- package-ecosystem: gomod
-  directory: /
-  labels:
-  - dependencies
-  - go
+- package-ecosystem: docker
+  directory: /nvidia-driver-installer/ubuntu
   schedule:
     interval: weekly
-    day: monday
-    time: "03:00"
-    timezone: America/Los_Angeles
-  target-branch: develop
-  reviewers:
-  - grac3gao
-  - Jiaqicao257
-  - aston-github
-  - elfinhe 
-  - samuelkarp
+- package-ecosystem: docker
+  directory: /nvidia-driver-installer/minikube
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /partition_gpu
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /fast-socket-installer/image
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /demo/gpu-error/illegal-memory-access
+  schedule:
+    interval: weekly
+- package-ecosystem: docker
+  directory: /
+  schedule:
+    interval: weekly
+- package-ecosystem: gomod
+  directory: /
+  schedule:
+    interval: weekly
+  groups:
+    gomod-dependencies:
+      patterns:
+      - '*'
