@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvidia/cuda:11.0-devel-ubuntu18.04
+FROM nvidia/cuda:12.1.0-devel-ubuntu18.04
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         cuda-samples-11-0 && \
