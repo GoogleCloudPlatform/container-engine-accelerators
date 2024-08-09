@@ -49,11 +49,11 @@ var partitionSizeToProfileID = map[string]string{
 	"1g.20gb": "15",
 
 	//nvidia-h200-141gb
-	"1g.18gb": "19",
-	"1g.35gb": "15",
-	"2g.35gb": "14",
-	"3g.71gb": "9",
-	"4g.71gb": "5",
+	"1g.18gb":  "19",
+	"1g.35gb":  "15",
+	"2g.35gb":  "14",
+	"3g.71gb":  "9",
+	"4g.71gb":  "5",
 	"7g.141gb": "0",
 }
 
@@ -73,20 +73,20 @@ var partitionSizeMaxCount = map[string]int{
 	//nvidia-h100-80gb
 	"1g.20gb": 4,
 	//nvidia-h200-141gb
-	"1g.18gb": 7,
-	"1g.35gb": 4,
-	"2g.35gb": 3,
-	"3g.71gb": 2,
-	"4g.71gb": 1,
+	"1g.18gb":  7,
+	"1g.35gb":  4,
+	"2g.35gb":  3,
+	"3g.71gb":  2,
+	"4g.71gb":  1,
 	"7g.141gb": 1,
 }
 
 const (
-	SIGRTMIN       = 34
-	Nvidia141gbH200 = "NVIDIA H200" //nvidia-h200-141gb
-	Nvidia80gbH100 = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
-	Nvidia40gbA100 = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
-	Nvidia80gbA100 = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+	SIGRTMIN        = 34
+	Nvidia141gbH200 = "NVIDIA H200"           //nvidia-h200-141gb
+	Nvidia80gbH100  = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
+	Nvidia40gbA100  = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
+	Nvidia80gbA100  = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
 )
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
