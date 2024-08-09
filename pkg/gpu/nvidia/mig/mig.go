@@ -44,11 +44,11 @@ var gpuPartitionSizeMaxCount = map[string]int{
 	//nvidia-h100-80gb
 	"1g.20gb": 4,
 	//nvidia-h200-141gb
-	"1g.18gb": 7,
-	"1g.35gb": 4,
-	"2g.35gb": 3,
-	"3g.71gb": 2,
-	"4g.71gb": 1,
+	"1g.18gb":  7,
+	"1g.35gb":  4,
+	"2g.35gb":  3,
+	"3g.71gb":  2,
+	"4g.71gb":  1,
 	"7g.141gb": 1,
 }
 
