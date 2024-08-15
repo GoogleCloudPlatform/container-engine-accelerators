@@ -47,6 +47,14 @@ var partitionSizeToProfileID = map[string]string{
 	"7g.80gb": "0",
 	//nvidia-h100-80gb
 	"1g.20gb": "15",
+
+	//nvidia-h200-141gb
+	"1g.18gb":  "19",
+	"1g.35gb":  "15",
+	"2g.35gb":  "14",
+	"3g.71gb":  "9",
+	"4g.71gb":  "5",
+	"7g.141gb": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -64,13 +72,21 @@ var partitionSizeMaxCount = map[string]int{
 	"7g.80gb": 1,
 	//nvidia-h100-80gb
 	"1g.20gb": 4,
+	//nvidia-h200-141gb
+	"1g.18gb":  7,
+	"1g.35gb":  4,
+	"2g.35gb":  3,
+	"3g.71gb":  2,
+	"4g.71gb":  1,
+	"7g.141gb": 1,
 }
 
 const (
-	SIGRTMIN       = 34
-	Nvidia80gbH100 = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
-	Nvidia40gbA100 = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
-	Nvidia80gbA100 = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+	SIGRTMIN        = 34
+	Nvidia141gbH200 = "NVIDIA H200"           //nvidia-h200-141gb
+	Nvidia80gbH100  = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
+	Nvidia40gbA100  = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
+	Nvidia80gbA100  = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
 )
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
@@ -196,6 +212,8 @@ func checkGpuType() (string, error) {
 		return "", err
 	}
 	switch {
+	case strings.HasPrefix(string(gpuType), Nvidia141gbH200):
+		return Nvidia141gbH200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia80gbH100):
 		return Nvidia80gbH100, nil
 	case strings.HasPrefix(string(gpuType), Nvidia40gbA100):
