@@ -17,6 +17,8 @@ package util
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 func DeviceNameFromPath(path string) (string, error) {
@@ -26,4 +28,21 @@ func DeviceNameFromPath(path string) (string, error) {
 		return "", fmt.Errorf("path (%s) is not a valid GPU device path", path)
 	}
 	return m[1], nil
+}
+
+// Files creates a Watcher for the specified files.
+func Files(files ...string) (*fsnotify.Watcher, error) {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range files {
+		err = watcher.Add(f)
+		if err != nil {
+			watcher.Close()
+			return nil, err
+		}
+	}
+	return watcher, nil
 }
