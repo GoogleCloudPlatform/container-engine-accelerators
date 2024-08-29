@@ -412,7 +412,8 @@ func totalMemPerGPU() (uint64, error) {
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {
 	registerWithKubelet := false
 	// Check if the unix socket device-plugin/kubelet.sock is at the host path.
-	if _, err := os.Stat(path.Join(pMountPath, kEndpoint)); err == nil {
+	kubeletEndpointPath := path.Join(pMountPath, kEndpoint)
+	if _, err := os.Stat(kubeletEndpointPath); err == nil {
 		glog.Infof("registered with kubelet, will use beta API\n")
 		registerWithKubelet = true
 	} else {
@@ -420,7 +421,7 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 	}
 
 	// Create a watcher to watch /device-plugin directory.
-	watcher, _ := util.Files(pluginapi.DevicePluginPath)
+	watcher, _ := util.Files(pMountPath)
 	defer watcher.Close()
 	glog.Info("Starting filesystem watcher.")
 
@@ -501,8 +502,8 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 						}
 					// Restart the device plugin if kubelet socket gets recreated, which indicates a kubelet restart.
 					case event := <-watcher.Events:
-						if event.Name == pluginapi.KubeletSocket && event.Op&fsnotify.Create == fsnotify.Create {
-							glog.Infof(" %s created, restarting.", pluginapi.KubeletSocket)
+						if event.Name == kubeletEndpointPath && event.Op&fsnotify.Create == fsnotify.Create {
+							glog.Infof(" %s created, restarting.", kubeletEndpointPath)
 							break statusCheck
 						}
 					// Log for any other fs errors and log them. This will not induce a device plugin restart.
