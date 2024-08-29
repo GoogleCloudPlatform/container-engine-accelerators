@@ -503,7 +503,8 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 					// Restart the device plugin if kubelet socket gets recreated, which indicates a kubelet restart.
 					case event := <-watcher.Events:
 						if event.Name == kubeletEndpointPath && event.Op&fsnotify.Create == fsnotify.Create {
-							glog.Infof(" %s created, restarting.", kubeletEndpointPath)
+							glog.Infof(" %s recreated, stopping device-plugin server", kubeletEndpointPath)
+							ngm.grpcServer.Stop()
 							break statusCheck
 						}
 					// Log for any other fs errors and log them. This will not induce a device plugin restart.
