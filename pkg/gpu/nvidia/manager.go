@@ -29,7 +29,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/fsnotify/fsnotify"
 	"github.com/golang/glog"
 	"google.golang.org/grpc"
 
@@ -409,12 +411,19 @@ func totalMemPerGPU() (uint64, error) {
 
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {
 	registerWithKubelet := false
-	if _, err := os.Stat(path.Join(pMountPath, kEndpoint)); err == nil {
-		glog.Infof("will use alpha API\n")
+	// Check if the unix socket device-plugin/kubelet.sock is at the host path.
+	kubeletEndpointPath := path.Join(pMountPath, kEndpoint)
+	if _, err := os.Stat(kubeletEndpointPath); err == nil {
+		glog.Infof("registered with kubelet, will use beta API\n")
 		registerWithKubelet = true
 	} else {
-		glog.Infof("will use beta API\n")
+		glog.Infof("no kubelet.sock to register.\n")
 	}
+
+	// Create a watcher to watch /device-plugin directory.
+	watcher, _ := util.Files(pMountPath)
+	defer watcher.Close()
+	glog.Info("Starting filesystem watcher.")
 
 	for {
 		select {
@@ -472,6 +481,7 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 			statusCheck:
 				for {
 					select {
+					// Restart the device plugin if plugin endpoint file disappears.
 					case <-pluginSocketCheck.C:
 						if _, err := os.Lstat(pluginEndpointPath); err != nil {
 							glog.Infof("stopping device-plugin server at: %s\n", pluginEndpointPath)
@@ -479,6 +489,7 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 							ngm.grpcServer.Stop()
 							break statusCheck
 						}
+					// Restart the device plugin if additional GPU installers.
 					case <-gpuCheck.C:
 						if ngm.hasAdditionalGPUsInstalled() {
 							ngm.grpcServer.Stop()
@@ -489,7 +500,16 @@ func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string)
 								}
 							}
 						}
-
+					// Restart the device plugin if kubelet socket gets recreated, which indicates a kubelet restart.
+					case event := <-watcher.Events:
+						if event.Name == kubeletEndpointPath && event.Op&fsnotify.Create == fsnotify.Create {
+							glog.Infof(" %s recreated, stopping device-plugin server", kubeletEndpointPath)
+							ngm.grpcServer.Stop()
+							break statusCheck
+						}
+					// Log for any other fs errors and log them. This will not induce a device plugin restart.
+					case err := <-watcher.Errors:
+						glog.Infof("inotify: %s", err)
 					}
 				}
 				wg.Wait()
