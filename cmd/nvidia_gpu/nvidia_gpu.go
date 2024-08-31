@@ -124,14 +124,18 @@ func main() {
 	}
 
 	if *enableContainerGPUMetrics {
-		glog.Infof("Starting metrics server on port: %d, endpoint path: %s, collection frequency: %d", *gpuMetricsPort, "/metrics", *gpuMetricsCollectionIntervalMs)
-		metricServer := metrics.NewMetricServer(*gpuMetricsCollectionIntervalMs, *gpuMetricsPort, "/metrics")
-		err := metricServer.Start()
-		if err != nil {
-			glog.Infof("Failed to start metric server: %v", err)
-			return
+		if gpuConfig.GPUPartitionSize != "" {
+			glog.Info("Using multi-instance GPU, metrics are not supported.")
+		} else {
+			glog.Infof("Starting metrics server on port: %d, endpoint path: %s, collection frequency: %d", *gpuMetricsPort, "/metrics", *gpuMetricsCollectionIntervalMs)
+			metricServer := metrics.NewMetricServer(*gpuMetricsCollectionIntervalMs, *gpuMetricsPort, "/metrics")
+			err := metricServer.Start()
+			if err != nil {
+				glog.Infof("Failed to start metric server: %v", err)
+				return
+			}
+			defer metricServer.Stop()
 		}
-		defer metricServer.Stop()
 	}
 
 	if *enableHealthMonitoring {

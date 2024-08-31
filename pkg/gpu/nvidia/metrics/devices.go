@@ -85,13 +85,14 @@ func GetDevicesForAllContainers() (map[ContainerID][]string, error) {
 				if len(d.DeviceIds) == 0 || d.ResourceName != gpuResourceName {
 					continue
 				}
-				containerDevices[container] = make([]string, 0)
+				var devices []string
 				for _, deviceID := range d.DeviceIds {
 					if gpusharing.IsVirtualDeviceID(deviceID) {
 						continue
 					}
-					containerDevices[container] = append(containerDevices[container], deviceID)
+					devices = append(devices, deviceID)
 				}
+				containerDevices[container] = append(containerDevices[container], devices...)
 			}
 		}
 	}
