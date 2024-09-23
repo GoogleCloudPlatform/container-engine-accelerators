@@ -63,7 +63,7 @@ spec:
         hostPath:
           path: /
       initContainers:
-      - image: gcr.io/cos-cloud/cos-gpu-installer@sha256:8d86a652759f80595cafed7d3dcde3dc53f57f9bc1e33b27bc3cfa7afea8d483  # 'v20200701'
+      - image: gcr.io/cos-cloud/cos-gpu-installer@sha256:48225713f3c79c6ec269dfef30d07e63b226d9c53683875f3ea003843c134bd5  # 'v20200701'
         name: nvidia-driver-installer
         resources:
           requests:
