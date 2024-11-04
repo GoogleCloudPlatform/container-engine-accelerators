@@ -22,6 +22,7 @@ metadata:
   name: nccl-test-host-1
   labels:
     name: nccl-host-1
+    tcpxo: daemon
   annotations:
     devices.gke.io/container.tcpxo-daemon: |+
       - path: /dev/nvidia0
@@ -49,6 +50,16 @@ metadata:
         {"interfaceName":"eth8","network":"vpc8"}
       ]
 spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: tcpxo
+            operator: In
+            values:
+            - daemon
+        topologyKey: "kubernetes.io/hostname"
   nodeSelector:
     cloud.google.com/gke-accelerator: nvidia-h100-mega-80gb
     cloud.google.com/gke-spot: "true"
@@ -132,6 +143,7 @@ metadata:
   name: nccl-test-host-2
   labels:
     name: nccl-host-2
+    tcpxo: daemon
   annotations:
     devices.gke.io/container.tcpxo-daemon: |+
       - path: /dev/nvidia0
@@ -159,6 +171,16 @@ metadata:
         {"interfaceName":"eth8","network":"vpc8"}
       ]
 spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: tcpxo
+            operator: In
+            values:
+            - daemon
+        topologyKey: "kubernetes.io/hostname"
   nodeSelector:
     cloud.google.com/gke-accelerator: nvidia-h100-mega-80gb
     cloud.google.com/gke-spot: "true"
