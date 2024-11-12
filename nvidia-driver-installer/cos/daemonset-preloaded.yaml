@@ -119,7 +119,7 @@ spec:
             echo "No GPU driver module detected, installing now"
             /cos-gpu-installer install || exit 1
           fi
-      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:116be6b7335c1d34366223b9a3780fe80d862fcf06cd2c580426fdc1697af693"
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:7c13d18e82dc217aa4eaf5eaa0ebf4c41691ceb896c39f5d88917812ead4131a"
         name: partition-gpus
         env:
           - name: LD_LIBRARY_PATH
