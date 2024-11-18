@@ -1,6 +1,7 @@
 ## Overview
 
-This document gives instructions on how to enable topology in GKE clusters.
+This document gives instructions on how to enable topology in GKE clusters on
+A3M & A3U machines clusters.
 
 The general outline for this to be successful is:
 - We add labels for topology to nodes in the cluster with a daemonset
@@ -10,7 +11,7 @@ The general outline for this to be successful is:
 ## Prerequisites
 
 For topology awareness to be enabled, a GKE node pool has to be created with
-compact placement. Specifically, the `physical_host` arrtibute
+compact placement. Specifically, the `physical_host` attribute
 [ref](https://cloud.google.com/compute/docs/instances/use-compact-placement-policies#verify-vm-location)
 should be present for each GPU node in the cluster.
 
@@ -38,13 +39,14 @@ Next apply the service account config to the cluster:
 Now apply the scheduling and label daemons to the cluster so that pods will
 automatically be scheduled with the correct schedulingGates
 
--   Apply `label-nodes-daemon.yaml` daemonset to the cluster by running
-    `kubectl apply -f label-nodes-daemon.yaml`.
 -   Apply `schedule-daemon.yaml` daemonset to the cluster by running `kubectl
     apply -f schedule-daemon.yaml`.
+-   If GKE <1.31, apply `label-nodes-daemon.yaml` daemonset
+    to the cluster by running `kubectl apply -f label-nodes-daemon.yaml`.
 
 To let the daemon "pick up" the workload for scheduling, simply add a
 schedulingGate that starts with ”gke.io/topology-aware-auto-”, for example:
+
 ```
   schedulingGates:
   - name: "gke.io/topology-aware-auto-my-job-name"
