@@ -1,7 +1,7 @@
 ## Overview
 
 This document gives instructions on how to enable topology in GKE clusters on
-A3M & A3U machines clusters.
+A3M & A3Ultra clusters.
 
 The general outline for this to be successful is:
 - We add labels for topology to nodes in the cluster with a daemonset
