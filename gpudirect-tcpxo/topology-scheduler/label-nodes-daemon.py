@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+"""Daemon to update Kubernetes node labels based on GCE VM metadata."""
 
 # Copyright 2024 Google Inc. All Rights Reserved.
 #
@@ -15,13 +16,14 @@
 # limitations under the License.
 
 import time
+from typing import Dict
 
 from kubernetes import client
 from kubernetes import config
 import requests
 
 
-def update_node_labels(kube):
+def update_node_labels(kube: client.CoreV1Api) -> None:
   """Updates Kubernetes node labels based on GCE VM metadata."""
   node_name_url = "http://metadata.google.internal/computeMetadata/v1/instance/name"
   metadata_url = "http://metadata.google.internal/computeMetadata/v1/instance/attributes/physical_host"
@@ -45,24 +47,23 @@ def update_node_labels(kube):
 
   cluster, rack, host = physical_host.split("/")[1:]
 
-  node_labels = {
+  node_labels: Dict[str, str] = {
       "topology.gke.io/cluster": cluster,
       "topology.gke.io/rack": rack,
       "topology.gke.io/host": host,
   }
 
-  kube.patch_node(node_name, {"metadata": {"labels": node_labels}})
+  kube.patch_node(node_name, {"metadata": {"labels": node_labels}})  # type: ignore
   print(f"Updated labels on node {node_name}: {node_labels}")
 
 
 if __name__ == "__main__":
   # Kubernetes configuration
   config.load_incluster_config()
-  kube = client.CoreV1Api()
+  client = client.CoreV1Api()
 
   while True:
     print("Starting node update")
     # Update node labels
-    update_node_labels(kube)
+    update_node_labels(client)
     time.sleep(600)
-

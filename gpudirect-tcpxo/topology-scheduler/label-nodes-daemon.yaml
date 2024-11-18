@@ -17,20 +17,19 @@ spec:
         key: nvidia.com/gpu
       hostNetwork: true
       containers:
-        - name: label-nodes-daemon
-          image: python:3.9
-          command:
-          - bash
-          - -c
-          - |
-            pip install kubernetes
-            python -u /scripts/label-nodes-daemon.py
-          volumeMounts:
-            - name: scripts-volume
-              mountPath: /scripts
-      volumes:
+      - name: label-nodes-daemon
+        image: python:3.10
+        command:
+        - bash
+        - -c
+        - |
+          pip install kubernetes
+          python -u /scripts/label-nodes-daemon.py
+        volumeMounts:
         - name: scripts-volume
-          configMap:
-            name: topology-scheduler-scripts
+          mountPath: /scripts
+      volumes:
+      - name: scripts-volume
+        configMap:
+          name: topology-scheduler-scripts
       serviceAccount: topology-scheduler
-
