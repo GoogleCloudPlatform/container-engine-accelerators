@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-"""schedule-daemon.py is a Topology-aware Kubernetes pod scheduler."""
 
 # Copyright 2024 Google Inc. All Rights Reserved.
 #
@@ -14,6 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""schedule-daemon.py is a Topology-aware Kubernetes pod scheduler."""
 
 import argparse
 import collections
