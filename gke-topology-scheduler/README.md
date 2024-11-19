@@ -10,7 +10,7 @@ The general outline for this to be successful is:
 
 ## Prerequisites
 
-For topology awareness to be enabled, a GKE node pool has to be created with
+For topology awareness to be enabled in A3M, a GKE node pool has to be created with
 compact placement. Specifically, the `physical_host` attribute
 [ref](https://cloud.google.com/compute/docs/instances/use-compact-placement-policies#verify-vm-location)
 should be present for each GPU node in the cluster.
