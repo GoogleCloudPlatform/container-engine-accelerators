@@ -184,14 +184,25 @@ def node_topology_key(
     A tuple of the node's topology labels, or an empty tuple if the node does
     not have topology labels.
   """
-  node_labels = node['node_labels']
+  node_labels = node.get('node_labels', {})
   for labels in [
       (CLUSTER_LABEL, RACK_LABEL, HOST_LABEL),
       (PRERELEASE_CLUSTER_LABEL, PRERELEASE_RACK_LABEL, PRERELEASE_HOST_LABEL),
   ]:
     if all(label in node_labels for label in labels):
-      return tuple(node_labels[label] for label in labels)
-  logging.info('Node %s does not have topology labels', node['name'])
+      labels_triplet = tuple(node_labels[label] for label in labels)
+      # A3U uses with single superblock for now, rewriting suberblock label
+      if (
+          node_labels.get('node.kubernetes.io/instance-type', '')
+          == 'a3-ultragpu-8g'
+      ):
+        labels_triplet = tuple(
+            ('a3-ultragpu-8g', labels_triplet[1], labels_triplet[2])
+        )
+      return labels_triplet
+  logging.info(
+      'Node %s does not have topology labels', node.get('name', 'unknown_name')
+  )
   return ()
 
 
