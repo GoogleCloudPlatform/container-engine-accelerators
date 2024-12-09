@@ -438,7 +438,7 @@ def schedule_pod_on_node(
     v1: kubernetes.client.CoreV1Api,
     pod_name: str,
     pod_namespace: str,
-    node_name: str,
+    node: dict[str, Any],
     gate_name: str,
 ) -> bool:
   """Schedules a pod on a given node using affinity for direct assignment.
@@ -447,7 +447,7 @@ def schedule_pod_on_node(
     v1: The kubernetes client.
     pod_name: The name of the pod to schedule.
     pod_namespace: The namespace of the pod to schedule.
-    node_name: The name of the node to schedule the pod on.
+    node: The node to schedule the pod on.
     gate_name: The name of the gate to remove from the pod.
 
   Returns:
@@ -466,7 +466,7 @@ def schedule_pod_on_node(
                       'matchExpressions': [{
                           'key': 'kubernetes.io/hostname',
                           'operator': 'In',
-                          'values': [node_name],
+                          'values': [node['name']],
                       }]
                   }]
               }
@@ -477,7 +477,7 @@ def schedule_pod_on_node(
       v1.replace_namespaced_pod(pod_name, pod_namespace, pod)
 
       logging.info(
-          'Pod %s/%s scheduled on %s', pod_namespace, pod_name, node_name
+          'Pod %s/%s scheduled on %s with topology %s', pod_namespace, pod_name, node['name'], node_topology_key(node)
       )
   except kubernetes.client.rest.ApiException as e:
     logging.exception(
@@ -720,7 +720,7 @@ def schedule_pod_with_gate(
       for i, pod in enumerate(sorted_pods):
         node = sorted_nodes[best_assignment[i]]
         if not schedule_pod_on_node(
-            v1, pod['name'], pod['namespace'], node['name'], gate_name
+            v1, pod['name'], pod['namespace'], node, gate_name
         ):
           logging.error(
               'Failed to schedule pod %s on node %s. Skipping job %s',
