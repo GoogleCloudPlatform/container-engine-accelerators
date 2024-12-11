@@ -45,7 +45,7 @@ build:
 	cd cmd/nvidia_gpu; go build nvidia_gpu.go
 
 container:
-	docker build --pull -t ${REGISTRY}/${IMAGE}:${TAG} .
+	docker buildx build --pull -t ${REGISTRY}/${IMAGE}:${TAG} .
 
 push:
 	gcloud docker -- push ${REGISTRY}/${IMAGE}:${TAG}
@@ -58,6 +58,9 @@ fastsocket_installer:
 
 nri-device-injector:
 	docker build --pull -t ${REGISTRY}/${DEVICE_INJECTOR_IMAGE}:${TAG} -f nri_device_injector/Dockerfile .
+
+container-multi-arch:
+	docker buildx build --pull --platform linux/arm64,linux/amd64 -t ${REGISTRY}/${IMAGE}:${TAG} .
 
 .PHONY: all format test vet presubmit build container push partition-gpu
 
