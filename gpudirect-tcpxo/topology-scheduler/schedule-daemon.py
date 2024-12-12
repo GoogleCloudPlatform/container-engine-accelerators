@@ -295,7 +295,7 @@ def can_schedule(node, pod):
   )
 
 
-def schedule_pod_on_node(v1, pod_name, pod_namespace, node_name, gate_name):
+def schedule_pod_on_node(v1, pod_name, pod_namespace, node, gate_name):
   """Schedules a pod on a given node."""
   try:
     pod = v1.read_namespaced_pod(pod_name, pod_namespace)
@@ -311,7 +311,7 @@ def schedule_pod_on_node(v1, pod_name, pod_namespace, node_name, gate_name):
                       'matchExpressions': [{
                           'key': 'kubernetes.io/hostname',
                           'operator': 'In',
-                          'values': [node_name],
+                          'values': [node['name']],
                       }]
                   }]
               }
@@ -321,7 +321,7 @@ def schedule_pod_on_node(v1, pod_name, pod_namespace, node_name, gate_name):
 
       v1.replace_namespaced_pod(pod_name, pod_namespace, pod)
 
-      print(f'Pod {pod_namespace}/{pod_name} scheduled on {node_name}')
+      print(f'Pod {pod_namespace}/{pod_name} scheduled on {node['name']} with topology: {node_topology_key(node)}')
   except ApiException as e:
     print(f'Exception when removing scheduling gate: {e}')
 
@@ -395,7 +395,7 @@ def schedule_pod_with_gate(v1, pods, gate):
       pod = sorted_pods[i]
       node = sorted_nodes[best_assignment[i]]
       schedule_pod_on_node(
-          v1, pod['name'], pod['namespace'], node['name'], gate
+          v1, pod['name'], pod['namespace'], node, gate
       )
 
 
