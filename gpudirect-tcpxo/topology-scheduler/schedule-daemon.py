@@ -76,13 +76,11 @@ def node_topology_key(node):
   node_labels = node['node_labels']
 
   if (
-      'cloud.google.com/gke-placement-group' in node_labels
-      and 'topology.gke.io/cluster' in node_labels
+      'topology.gke.io/cluster' in node_labels
       and 'topology.gke.io/rack' in node_labels
       and 'topology.gke.io/host' in node_labels
   ):
     return (
-        node_labels['cloud.google.com/gke-placement-group'],
         node_labels['topology.gke.io/cluster'],
         node_labels['topology.gke.io/rack'],
         node_labels['topology.gke.io/host'],
@@ -137,14 +135,8 @@ def find_schedulable_nodes(nodes, pods, tolerated_taints):
     node_name = node.metadata.name
     node_labels = node.metadata.labels
 
-    if 'cloud.google.com/gke-placement-group' not in node_labels:
-      print(
-          f'Skipping node {node_name} because it does not have topology'
-          ' metadata'
-      )
-      continue
-
     skip_node = False
+    # check node taints
     if node.spec.taints is not None:
       for t in node.spec.taints:
         if t.key not in tolerated_taint_dict:
@@ -154,8 +146,14 @@ def find_schedulable_nodes(nodes, pods, tolerated_taints):
         else:
           tol = tolerated_taint_dict[t.key]
           if tol.operator == "Equal" and tol.value != t.value:
+            print(f'Skipping node {node_name} because it is tainted with key {t.key} with value {t.value}')
             skip_node = True
             break
+    # check node status
+    if any(condition.type == "Ready" and condition.status != "True" for condition in node.status.conditions):
+      print(f'Skipping node {node_name} because it is NotReady')
+      skip_node = True
+      break
 
     if skip_node:
       continue
@@ -321,7 +319,9 @@ def schedule_pod_on_node(v1, pod_name, pod_namespace, node, gate_name):
 
       v1.replace_namespaced_pod(pod_name, pod_namespace, pod)
 
-      print(f'Pod {pod_namespace}/{pod_name} scheduled on {node['name']} with topology: {node_topology_key(node)}')
+      print(
+        'Pod %s/%s scheduled on %s with topology %s', pod_namespace, pod_name, node['name'], node_topology_key(node)
+      )
   except ApiException as e:
     print(f'Exception when removing scheduling gate: {e}')
 

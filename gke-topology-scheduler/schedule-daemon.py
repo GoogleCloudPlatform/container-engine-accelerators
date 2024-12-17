@@ -286,6 +286,16 @@ def find_schedulable_nodes(
       )
       continue
 
+    # skip nodes that is not in Ready state
+    if any(
+      condition.type == "Ready" and condition.status != "True" for condition in node.status.conditions
+      ):
+        logging.info(
+          'Skipping node %s because it is NotReady',
+          node_name
+        )
+        continue
+
     allocatable = node.status.allocatable
     used_cpu, used_memory, used_gpu = 0, 0, 0
 
