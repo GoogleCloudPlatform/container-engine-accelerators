@@ -76,11 +76,13 @@ def node_topology_key(node):
   node_labels = node['node_labels']
 
   if (
-      'topology.gke.io/cluster' in node_labels
+      'cloud.google.com/gke-placement-group' in node_labels
+      and 'topology.gke.io/cluster' in node_labels
       and 'topology.gke.io/rack' in node_labels
       and 'topology.gke.io/host' in node_labels
   ):
     return (
+        node_labels['cloud.google.com/gke-placement-group'],
         node_labels['topology.gke.io/cluster'],
         node_labels['topology.gke.io/rack'],
         node_labels['topology.gke.io/host'],
@@ -134,6 +136,13 @@ def find_schedulable_nodes(nodes, pods, tolerated_taints):
   for node in nodes:
     node_name = node.metadata.name
     node_labels = node.metadata.labels
+
+    if 'cloud.google.com/gke-placement-group' not in node_labels:
+      print(
+          f'Skipping node {node_name} because it does not have topology'
+          ' metadata'
+      )
+      continue
 
     skip_node = False
     # check node taints
