@@ -12,10 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.23-bullseye as builder
+FROM --platform=$BUILDPLATFORM golang:1.23-bullseye AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
-RUN go build cmd/nvidia_gpu/nvidia_gpu.go
+RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
+    apt update && \
+    apt install -yq --no-install-recommends \
+        gcc-aarch64-linux-gnu libc6-dev-arm64-cross; \
+        CC=aarch64-linux-gnu-gcc; \
+    fi && \
+    GOTOOLCHAIN=local GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 CC=${CC} \
+      go build cmd/nvidia_gpu/nvidia_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu
 
 FROM gcr.io/distroless/base:latest
