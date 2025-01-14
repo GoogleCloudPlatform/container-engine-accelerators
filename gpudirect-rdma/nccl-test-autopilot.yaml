@@ -54,9 +54,6 @@ metadata:
 spec:
   nodeSelector:
     cloud.google.com/gke-accelerator: nvidia-h200-141gb
-    // if requesting reservation
-    // cloud.google.com/reservation-name: gke-exfr-3
-    // cloud.google.com/reservation-affinity: specific
   volumes:
     - name: library-dir-host
       hostPath:
@@ -120,9 +117,6 @@ metadata:
 spec:
   nodeSelector:
     cloud.google.com/gke-accelerator: nvidia-h200-141gb
-    // if requesting reservation
-    // cloud.google.com/reservation-name: gke-exfr-3
-    // cloud.google.com/reservation-affinity: specific
   volumes:
     - name: library-dir-host
       hostPath:
