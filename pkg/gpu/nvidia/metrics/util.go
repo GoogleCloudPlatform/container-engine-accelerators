@@ -34,7 +34,7 @@ package metrics
 // In my experiments, I found that NVML_GPU_UTILIZATION_SAMPLES buffer stores
 // 100 samples that are uniformly spread with ~6 samples per second. So the
 // buffer stores last ~16s of data.
-nvmlReturn_t nvmlDeviceGetAverageUsage(char *uuid, unsigned long long lastSeenTimeStamp, unsigned int* averageUsage) {
+nvmlReturn_t nvmlDeviceGetAverageUsage(char *uuid, unsigned long long lastSeenTimeStamp, unsigned int* averageUsage, unsigned int* sumValue, unsigned int* sampleCountValue) {
   nvmlValueType_t sampleValType;
 
   // This will be set to the number of samples that can be queried. We would
@@ -47,14 +47,26 @@ nvmlReturn_t nvmlDeviceGetAverageUsage(char *uuid, unsigned long long lastSeenTi
 	  return r;
   }
 
-  // Invoking this method with `samples` set to NULL sets the sampleCount.
+  // Invoking this method with `samples` set to NULL, to get the size of samples that user needs to allocate.
+  // The returned samplesCount will provide the number of samples that can be queried. The user needs to
+  // allocate the buffer with size as samplesCount * sizeof(nvmlSample_t).
   r = nvmlDeviceGetSamples(device, NVML_GPU_UTILIZATION_SAMPLES, lastSeenTimeStamp, &sampleValType, &sampleCount, NULL);
   if (r != NVML_SUCCESS) {
+    // @return
+    //      - \ref NVML_SUCCESS                 if samples are successfully retrieved
+    //      - \ref NVML_ERROR_UNINITIALIZED     if the library has not been successfully initialized
+    //      - \ref NVML_ERROR_INVALID_ARGUMENT  if \a device is invalid, \a samplesCount is NULL or
+    //                                          reference to \a sampleCount is 0 for non null \a samples
+    //      - \ref NVML_ERROR_NOT_SUPPORTED     if this query is not supported by the device
+    //      - \ref NVML_ERROR_GPU_IS_LOST       if the target GPU has fallen off the bus or is otherwise inaccessible
+    //      - \ref NVML_ERROR_NOT_FOUND         if sample entries are not found
+    //      - \ref NVML_ERROR_UNKNOWN           on any unexpected error
     return r;
   }
   // Allocate memory to store sampleCount samples.
   // In my experiments, the sampleCount at this stage was always 120 for
   // NVML_TOTAL_POWER_SAMPLES and 100 for NVML_GPU_UTILIZATION_SAMPLES
+  // The reference to a sampleCount will not be 0, otherwise if will have NVML_ERROR_INVALID_ARGUMENT error
   nvmlSample_t* samples = (nvmlSample_t*) malloc(sampleCount * sizeof(nvmlSample_t));
   r = nvmlDeviceGetSamples(device, NVML_GPU_UTILIZATION_SAMPLES, lastSeenTimeStamp, &sampleValType, &sampleCount, samples);
   if (r != NVML_SUCCESS) {
@@ -64,9 +76,12 @@ nvmlReturn_t nvmlDeviceGetAverageUsage(char *uuid, unsigned long long lastSeenTi
   int i = 0;
   unsigned int sum = 0;
   for (; i < sampleCount; i++) {
+  // Power, Utilization and Clock samples are returned as type "unsigned int" for the union nvmlValue_t.
     sum += samples[i].sampleValue.uiVal;
   }
   *averageUsage = sum/sampleCount;
+  *sumValue = sum;
+  *sampleCountValue = sampleCount;
   free(samples);
   return r;
 }
@@ -83,12 +98,16 @@ func AverageGPUUtilization(uuid string, since time.Duration) (uint, error) {
 	lastTs := C.ulonglong(time.Now().Add(-1*since).UnixNano() / 1000)
 	uuidCStr := C.CString(uuid)
 	var util C.uint
-	r := C.nvmlDeviceGetAverageUsage(uuidCStr, lastTs, &util)
+	var sum C.uint
+	var sampleCount C.uint
+	r := C.nvmlDeviceGetAverageUsage(uuidCStr, lastTs, &util, &sum, &sampleCount)
 	C.free(unsafe.Pointer(uuidCStr))
 	if r != C.NVML_SUCCESS {
 		return 0, fmt.Errorf("failed to get GPU utilization for device %s, nvml return code: %v", uuid, r)
-
 	}
-
-	return uint(util), nil
+	averageUtilization := uint(util)
+	if averageUtilization > 100 || averageUtilization < 0 {
+		return 0, fmt.Errorf("failed to get GPU utilization for device %s, out of range [0, 100] utilization: %d, sum: %d, sampleCount: %d", uuid, averageUtilization, uint(sum), uint(sampleCount))
+	}
+	return averageUtilization, nil
 }
