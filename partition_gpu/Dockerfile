@@ -18,6 +18,6 @@ COPY . .
 RUN go build -o gpu_partitioner partition_gpu/partition_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner
 
-FROM gke.gcr.io/gke-distroless/bash:gke_distroless_20230307.00_p0@sha256:f75e30785119d31e209cdc60dde2681a8519021936c31b3f1fcdf6a82ca798d3
+FROM us.gcr.io/gke-release/gke-distroless/bash:gke_distroless_20250207.00_p0@sha256:dce99ff7978706ab3cabfeaae65d404d033d27a020e2c32a2f3a1daffd033343
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner /usr/bin/gpu_partitioner
 CMD ["/usr/bin/gpu_partitioner", "-logtostderr"]
