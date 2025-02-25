@@ -233,7 +233,7 @@ func cleanupAllGPUPartitions() error {
 	args := []string{"mig", "-dci"}
 	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
 	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil && !strings.Contains(string(out), "No GPU instances found") {
+	if err != nil && !strings.Contains(string(out), "No compute instances found") {
 		return fmt.Errorf("failed to destroy compute instance, nvidia-smi output: %s, error: %v ", string(out), err)
 	}
 	glog.Infof("Output:\n %s", string(out))
@@ -241,7 +241,7 @@ func cleanupAllGPUPartitions() error {
 	args = []string{"mig", "-dgi"}
 	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
 	out, err = exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil && !strings.Contains(string(out), "No GPU instances found") {
+	if err != nil && !strings.Contains(string(out), "No compute instances found") {
 		return fmt.Errorf("failed to destroy gpu instance, nvidia-smi output: %s, error: %v ", string(out), err)
 	}
 	glog.Infof("Output:\n %s", string(out))
