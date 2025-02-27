@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.23-bullseye as builder
+FROM --platform=$BUILDPLATFORM golang:1.23-bullseye as builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
-RUN go build -o gpu_partitioner partition_gpu/partition_gpu.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o gpu_partitioner partition_gpu/partition_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner
 
 FROM us.gcr.io/gke-release/gke-distroless/bash:gke_distroless_20250207.00_p0@sha256:dce99ff7978706ab3cabfeaae65d404d033d27a020e2c32a2f3a1daffd033343
