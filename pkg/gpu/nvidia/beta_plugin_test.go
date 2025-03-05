@@ -271,6 +271,12 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 		return fmt.Errorf("failed to initilize a GPU manager")
 	}
 
+	// overriding nvmlDeviceInfo to mockDeviceInfo interface
+	nvmlDeviceInfo = &mockDeviceInfo{}
+	mockInfo, _ := nvmlDeviceInfo.(*mockDeviceInfo)
+
+	mockInfo.testDevDir = testDevDir
+
 	// Start GPU manager.
 	if err := testGpuManager.Start(); err != nil {
 		return fmt.Errorf("unable to start gpu manager: %w", err)
@@ -282,6 +288,7 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 	if discoverErr != nil {
 		return discoverErr
 	}
+
 	gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()
 	if gpus == 0 {
 		return fmt.Errorf("unable to discover GPU devices")
@@ -331,6 +338,7 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 	for _, d := range devs.Devices {
 		devices[d.ID] = d
 	}
+
 	if diff := cmp.Diff(wantDevices, devices); diff != "" {
 		return fmt.Errorf("unexpected devices (-want, +got) = %s", diff)
 	}
@@ -446,6 +454,12 @@ func testNvidiaGPUManagerBetaAPIWithMig(gpuConfig GPUConfig, wantDevices map[str
 	if testGpuManager == nil {
 		return fmt.Errorf("failed to initilize a GPU manager")
 	}
+
+	// overriding nvmlDeviceInfo to mockDeviceInfo interface
+	nvmlDeviceInfo = &mockDeviceInfo{}
+	mockInfo, _ := nvmlDeviceInfo.(*mockDeviceInfo)
+
+	mockInfo.testDevDir = testDevDir
 
 	// Start GPU manager.
 	if err := testGpuManager.Start(); err != nil {
