@@ -190,7 +190,7 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 			for i := 0; i < ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU; i++ {
 				virtualDeviceID := fmt.Sprintf("%s/vgpu%d", device.ID, i)
 				// When sharing GPUs, the virtual GPU device will inherit the health status from its underlying physical GPU device.
-				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health}
+				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health, Topology: device.Topology}
 			}
 		}
 		return virtualGPUDevices
@@ -231,21 +231,112 @@ func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec
 
 // Discovers all NVIDIA GPU devices available on the local node by walking nvidiaGPUManager's devDirectory.
 func (ngm *nvidiaGPUManager) discoverGPUs() error {
-	reg := regexp.MustCompile(nvidiaDeviceRE)
-	files, err := ioutil.ReadDir(ngm.devDirectory)
-	if err != nil {
-		return err
+	devicesCount, ret := nvml.DeviceGetCount()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("failed to get devices count: %v", nvml.ErrorString(ret))
 	}
-	for _, f := range files {
-		if f.IsDir() {
-			continue
+
+	for i := 0; i < devicesCount; i++ {
+		device, ret := nvml.DeviceGetHandleByIndex(i)
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("failed to get the device handle for index %d: %v", i, nvml.ErrorString(ret))
 		}
-		if reg.MatchString(f.Name()) {
-			glog.V(3).Infof("Found Nvidia GPU %q\n", f.Name())
-			ngm.SetDeviceHealth(f.Name(), pluginapi.Healthy)
+
+		minor, ret := device.GetMinorNumber()
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("failed to get the minor number for device with index %d: %v", i, nvml.ErrorString(ret))
 		}
+
+		path := fmt.Sprintf("nvidia%d", minor)
+		glog.V(3).Infof("Found Nvidia GPU %q\n", path)
+		topologyInfo, err := topology(device, i)
+		if err != nil {
+			return err
+		}
+		ngm.SetDeviceHealth(path, pluginapi.Healthy, topologyInfo)
 	}
 	return nil
+}
+
+// topology determines the NUMA topology information for a GPU device.
+// For MIG-enabled GPUs, it retrieves the NUMA node ID from the parent GPU device.
+// For non-MIG GPUs, it gets the NUMA node ID directly from the GPU device.
+// Returns a TopologyInfo containing the NUMA node ID if NUMA is enabled, nil otherwise.
+func topology(gpuDevice nvml.Device, i int) (*pluginapi.TopologyInfo, error) {
+	currentMode, _, ret := gpuDevice.GetMigMode()
+	if ret != nvml.ERROR_NOT_SUPPORTED {
+		if ret != nvml.SUCCESS {
+			return nil, fmt.Errorf("failed to get mig mode: %v", nvml.ErrorString(ret))
+		}
+	}
+
+	// For GPU topology information: When MIG (Multi-Instance GPU) is enabled, retrieve
+	// the NUMA node ID from the parent GPU device. Otherwise, get the NUMA node ID
+	// directly from the GPU device itself.
+	numaDevice := gpuDevice
+	if currentMode == 1 {
+		parent, ret := gpuDevice.GetMigDeviceHandleByIndex(i)
+		if ret != nvml.SUCCESS {
+			return nil, fmt.Errorf("failed to get mig device handle: %v", nvml.ErrorString(ret))
+		}
+		numaDevice = parent
+
+	}
+	numaEnabled, node, err := numaNode(numaDevice)
+	if err != nil {
+		return nil, err
+	}
+
+	if !numaEnabled {
+		return nil, nil
+	}
+
+	return &pluginapi.TopologyInfo{
+		Nodes: []*pluginapi.NUMANode{
+			{
+				ID: int64(node),
+			},
+		},
+	}, nil
+}
+
+// numaNode retrieves the NUMA node information for a given GPU device.
+// It first gets the PCI bus ID from the device, formats it appropriately,
+// then reads the NUMA node value from the sysfs filesystem.
+func numaNode(d nvml.Device) (numaEnabled bool, numaNode int, err error) {
+	info, ret := d.GetPciInfo()
+	if ret != nvml.SUCCESS {
+		return false, 0, fmt.Errorf("error getting PCI Bus Info of device with index: %v", ret)
+	}
+
+	var bytesT []byte
+	for _, b := range info.BusId {
+		if byte(b) == '\x00' {
+			break
+		}
+		bytesT = append(bytesT, byte(b))
+	}
+
+	// Discard leading zeros.
+	busID := strings.ToLower(strings.TrimPrefix(string(bytesT), "0000"))
+
+	numaNodeFile := fmt.Sprintf("/sys/bus/pci/devices/%s/numa_node", busID)
+	glog.Infof("Reading NUMA node information from %q", numaNodeFile)
+	b, err := os.ReadFile(numaNodeFile)
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to read NUMA information from %q file: %v", numaNodeFile, err)
+	}
+
+	numaNode, err = strconv.Atoi(string(bytes.TrimSpace(b)))
+	if err != nil {
+		return false, 0, fmt.Errorf("eror parsing value for NUMA node: %v", err)
+	}
+
+	if numaNode < 0 {
+		return false, 0, nil
+	}
+
+	return true, numaNode, nil
 }
 
 func (ngm *nvidiaGPUManager) hasAdditionalGPUsInstalled() bool {
@@ -327,15 +418,15 @@ func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 }
 
 // SetDeviceHealth sets the health status for a GPU device or partition if MIG is enabled
-func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string) {
+func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string, topology *pluginapi.TopologyInfo) {
 	ngm.devicesMutex.Lock()
 	defer ngm.devicesMutex.Unlock()
 
 	reg := regexp.MustCompile(nvidiaDeviceRE)
 	if reg.MatchString(name) {
-		ngm.devices[name] = pluginapi.Device{ID: name, Health: health}
+		ngm.devices[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 	} else {
-		ngm.migDeviceManager.SetDeviceHealth(name, health)
+		ngm.migDeviceManager.SetDeviceHealth(name, health, topology)
 	}
 }
 
