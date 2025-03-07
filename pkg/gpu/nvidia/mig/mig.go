@@ -51,11 +51,11 @@ var gpuPartitionSizeMaxCount = map[string]int{
 	"4g.71gb":  1,
 	"7g.141gb": 1,
 	//nvidia-b200
-	"1g.23gb": 7,
-	"1g.45gb": 4,
-	"2g.45gb": 3,
-	"3g.90gb": 2,
-	"4g.90gb": 1,
+	"1g.23gb":  7,
+	"1g.45gb":  4,
+	"2g.45gb":  3,
+	"3g.90gb":  2,
+	"4g.90gb":  1,
 	"7g.180gb": 1,
 }
 
