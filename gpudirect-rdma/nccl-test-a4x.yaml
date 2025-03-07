@@ -33,6 +33,15 @@ metadata:
         {"interfaceName":"eth5","network":"rdma-3"}
       ]
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: cloud.google.com/gke-accelerator
+            operator: In
+            values:
+              - nvidia-gb200
   hostNetwork: false
   hostPID: false
   volumes:
@@ -92,6 +101,15 @@ metadata:
         {"interfaceName":"eth5","network":"rdma-3"}
       ]
 spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: cloud.google.com/gke-accelerator
+            operator: In
+            values:
+              - nvidia-gb200
   hostNetwork: false
   hostPID: false
   volumes:
