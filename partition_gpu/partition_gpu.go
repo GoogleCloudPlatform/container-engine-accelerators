@@ -55,6 +55,14 @@ var partitionSizeToProfileID = map[string]string{
 	"3g.71gb":  "9",
 	"4g.71gb":  "5",
 	"7g.141gb": "0",
+
+	//nvidia-b200
+	"1g.23gb":  "19",
+	"1g.45gb":  "15",
+	"2g.45gb":  "14",
+	"3g.90gb":  "9",
+	"4g.90gb":  "5",
+	"7g.180gb": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -79,10 +87,18 @@ var partitionSizeMaxCount = map[string]int{
 	"3g.71gb":  2,
 	"4g.71gb":  1,
 	"7g.141gb": 1,
+	//nvidia-b200
+	"1g.23gb":  7,
+	"1g.45gb":  4,
+	"2g.45gb":  3,
+	"3g.90gb":  2,
+	"4g.90gb":  1,
+	"7g.180gb": 1,
 }
 
 const (
 	SIGRTMIN        = 34
+	NvidiaB200      = "NVIDIA B200"           //nvidia-b200
 	Nvidia141gbH200 = "NVIDIA H200"           //nvidia-h200-141gb
 	Nvidia80gbH100  = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
 	Nvidia40gbA100  = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
@@ -212,6 +228,8 @@ func checkGpuType() (string, error) {
 		return "", err
 	}
 	switch {
+	case strings.HasPrefix(string(gpuType), NvidiaB200):
+		return NvidiaB200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia141gbH200):
 		return Nvidia141gbH200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia80gbH100):
