@@ -78,7 +78,7 @@ spec:
         hostPath:
           path: /etc/nvidia
       initContainers:
-      - image: "cos-nvidia-installer:fixed"
+      - image: "us.gcr.io/cos-cloud/cos-gpu-installer:v2.4.7"
         imagePullPolicy: Never
         name: nvidia-driver-installer
         resources:
