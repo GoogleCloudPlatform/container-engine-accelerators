@@ -5,7 +5,7 @@ For new users, refer [Maximize GPU network bandwidth in Standard mode clusters](
 
 For existing users, use this release notes to update your cluster with latest versions of GPUDirect-TCPXO components.
 
-For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(O)](github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpxo/best-practice.md).
+For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(O)](./best-practice.md).
 
 ## How to upgrade to a new release
 #### Recommended GKE versions:
@@ -101,7 +101,7 @@ qualified and supported: NCCL 2.21.5-2.23.4
 "NCCL_DEBUG_SUBSYS=INIT,NET,ENV,COLL,GRAPH"
 ```
 #### What is new with in release:
-* Support NCCL LL128 for small-medium sized collective performance improvements, including optimized NCCL tuning profile and updated guest configuration profiles. Refer to [Best practice to run workload with GPUDirect-TCPX(O)](github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpxo/best-practice.md) for more details.
+* Support NCCL LL128 for small-medium sized collective performance improvements, including optimized NCCL tuning profile and updated guest configuration profiles. Refer to [Best practice to run workload with GPUDirect-TCPX(O)](./best-practice.md) for more details.
 * Qualified a wider range of NCCL core version.
 
 ## Nov 27, 2024
@@ -271,7 +271,7 @@ nccl-2.21.5
 * We recommend users to set the following NCCL debug related params to enable WARN logging level for better debuggability:
 `NCCL_DEBUG=WARN`,
 `NCCL_DEBUG_SUBSYS=INIT,NET,ENV,COLL,GRAPH`. Note: This setting might have some performance impact on certain workload, and might also increase log volume in failure cases.
-* GKE startup probe support for the TCPXO-daemon. Refer to [Best practice to run workload with GPUDirect-TCPX(O)](github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpxo/best-practice.md) for more details.
+* GKE startup probe support for the TCPXO-daemon. Refer to [Best practice to run workload with GPUDirect-TCPX(O)](./best-practice.md) for more details.
 
 
 ## Sept 06, 2024

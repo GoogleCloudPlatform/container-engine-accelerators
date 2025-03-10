@@ -61,7 +61,7 @@ Using the sidecar containers feature, the tcpxo-daemon is guaranteed to auto-ter
 LL128 is a NCCL feature that gives non-trivial latency reductions for small-medium msg sizes.
 
 You could update the following NCCL configs in your workload to enable LL128: 
-- Ensure the NCCL plugin installer image is in release >= Feb 06, 2025 in [GPUDirect-TCPXO release notes](github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpxo/README.md), with this version or later:
+- Ensure the NCCL plugin installer image is in release >= Feb 06, 2025 in [GPUDirect-TCPXO release notes](./README.md), with this version or later:
 ```
 us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-
 dev:v1.0.8-1
