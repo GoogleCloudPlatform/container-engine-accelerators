@@ -37,6 +37,18 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 
 
 ## Releases
+- [Feb 27, 2025](./README.md#feb-27-2025)
+- [Feb 06, 2025](./README.md#feb-06-2025)
+- [Nov 27, 2024](./README.md#nov-27-2024)
+- [Oct 18, 2024](./README.md#oct-18-2024)
+- [Sept 19, 2024](./README.md#sept-19-2024)
+- [Sept 06, 2024](./README.md#sept-06-2024)
+- [Aug 06, 2024](./README.md#aug-06-2024)
+- [Jun 27, 2024](./README.md#jun-06-2024)
+- [May 30, 2024](./README.md#may-30-2024)
+- [May 20, 2024](./README.md#may-20-2024)
+- [Apr 17, 2024](./README.md#apr-17-2024)
+
 ## Feb 27, 2025
 #### GKE 1.32 starts to support TCPXO:
 ```
@@ -92,7 +104,7 @@ qualified and supported: NCCL 2.21.5-2.23.4
 * Support NCCL LL128 for small-medium sized collective performance improvements, including optimized NCCL tuning profile and updated guest configuration profiles. Refer to [Best practice to run workload with GPUDirect-TCPX(O)](github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpxo/best-practice.md) for more details.
 * Qualified a wider range of NCCL core version.
 
-## Nov 27, 2025
+## Nov 27, 2024
 #### Recommended GKE version:
 ```
 For 1.28 >= 1.28.11-gke.1289000
@@ -204,7 +216,7 @@ nccl-2.21.5
 #### What is new with in release:
 * tcpxo-daemon resiliency improvements
 
-## Sep 19, 2024
+## Sept 19, 2024
 #### Compatible GKE versions:
 ```
 For 1.28 >= 1.28.11-gke.1289000
@@ -262,13 +274,13 @@ nccl-2.21.5
 * GKE startup probe support for the TCPXO-daemon. Refer to [Best practice to run workload with GPUDirect-TCPX(O)](github.com/GoogleCloudPlatform/container-engine-accelerators/gpudirect-tcpxo/best-practice.md) for more details.
 
 
-## Sep 6, 2024
+## Sept 06, 2024
 #### GKE 1.30 starts to support TCPXO:
 ```
 For 1.30 >= 1.30.4-gke.1129000
 ```
 
-## Aug 6, 2024
+## Aug 06, 2024
 #### Recommended GKE versions:
 ```
 For 1.28 >= 1.28.11-gke.1289000

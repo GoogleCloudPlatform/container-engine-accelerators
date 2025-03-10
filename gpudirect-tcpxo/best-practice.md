@@ -1,6 +1,10 @@
 # Best practice to run workload with GPUDirect-TCPX(O)
+* [Automatic Sidecar Termination](./best-practice.md#automatic-sidecar-termination)
+* [Enable LL128 for latency reduction](./best-practice.md#enable-ll128-for-latency-reduction)
+* [Setup Startup Probe for the TCPXO-daemon Sidecar](./best-practice.md#setup-startup-probe-for-the-tcpxo-daemon-sidecar)
+* [Topology awareness scheduling](./best-practice.md#topology-awareness-scheduling)
 
-## Automatic sidecar termination
+## Automatic Sidecar Termination
 The current TCPX(O) setup requires both the tcpxo-daemon and main application run in the same Pod, because these two containers need to use the same network namespace when `hostNetwork:false`. As the example in https://cloud.google.com/kubernetes-engine/docs/how-to/gpu-bandwidth-gpudirect-tcpx shows, we commonly put them as containers under the same Pod. The problem with this workaround is the tcpxo-daemon doesn’t keep the same lifecycle as the main application container. The tcpxo-daemon will keep running even if the main application container completes the work, blocking the Job/Pod to complete.
 
 We leverage the [Sidecar Containers](https://kubernetes.io/docs/concepts/workloads/pods/sidecar-containers/) feature in kubernetes to resolve this problem. This feature is by default enabled in **GKE versions minor version 1.29 and later**.
@@ -53,7 +57,7 @@ metadata:
 
 Using the sidecar containers feature, the tcpxo-daemon is guaranteed to auto-terminate after the main application container completes. Reference: https://kccnceu2024.sched.com/event/1YeS0
 
-## Enable LL128 for latency reduction
+## Enable LL128 for Latency Reduction
 LL128 is a NCCL feature that gives non-trivial latency reductions for small-medium msg sizes.
 
 You could update the following NCCL configs in your workload to enable LL128: 
@@ -112,7 +116,7 @@ When TCPXO-daemon sidecar starts, it will execute an initialization process. If 
             - /run/health-check
   ```
 
-## Topology awareness scheduling
+## Topology Awareness Scheduling
 If you are using the compact placement when creating A3+ nodepool, you can set up topology awareness configuration to gain better network performance.
 
 Please check [gke-topology-scheduler](https://github.com/GoogleCloudPlatform/container-engine-accelerators/tree/master/gke-topology-scheduler) on the external github for an example of how to take advantage of the performance boosts of this feature.
