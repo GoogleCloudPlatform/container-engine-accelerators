@@ -41,6 +41,10 @@ spec:
                     operator: In
                     values:
                       - nvidia-gb200
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values:
+                      - arm64
       tolerations:
         - operator: "Exists"
       hostNetwork: true
