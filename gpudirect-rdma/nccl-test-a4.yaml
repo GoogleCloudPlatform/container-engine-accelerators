@@ -76,9 +76,6 @@ spec:
           /scripts/container_entry.sh shell
           source /usr/local/gib/scripts/set_nccl_env.sh
           sleep infinity
-      securityContext:
-        capabilities:
-          add: ["IPC_LOCK"]
 ---
 apiVersion: v1
 kind: Pod
@@ -140,6 +137,3 @@ spec:
           /scripts/container_entry.sh shell
           source /usr/local/gib/scripts/set_nccl_env.sh
           sleep infinity
-      securityContext:
-        capabilities:
-          add: ["IPC_LOCK"]
