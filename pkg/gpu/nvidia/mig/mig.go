@@ -233,8 +233,8 @@ func (d *DeviceManager) Start(partitionSize string) error {
 }
 
 // SetDeviceHealth sets the health status for a GPU partition
-func (d *DeviceManager) SetDeviceHealth(name string, health string) {
-	d.gpuPartitions[name] = pluginapi.Device{ID: name, Health: health}
+func (d *DeviceManager) SetDeviceHealth(name string, health string, topology *pluginapi.TopologyInfo) {
+	d.gpuPartitions[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 }
 
 // Discovers all NVIDIA GPU devices available on the local node by walking nvidiaGPUManager's devDirectory.
