@@ -33,9 +33,9 @@ const (
 )
 
 var (
-	containerPathPrefix            = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts host nvidia install directory")
-	cgpuConfigFile                 = flag.String("cgpu-config", "/etc/nvidia/confidential_node_type.txt", "File with Confidential Node Type used on Node")
-	readyDelay = flag.Int64("ready-delay-ms", 1000, "How much time to wait before setting GPU to ready state. Adding a delay helps to reduce the chances of a start up error.")
+	containerPathPrefix = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts host nvidia install directory")
+	cgpuConfigFile      = flag.String("cgpu-config", "/etc/nvidia/confidential_node_type.txt", "File with Confidential Node Type used on Node")
+	readyDelay          = flag.Int64("ready-delay-ms", 1000, "How much time to wait before setting GPU to ready state. Adding a delay helps to reduce the chances of a start up error.")
 )
 
 func main() {
@@ -53,7 +53,7 @@ func main() {
 		if err := updateContainerLdCache(); err != nil {
 			glog.ExitContextf(ctx, "updateContainerLdCache failed: %v", err)
 		}
-	
+
 		if err := enablePersistenceMode(ctx); err != nil {
 			glog.ExitContextf(ctx, "failed to start persistence mode: %v", err)
 		}
@@ -84,8 +84,8 @@ func enablePersistenceMode(ctx context.Context) error {
 		cmdArgs = append(cmdArgs, "--uvm-persistence-mode")
 		glog.InfoContext(ctx, "using --uvm-persistence-mode")
 	}
-	cmdArgs = append(cmdArgs, "--nvidia-cfg-path=" + *containerPathPrefix + "/lib64")
-	persistencedCMD := exec.Command(*containerPathPrefix + "/bin/nvidia-persistenced", cmdArgs...)
+	cmdArgs = append(cmdArgs, "--nvidia-cfg-path="+*containerPathPrefix+"/lib64")
+	persistencedCMD := exec.Command(*containerPathPrefix+"/bin/nvidia-persistenced", cmdArgs...)
 	if err := persistencedCMD.Run(); err != nil {
 		return err
 	}
@@ -94,11 +94,11 @@ func enablePersistenceMode(ctx context.Context) error {
 }
 
 func setGPUReadyState(ctx context.Context) error {
-	gpuReadyCMD := exec.Command(*containerPathPrefix + "/bin/nvidia-smi", "conf-compute", "-srs", "1")
+	gpuReadyCMD := exec.Command(*containerPathPrefix+"/bin/nvidia-smi", "conf-compute", "-srs", "1")
 	if err := gpuReadyCMD.Run(); err != nil {
 		return err
 	}
-	glog.InfoContext(ctx, "Confidential GPU is ready.");
+	glog.InfoContext(ctx, "Confidential GPU is ready.")
 	return nil
 }
 
@@ -117,9 +117,8 @@ func updateContainerLdCache() error {
 	return nil
 }
 
-
 func getLoadedNVIDIAKernelModuleVersion(ctx context.Context, versionFilePath string) string {
-	glog.InfoContextf(ctx,"Attempting to read nvidia gpu driver version from: %s", versionFilePath)
+	glog.InfoContextf(ctx, "Attempting to read nvidia gpu driver version from: %s", versionFilePath)
 	content, err := os.ReadFile(versionFilePath)
 	if err != nil {
 		glog.ErrorContextf(ctx, "Failed to read version file: %v", err)
