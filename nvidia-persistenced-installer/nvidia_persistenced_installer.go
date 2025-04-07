@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/golang/glog"
@@ -71,9 +73,13 @@ func main() {
 	}
 
 	// Need to keep the container running so that the nvidia persistence daemon can keep running.
-	for {
-		time.Sleep(5 * time.Minute)
-	}
+	// Create a channel to listen for termination signals (SIGINT and SIGTERM)
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	// Block indefinitely until a signal is received
+	sig := <-sigChan
+	fmt.Printf("Received signal: %v. Shutting down...\n", sig)
 }
 
 func enablePersistenceMode(ctx context.Context) error {

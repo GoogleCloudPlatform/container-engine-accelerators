@@ -9,11 +9,11 @@ import (
 type fakeReadFileFunc func(name string) ([]byte, error)
 
 func TestCheckConfidentialGPUEnabled(t *testing.T) {
-	testcases := []struct{
-		name string
+	testcases := []struct {
+		name         string
 		readFileFunc fakeReadFileFunc
-		wantEnabled bool
-		wantErr bool
+		wantEnabled  bool
+		wantErr      bool
 	}{
 		{
 			name: "file not found",
