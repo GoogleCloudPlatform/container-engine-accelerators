@@ -69,7 +69,6 @@ func main() {
 
 	// Need to keep the container running so that the nvidia persistence daemon can keep running.
 	for {
-		glog.InfoContext(ctx, "sleeping");
 		time.Sleep(5 * time.Minute)
 	}
 }
@@ -77,7 +76,7 @@ func main() {
 func enablePersistenceMode(ctx context.Context) error {
 	glog.InfoContext(ctx, "Starting NVIDIA persistence daemon.")
 	cmdArgs := []string{}
-	if versionMajor, err := nvidiaVersionMajor(); err != nil {
+	if versionMajor, err := nvidiaVersionMajor(ctx); err != nil {
 		return err
 	} else if versionMajor >= minUVMSupportedVersion {
 		// UVM persistence mode is only available starting at R550.
@@ -118,35 +117,35 @@ func updateContainerLdCache() error {
 }
 
 
-func getLoadedNVIDIAKernelModuleVersion(versionFilePath string) string {
-	glog.Infof("Attempting to read version from: %s", versionFilePath)
+func getLoadedNVIDIAKernelModuleVersion(ctx context.Context, versionFilePath string) string {
+	glog.InfoContextf(ctx,"Attempting to read nvidia gpu driver version from: %s", versionFilePath)
 	content, err := os.ReadFile(versionFilePath)
 	if err != nil {
-		glog.Infof("Failed to read version file: %v", err)
+		glog.ErrorContextf(ctx, "Failed to read version file: %v", err)
 		return ""
 	}
 	contentStr := string(content)
 	kernelModuleVersionPattern := regexp.MustCompile(`\d+\.\d+\.\d+`)
 	kernelModuleVersion := kernelModuleVersionPattern.FindString(contentStr)
-	glog.Infof("NVIDIA kernel module version: %s", kernelModuleVersion)
+	glog.InfoContextf(ctx, "nvidia gpu driver version: %s", kernelModuleVersion)
 	return kernelModuleVersion
 }
 
-func nvidiaVersionMajor() (int, error) {
-	version := getLoadedNVIDIAKernelModuleVersion("/proc/driver/nvidia/version")
+func nvidiaVersionMajor(ctx context.Context) (int, error) {
+	version := getLoadedNVIDIAKernelModuleVersion(ctx, "/proc/driver/nvidia/version")
 	if version == "" {
-		return 0, fmt.Errorf("failed to read nvidia kernel module version at /proc/driver/nvidia/version")
+		return 0, fmt.Errorf("failed to read nvidia gpu driver version at /proc/driver/nvidia/version")
 	}
 
 	// Will be in this format as it was validated by the regex beforehand: 535.230.02
 	before, _, found := strings.Cut(version, ".")
 	if !found || len(before) != 3 {
-		return 0, fmt.Errorf("invalid nvidia kernel module version: %v", version)
+		return 0, fmt.Errorf("invalid nvidia gpu driver version: %v", version)
 	}
 
 	versionMajor, err := strconv.Atoi(before)
 	if err != nil {
-		return 0, fmt.Errorf("invalid nvidia kernel module version(%v), %w", version, err)
+		return 0, fmt.Errorf("invalid nvidia gpu driver version(%v), %w", version, err)
 	}
 	return versionMajor, nil
 }
@@ -156,7 +155,7 @@ func checkConfidentialGPUEnablement(ctx context.Context) (bool, error) {
 	if err != nil {
 		// Treat non existence of file as disabled.
 		if os.IsNotExist(err) {
-			glog.WarningContextf(ctx, "confidential node type file not found at %v, skipping persistenced installation", *cgpuConfigFile)
+			glog.InfoContextf(ctx, "confidential node type file not found at %v, skipping persistenced installation", *cgpuConfigFile)
 			return false, nil
 		}
 		return false, err
