@@ -35,6 +35,7 @@ const (
 var (
 	containerPathPrefix            = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts host nvidia install directory")
 	cgpuConfigFile                 = flag.String("cgpu-config", "/etc/nvidia/confidential_node_type.txt", "File with Confidential Node Type used on Node")
+	readyDelay = flag.Int64("ready-delay-ms", 1000, "How much time to wait before setting GPU to ready state. Adding a delay helps to reduce the chances of a start up error.")
 )
 
 func main() {
@@ -58,7 +59,7 @@ func main() {
 		}
 		// Add small delay before setting the ready state for consistency.
 		// If the workload starts too close to when the persistence daemon has started sometimes there can be errors.
-		time.Sleep(1 * time.Second)
+		time.Sleep(time.Duration(*readyDelay) * time.Millisecond)
 		if err := setGPUReadyState(ctx); err != nil {
 			glog.ExitContextf(ctx, "failed to set gpu to ready state: %v", err)
 		}
