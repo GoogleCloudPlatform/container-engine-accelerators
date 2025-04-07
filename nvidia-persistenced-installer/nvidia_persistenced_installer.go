@@ -33,6 +33,8 @@ const (
 )
 
 var (
+	readFile = os.ReadFile
+
 	containerPathPrefix = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts host nvidia install directory")
 	cgpuConfigFile      = flag.String("cgpu-config", "/etc/nvidia/confidential_node_type.txt", "File with Confidential Node Type used on Node")
 	readyDelay          = flag.Int64("ready-delay-ms", 1000, "How much time to wait before setting GPU to ready state. Adding a delay helps to reduce the chances of a start up error.")
@@ -151,7 +153,7 @@ func nvidiaVersionMajor(ctx context.Context) (int, error) {
 }
 
 func checkConfidentialGPUEnablement(ctx context.Context) (bool, error) {
-	file, err := os.ReadFile(*cgpuConfigFile)
+	file, err := readFile(*cgpuConfigFile)
 	if err != nil {
 		// Treat non existence of file as disabled.
 		if os.IsNotExist(err) {
