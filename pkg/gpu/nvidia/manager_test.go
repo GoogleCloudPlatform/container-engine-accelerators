@@ -15,9 +15,15 @@
 package nvidia
 
 import (
+	"io/ioutil"
 	"os"
+	"path"
 	"reflect"
 	"testing"
+
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/google/go-cmp/cmp"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func TestGPUConfig_AddDefaultsAndValidate(t *testing.T) {
@@ -209,6 +215,95 @@ func Test_nvidiaGPUManager_Envs(t *testing.T) {
 			if got := ngm.Envs(tt.numDevicesRequested); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("nvidiaGPUManager.Envs() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func Test_topology(t *testing.T) {
+	testDevDir, err := ioutil.TempDir("", "pci")
+	defer os.RemoveAll(testDevDir)
+	if err != nil {
+		t.Errorf("unable to create %q temp dir for testing...", testDevDir)
+	}
+	device := nvml.Device{}
+
+	testCases := []struct {
+		name             string
+		pciDevicesRoot   string
+		busID            [32]int8
+		numaFileContent  string
+		numaFileDir      string
+		wantTopologyInfo *pluginapi.TopologyInfo
+		wantError        bool
+	}{
+		{
+			name:           "valid numa configuration and topology info",
+			pciDevicesRoot: testDevDir,
+			busID: [32]int8{'0', '0', '0', '0', '0', '0', '0', '0', ':', '3', 'b', ':', '0', '0', '.', '0', 0, // null terminator
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			numaFileContent: "0",
+			numaFileDir:     "0000:3b:00.0",
+			wantTopologyInfo: &pluginapi.TopologyInfo{
+				Nodes: []*pluginapi.NUMANode{
+					{
+						ID: 0,
+					},
+				},
+			},
+			wantError: false,
+		},
+		{
+			name:           "invalid valid numa configuration",
+			pciDevicesRoot: testDevDir,
+			busID: [32]int8{'0', ':', '3', 'b', ':', '0', '0', '.', '0', 0, // null terminator
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			numaFileContent:  "0",
+			numaFileDir:      "0000:3b:00.0",
+			wantTopologyInfo: nil,
+			wantError:        true,
+		},
+		{
+			name:           "no numa configuration",
+			pciDevicesRoot: testDevDir,
+			busID: [32]int8{'0', '0', '0', '0', '0', '0', '0', '0', ':', '3', 'b', ':', '0', '0', '.', '0', 0, // null terminator
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+			numaFileContent:  "-1",
+			numaFileDir:      "0000:3b:00.0",
+			wantTopologyInfo: nil,
+			wantError:        true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// overriding info to mockDeviceInfo interface
+			nvmlDeviceInfo = &mockDeviceInfo{}
+			pciDevicesRoot = testDevDir
+			mockInfo := nvmlDeviceInfo.(*mockDeviceInfo)
+			mockInfo.busID = tc.busID
+			if len(tc.numaFileContent) > 0 {
+				err = os.MkdirAll(path.Join(testDevDir, tc.numaFileDir), 0755)
+				if err != nil {
+					t.Errorf("unable to create %q directory in %q", tc.numaFileDir, testDevDir)
+				}
+				fileName := path.Join(testDevDir, "0000:3b:00.0", "numa_node")
+				file, err := os.Create(fileName)
+				if err != nil {
+					t.Errorf("unable to create %q file", fileName)
+				}
+				err = ioutil.WriteFile(file.Name(), []byte(tc.numaFileContent), 0644)
+				if err != nil {
+					t.Errorf("unable to write following content to %q file: %q", fileName, tc.numaFileContent)
+				}
+			}
+			gotTopologyInfo, gotError := topology(device, 0)
+			if gotError != nil && !tc.wantError {
+				t.Errorf("%v", gotError)
+			}
+			if diff := cmp.Diff(tc.wantTopologyInfo, gotTopologyInfo); diff != "" {
+				t.Errorf("unexpected topologyInfo (-want, +got) = %s", diff)
+			}
+
 		})
 	}
 }
