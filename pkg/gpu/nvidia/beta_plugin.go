@@ -45,7 +45,7 @@ func (s *pluginServiceV1Beta1) ListAndWatch(emtpy *pluginapi.Empty, stream plugi
 		select {
 		case d := <-s.ngm.Health:
 			glog.Infof("device-plugin: %s device marked as %s", d.ID, d.Health)
-			s.ngm.SetDeviceHealth(d.ID, d.Health)
+			s.ngm.SetDeviceHealth(d.ID, d.Health, d.Topology)
 			if err := s.sendDevices(stream); err != nil {
 				return err
 			}
@@ -133,7 +133,7 @@ func RegisterWithV1Beta1Kubelet(kubeletEndpoint, pluginEndpoint, resourceName st
 func (s *pluginServiceV1Beta1) sendDevices(stream pluginapi.DevicePlugin_ListAndWatchServer) error {
 	resp := new(pluginapi.ListAndWatchResponse)
 	for _, dev := range s.ngm.ListDevices() {
-		resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health})
+		resp.Devices = append(resp.Devices, &pluginapi.Device{ID: dev.ID, Health: dev.Health, Topology: dev.Topology})
 	}
 	glog.Infof("ListAndWatch: send devices %v\n", resp)
 	if err := stream.Send(resp); err != nil {
