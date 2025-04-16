@@ -40,6 +40,7 @@ IMAGE=nvidia-gpu-device-plugin
 PARTITION_GPU_IMAGE=nvidia-partition-gpu
 FASTSOCKET_INSTALLER_IMAGE=fastsocket-installer
 DEVICE_INJECTOR_IMAGE=nri-device-injector
+NVIDIA_PERSISTENCED_IMAGE=nvidia-persistenced-installer
 ALL_ARCHITECTURES=amd64 arm64
 
 build:
@@ -77,6 +78,9 @@ fastsocket_installer:
 
 nri-device-injector:
 	docker build --pull -t ${REGISTRY}/${DEVICE_INJECTOR_IMAGE}:${TAG} -f nri_device_injector/Dockerfile .
+
+nvidia_persistenced_installer:
+	docker buildx build --pull --load -t ${REGISTRY}/${NVIDIA_PERSISTENCED_IMAGE}:${TAG} -f nvidia-persistenced-installer/Dockerfile .
 
 .PHONY: all format test vet presubmit build container push partition-gpu
 
