@@ -120,7 +120,7 @@ spec:
             /cos-gpu-installer install --version=latest || exit 1
             chmod 755 /root/home/kubernetes/bin/nvidia
           fi
-      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:116be6b7335c1d34366223b9a3780fe80d862fcf06cd2c580426fdc1697af693"
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:de12f85ebfb4fb6c1893cd30c23aab662a72fa0448f97ef74fccb82d7522ef17"
         name: partition-gpus
         env:
           - name: LD_LIBRARY_PATH
