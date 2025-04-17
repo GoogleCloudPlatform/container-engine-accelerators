@@ -113,11 +113,21 @@ spec:
           mountPath: /build/cos-tools
         - name: nvidia-config
           mountPath: /etc/nvidia
+        - name: nvidia-config
+          mountPath: /etc/nvidia
         command:
         - bash
         - -c
         - |
           echo "Checking for existing GPU driver modules"
+          LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
+          IFS=,; for label in $LABELS; do
+            IFS==; read -r LABEL VALUE <<< "$label"
+            if [[ "${LABEL}" == "cloud.google.com/gke-confidential-nodes-instance-type" ]]; then
+                CONFIDENTIAL_INSTANCE_TYPE=$VALUE
+                echo "${CONFIDENTIAL_INSTANCE_TYPE}" > /etc/nvidia/confidential_node_type.txt
+            fi
+          done
           LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
           IFS=,; for label in $LABELS; do
             IFS==; read -r LABEL VALUE <<< "$label"
@@ -140,7 +150,7 @@ spec:
               echo "Confidential GPU is not supported on this VM, skipping driver installation"
             fi
           fi
-      - image: "gcr.io/gke-release-staging/nvidia-persistenced-installer@sha256:e875101ea7bddcef6e628359e3a8f02fdfbcd05f6efe75bc7ad9457ef4020a04"
+      - image: "gcr.io/gke-release/nvidia-persistenced-installer@sha256:e875101ea7bddcef6e628359e3a8f02fdfbcd05f6efe75bc7ad9457ef4020a04"
         name: "nvidia-persistenced-installer"
         restartPolicy: Always
         securityContext:
@@ -178,7 +188,7 @@ spec:
           mountPath: /dev
         - name: cos-tools
           mountPath: /build/cos-tools
-      - image: "gcr.io/gke-release/nvidia-persistenced-installer@sha256:e875101ea7bddcef6e628359e3a8f02fdfbcd05f6efe75bc7ad9457ef4020a04"
+      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:116be6b7335c1d34366223b9a3780fe80d862fcf06cd2c580426fdc1697af693"
         name: partition-gpus
         env:
           - name: LD_LIBRARY_PATH
