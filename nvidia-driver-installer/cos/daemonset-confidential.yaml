@@ -53,10 +53,6 @@ spec:
                 operator: In
                 values:
                   - TDX
-              - key: node.kubernetes.io/instance-type
-                operator: In
-                values:
-                  - a3-highgpu-1g
       tolerations:
       - operator: "Exists"
       hostNetwork: true
@@ -115,23 +111,81 @@ spec:
           mountPath: /root
         - name: cos-tools
           mountPath: /build/cos-tools
+        - name: nvidia-config
+          mountPath: /etc/nvidia
         command:
         - bash
         - -c
         - |
           echo "Checking for existing GPU driver modules"
+          LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
+          IFS=,; for label in $LABELS; do
+            IFS==; read -r LABEL VALUE <<< "$label"
+            if [[ "${LABEL}" == "cloud.google.com/gke-confidential-nodes-instance-type" ]]; then
+                CONFIDENTIAL_INSTANCE_TYPE=$VALUE
+                echo "${CONFIDENTIAL_INSTANCE_TYPE}" > /etc/nvidia/confidential_node_type.txt
+            fi
+          done
+          LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
+          IFS=,; for label in $LABELS; do
+            IFS==; read -r LABEL VALUE <<< "$label"
+            if [[ "${LABEL}" == "cloud.google.com/gke-confidential-nodes-instance-type" ]]; then
+                CONFIDENTIAL_INSTANCE_TYPE=$VALUE
+                echo "${CONFIDENTIAL_INSTANCE_TYPE}" > /etc/nvidia/confidential_node_type.txt
+            fi
+          done
           if lsmod | grep nvidia; then
             echo "GPU driver is already installed, the installed version may or may not be the driver version being tried to install, skipping installation"
             exit 0
           else
-            echo "No GPU driver module detected, installing now"
-            /cos-gpu-installer install --no-verify || exit 1
-            sbin/modprobe -d /root drm_kms_helper; /sbin/insmod /usr/local/nvidia/drivers/nvidia.ko; sbin/insmod /usr/local/nvidia/drivers/nvidia-uvm.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-modeset.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-drm.ko
-            /usr/local/nvidia/bin/nvidia-modprobe -c0 -u -m
-            /usr/local/nvidia/bin/nvidia-ctk system create-dev-char-symlinks --create-all
-            chmod 755 /root/home/kubernetes/bin/nvidia
-            /usr/local/nvidia/bin/nvidia-smi conf-compute -srs 1
+            if [[ "${CONFIDENTIAL_INSTANCE_TYPE}" == "TDX" ]]; then
+              echo "No GPU driver module detected, installing now"
+              /cos-gpu-installer install --no-verify --version=default || exit 1
+              sbin/modprobe -d /root drm_kms_helper; /sbin/insmod /usr/local/nvidia/drivers/nvidia.ko; sbin/insmod /usr/local/nvidia/drivers/nvidia-uvm.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-modeset.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-drm.ko
+              /usr/local/nvidia/bin/nvidia-modprobe -c0 -u -m
+              chmod 755 /root/home/kubernetes/bin/nvidia
+            else
+              echo "Confidential GPU is not supported on this VM, skipping driver installation"
+            fi
           fi
+      - image: "gcr.io/gke-release/nvidia-persistenced-installer@sha256:e875101ea7bddcef6e628359e3a8f02fdfbcd05f6efe75bc7ad9457ef4020a04"
+        name: "nvidia-persistenced-installer"
+        restartPolicy: Always
+        securityContext:
+          privileged: true
+        env:
+          - name: LD_LIBRARY_PATH
+            value: /usr/local/nvidia/lib64
+          - name: NVIDIA_INSTALL_DIR_HOST
+            value: /home/kubernetes/bin/nvidia
+          - name: NVIDIA_INSTALL_DIR_CONTAINER
+            value: /usr/local/nvidia
+          - name: VULKAN_ICD_DIR_HOST
+            value: /home/kubernetes/bin/nvidia/vulkan/icd.d
+          - name: VULKAN_ICD_DIR_CONTAINER
+            value: /etc/vulkan/icd.d
+          - name: ROOT_MOUNT_DIR
+            value: /root
+          - name: COS_TOOLS_DIR_HOST
+            value: /var/lib/cos-tools
+          - name: COS_TOOLS_DIR_CONTAINER
+            value: /build/cos-tools
+        volumeMounts:
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
+          mountPropagation: HostToContainer
+        - name: root-mount
+          mountPath: /root
+          mountPropagation: HostToContainer
+        - name: nvidia-config
+          mountPath: /etc/nvidia
+          mountPropagation: HostToContainer
+        - name: vulkan-icd-mount
+          mountPath: /etc/vulkan/icd.d
+        - name: dev
+          mountPath: /dev
+        - name: cos-tools
+          mountPath: /build/cos-tools
       - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:116be6b7335c1d34366223b9a3780fe80d862fcf06cd2c580426fdc1697af693"
         name: partition-gpus
         env:
