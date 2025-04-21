@@ -55,6 +55,22 @@ var partitionSizeToProfileID = map[string]string{
 	"3g.71gb":  "9",
 	"4g.71gb":  "5",
 	"7g.141gb": "0",
+
+	//nvidia-b200, nvidia-gb200
+	"1g.23gb": "19",
+	//nvidia-b200
+	"1g.45gb":  "15",
+	"2g.45gb":  "14",
+	"3g.90gb":  "9",
+	"4g.90gb":  "5",
+	"7g.180gb": "0",
+
+	//nvidia-gb200
+	"1g.47gb":  "15",
+	"2g.47gb":  "14",
+	"3g.93gb":  "9",
+	"4g.93gb":  "5",
+	"7g.186gb": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -79,10 +95,26 @@ var partitionSizeMaxCount = map[string]int{
 	"3g.71gb":  2,
 	"4g.71gb":  1,
 	"7g.141gb": 1,
+	//nvidia-b200, nvidia-gb200
+	"1g.23gb": 7,
+	//nvidia-b200
+	"1g.45gb":  4,
+	"2g.45gb":  3,
+	"3g.90gb":  2,
+	"4g.90gb":  1,
+	"7g.180gb": 1,
+	//nvidia-gb200
+	"1g.47gb":  4,
+	"2g.47gb":  3,
+	"3g.93gb":  2,
+	"4g.93gb":  1,
+	"7g.186gb": 1,
 }
 
 const (
 	SIGRTMIN        = 34
+	NvidiaGB200     = "NVIDIA GB200"          //nvidia-gb200
+	NvidiaB200      = "NVIDIA B200"           //nvidia-b200
 	Nvidia141gbH200 = "NVIDIA H200"           //nvidia-h200-141gb
 	Nvidia80gbH100  = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
 	Nvidia40gbA100  = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
@@ -212,6 +244,10 @@ func checkGpuType() (string, error) {
 		return "", err
 	}
 	switch {
+	case strings.HasPrefix(string(gpuType), NvidiaGB200):
+		return NvidiaGB200, nil
+	case strings.HasPrefix(string(gpuType), NvidiaB200):
+		return NvidiaB200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia141gbH200):
 		return Nvidia141gbH200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia80gbH100):
@@ -233,7 +269,8 @@ func cleanupAllGPUPartitions() error {
 	args := []string{"mig", "-dci"}
 	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
 	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil && !strings.Contains(string(out), "No GPU instances found") {
+	if err != nil && !strings.Contains(string(out), "No GPU instances found") &&
+		!strings.Contains(string(out), "No compute instances found") {
 		return fmt.Errorf("failed to destroy compute instance, nvidia-smi output: %s, error: %v ", string(out), err)
 	}
 	glog.Infof("Output:\n %s", string(out))
@@ -241,7 +278,8 @@ func cleanupAllGPUPartitions() error {
 	args = []string{"mig", "-dgi"}
 	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
 	out, err = exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil && !strings.Contains(string(out), "No GPU instances found") {
+	if err != nil && !strings.Contains(string(out), "No GPU instances found") &&
+		!strings.Contains(string(out), "No compute instances found") {
 		return fmt.Errorf("failed to destroy gpu instance, nvidia-smi output: %s, error: %v ", string(out), err)
 	}
 	glog.Infof("Output:\n %s", string(out))

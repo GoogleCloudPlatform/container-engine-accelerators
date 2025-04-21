@@ -22,6 +22,7 @@ metadata:
   name: nccl-test-host-1
   labels:
     name: nccl-host-1
+    tcpxo: daemon
   annotations:
     devices.gke.io/container.tcpxo-daemon: |+
       - path: /dev/nvidia0
@@ -49,13 +50,23 @@ metadata:
         {"interfaceName":"eth8","network":"vpc8"}
       ]
 spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: tcpxo
+            operator: In
+            values:
+            - daemon
+        topologyKey: "kubernetes.io/hostname"
   hostname: host1
   subdomain: nccl-host-1
   #  hostNetwork: true
   #  dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.11
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.14
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -80,7 +91,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.5
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.8-1
       imagePullPolicy: Always
 #      securityContext:
 #        privileged: true
@@ -141,6 +152,7 @@ metadata:
   name: nccl-test-host-2
   labels:
     name: nccl-host-2
+    tcpxo: daemon
   annotations:
     devices.gke.io/container.tcpxo-daemon: |+
       - path: /dev/nvidia0
@@ -168,13 +180,23 @@ metadata:
         {"interfaceName":"eth8","network":"vpc8"}
       ]
 spec:
+  affinity:
+    podAntiAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+      - labelSelector:
+          matchExpressions:
+          - key: tcpxo
+            operator: In
+            values:
+            - daemon
+        topologyKey: "kubernetes.io/hostname"
   hostname: host2
   subdomain: nccl-host-2
   #  hostNetwork: true
   #  dnsPolicy: ClusterFirstWithHostNet
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.11
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.14
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -199,7 +221,7 @@ spec:
         - name: LD_LIBRARY_PATH
           value: /usr/local/nvidia/lib64
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.5
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.8-1
       imagePullPolicy: Always
 #      securityContext:
 #        privileged: true
