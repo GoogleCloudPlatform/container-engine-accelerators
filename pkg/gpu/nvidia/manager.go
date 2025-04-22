@@ -255,12 +255,14 @@ func (ngm *nvidiaGPUManager) discoverGPUs() error {
 
 		path := fmt.Sprintf("nvidia%d", minor)
 		glog.V(3).Infof("Found Nvidia GPU %q\n", path)
+
 		topologyInfo, err := nvmlutil.Topology(device, pciDevicesRoot)
 		if err != nil {
 			glog.Errorf("unable to get topology for device with index %d", i, err)
 		}
 		ngm.SetDeviceHealth(path, pluginapi.Healthy, topologyInfo)
 	}
+
 	return nil
 }
 
@@ -273,6 +275,7 @@ func (ngm *nvidiaGPUManager) hasAdditionalGPUsInstalled() bool {
 		glog.Errorln(err)
 		return false
 	}
+
 	if deviceCount > originalDeviceCount {
 		glog.Infof("Found %v GPUs, while only %v are registered. Stopping device-plugin server.", deviceCount, originalDeviceCount)
 		return true
@@ -348,10 +351,11 @@ func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string, topolog
 	defer ngm.devicesMutex.Unlock()
 
 	reg := regexp.MustCompile(nvidiaDeviceRE)
+
 	if reg.MatchString(name) {
 		ngm.devices[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 	} else {
-		ngm.migDeviceManager.SetDeviceHealth(name, health)
+		ngm.migDeviceManager.SetDeviceHealth(name, health, topology)
 	}
 }
 
