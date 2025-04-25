@@ -21,6 +21,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/nvmlutil"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/google/go-cmp/cmp"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
@@ -276,11 +277,11 @@ func Test_topology(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// overriding info to mockDeviceInfo interface
-			nvmlDeviceInfo = &mockDeviceInfo{}
+			// overriding info to nvmlutil.MockDeviceInfo interface
+			nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
 			pciDevicesRoot = testDevDir
-			mockInfo := nvmlDeviceInfo.(*mockDeviceInfo)
-			mockInfo.busID = tc.busID
+			mockInfo := nvmlutil.NvmlDeviceInfo.(*nvmlutil.MockDeviceInfo)
+			mockInfo.BusID = tc.busID
 			if len(tc.numaFileContent) > 0 {
 				err = os.MkdirAll(path.Join(testDevDir, tc.numaFileDir), 0755)
 				if err != nil {
@@ -296,7 +297,7 @@ func Test_topology(t *testing.T) {
 					t.Errorf("unable to write following content to %q file: %q", fileName, tc.numaFileContent)
 				}
 			}
-			gotTopologyInfo, gotError := topology(device, 0)
+			gotTopologyInfo, gotError := nvmlutil.Topology(device, tc.pciDevicesRoot)
 			if gotError != nil && !tc.wantError {
 				t.Errorf("%v", gotError)
 			}

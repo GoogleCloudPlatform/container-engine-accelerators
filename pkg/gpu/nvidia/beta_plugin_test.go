@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/nvmlutil"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -271,11 +272,11 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 		return fmt.Errorf("failed to initilize a GPU manager")
 	}
 
-	// overriding nvmlDeviceInfo to mockDeviceInfo interface
-	nvmlDeviceInfo = &mockDeviceInfo{}
-	mockInfo, _ := nvmlDeviceInfo.(*mockDeviceInfo)
+	// overriding nvmlutil.NvmlDeviceInfo to mockDeviceInfo interface
+	nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
+	mockInfo, _ := nvmlutil.NvmlDeviceInfo.(*nvmlutil.MockDeviceInfo)
 
-	mockInfo.testDevDir = testDevDir
+	mockInfo.TestDevDir = testDevDir
 
 	// Start GPU manager.
 	if err := testGpuManager.Start(); err != nil {
@@ -456,10 +457,10 @@ func testNvidiaGPUManagerBetaAPIWithMig(gpuConfig GPUConfig, wantDevices map[str
 	}
 
 	// overriding nvmlDeviceInfo to mockDeviceInfo interface
-	nvmlDeviceInfo = &mockDeviceInfo{}
-	mockInfo, _ := nvmlDeviceInfo.(*mockDeviceInfo)
+	nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
+	mockInfo, _ := nvmlutil.NvmlDeviceInfo.(*nvmlutil.MockDeviceInfo)
 
-	mockInfo.testDevDir = testDevDir
+	mockInfo.TestDevDir = testDevDir
 
 	// Start GPU manager.
 	if err := testGpuManager.Start(); err != nil {

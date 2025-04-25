@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc. All Rights Reserved.
+// Copyright 2025 Google Inc. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 // This file mocks NVML library methods for unit tests.
 
-package nvidia
+package nvmlutil
 
 import (
 	"io/ioutil"
@@ -23,16 +23,18 @@ import (
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 )
 
-type mockDeviceInfo struct {
-	currentDevice int
-	testDevDir    string
-	busID         [32]int8
+const nvidiaDeviceRE = `^nvidia[0-9]*$`
+
+type MockDeviceInfo struct {
+	CurrentDevice int
+	TestDevDir    string
+	BusID         [32]int8
 }
 
-func (gpuDeviceInfo *mockDeviceInfo) deviceCount() (int, nvml.Return) {
+func (gpuDeviceInfo *MockDeviceInfo) DeviceCount() (int, nvml.Return) {
 	reg := regexp.MustCompile(nvidiaDeviceRE)
 
-	files, _ := ioutil.ReadDir(gpuDeviceInfo.testDevDir)
+	files, _ := ioutil.ReadDir(gpuDeviceInfo.TestDevDir)
 
 	numDevices := 0
 	for _, f := range files {
@@ -46,23 +48,23 @@ func (gpuDeviceInfo *mockDeviceInfo) deviceCount() (int, nvml.Return) {
 	return numDevices, nvml.SUCCESS
 }
 
-func (gpuDeviceInfo *mockDeviceInfo) deviceHandleByIndex(i int) (nvml.Device, nvml.Return) {
-	gpuDeviceInfo.currentDevice = i
+func (gpuDeviceInfo *MockDeviceInfo) DeviceHandleByIndex(i int) (nvml.Device, nvml.Return) {
+	gpuDeviceInfo.CurrentDevice = i
 	return nvml.Device{}, nvml.SUCCESS
 }
 
-func (gpuDeviceInfo *mockDeviceInfo) migDeviceHandleByIndex(d nvml.Device, i int) (nvml.Device, nvml.Return) {
+func (gpuDeviceInfo *MockDeviceInfo) MigDeviceHandleByIndex(d nvml.Device, i int) (nvml.Device, nvml.Return) {
 	return nvml.Device{}, nvml.SUCCESS
 }
 
-func (gpuDeviceInfo *mockDeviceInfo) migMode(d nvml.Device) (int, int, nvml.Return) {
+func (gpuDeviceInfo *MockDeviceInfo) MigMode(d nvml.Device) (int, int, nvml.Return) {
 	return 0, 0, nvml.SUCCESS
 }
 
-func (gpuDeviceInfo *mockDeviceInfo) minorNumber(d nvml.Device) (int, nvml.Return) {
-	return gpuDeviceInfo.currentDevice, nvml.SUCCESS
+func (gpuDeviceInfo *MockDeviceInfo) MinorNumber(d nvml.Device) (int, nvml.Return) {
+	return gpuDeviceInfo.CurrentDevice, nvml.SUCCESS
 }
 
-func (gpuDeviceInfo *mockDeviceInfo) pciInfo(d nvml.Device) (nvml.PciInfo, nvml.Return) {
-	return nvml.PciInfo{BusId: gpuDeviceInfo.busID}, nvml.SUCCESS
+func (gpuDeviceInfo *MockDeviceInfo) PciInfo(d nvml.Device) (nvml.PciInfo, nvml.Return) {
+	return nvml.PciInfo{BusId: gpuDeviceInfo.BusID}, nvml.SUCCESS
 }
