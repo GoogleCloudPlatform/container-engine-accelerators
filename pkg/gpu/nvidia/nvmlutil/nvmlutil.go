@@ -132,7 +132,7 @@ func numaNode(d nvml.Device, pciDevicesRoot string) (numaEnabled bool, numaNode 
 	busID := strings.ToLower(strings.TrimPrefix(string(bytesT), "0000"))
 
 	numaNodeFile := fmt.Sprintf("%s/%s/numa_node", pciDevicesRoot, busID)
-	glog.Infof("Reading NUMA node information from %q", numaNodeFile)
+	glog.V(3).Infof("Reading NUMA node information from %q", numaNodeFile)
 	b, err := os.ReadFile(numaNodeFile)
 	if err != nil {
 		return false, 0, fmt.Errorf("failed to read NUMA information from %q file: %v", numaNodeFile, err)

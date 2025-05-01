@@ -277,7 +277,7 @@ func Test_topology(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// overriding info to nvmlutil.MockDeviceInfo interface
+			// overriding nvmlutil.NvmlDeviceInfo to nvmlutil.MockDeviceInfo interface
 			nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
 			pciDevicesRoot = testDevDir
 			mockInfo := nvmlutil.NvmlDeviceInfo.(*nvmlutil.MockDeviceInfo)

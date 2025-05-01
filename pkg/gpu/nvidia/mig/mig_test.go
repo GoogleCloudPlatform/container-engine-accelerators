@@ -22,6 +22,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/nvmlutil"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -79,6 +80,9 @@ func TestDiscoverGPUPartitions(t *testing.T) {
 			t.Fatalf("failed to create device node (%s): %v", device, err)
 		}
 	}
+
+	// overriding nvmlutil.NvmlDeviceInfo to nvmlutil.MockDeviceInfo interface
+	nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
 
 	deviceManager := NewDeviceManager(testDevDir, testProcDir)
 	if err := deviceManager.Start("3g.20gb"); err != nil {
