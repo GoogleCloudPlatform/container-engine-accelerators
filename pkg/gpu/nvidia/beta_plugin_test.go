@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/nvmlutil"
 	"github.com/google/go-cmp/cmp"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -271,6 +272,12 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 		return fmt.Errorf("failed to initilize a GPU manager")
 	}
 
+	// overriding nvmlutil.NvmlDeviceInfo to mockDeviceInfo interface
+	nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
+	mockInfo, _ := nvmlutil.NvmlDeviceInfo.(*nvmlutil.MockDeviceInfo)
+
+	mockInfo.TestDevDir = testDevDir
+
 	// Start GPU manager.
 	if err := testGpuManager.Start(); err != nil {
 		return fmt.Errorf("unable to start gpu manager: %w", err)
@@ -282,6 +289,7 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 	if discoverErr != nil {
 		return discoverErr
 	}
+
 	gpus := reflect.ValueOf(testGpuManager).Elem().FieldByName("devices").Len()
 	if gpus == 0 {
 		return fmt.Errorf("unable to discover GPU devices")
@@ -331,6 +339,7 @@ func testNvidiaGPUManagerBetaAPI(gpuConfig GPUConfig, wantDevices map[string]*pl
 	for _, d := range devs.Devices {
 		devices[d.ID] = d
 	}
+
 	if diff := cmp.Diff(wantDevices, devices); diff != "" {
 		return fmt.Errorf("unexpected devices (-want, +got) = %s", diff)
 	}
@@ -446,6 +455,12 @@ func testNvidiaGPUManagerBetaAPIWithMig(gpuConfig GPUConfig, wantDevices map[str
 	if testGpuManager == nil {
 		return fmt.Errorf("failed to initilize a GPU manager")
 	}
+
+	// overriding nvmlDeviceInfo to mockDeviceInfo interface
+	nvmlutil.NvmlDeviceInfo = &nvmlutil.MockDeviceInfo{}
+	mockInfo, _ := nvmlutil.NvmlDeviceInfo.(*nvmlutil.MockDeviceInfo)
+
+	mockInfo.TestDevDir = testDevDir
 
 	// Start GPU manager.
 	if err := testGpuManager.Start(); err != nil {

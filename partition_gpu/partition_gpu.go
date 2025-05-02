@@ -25,6 +25,8 @@ import (
 	"regexp"
 	"strings"
 	"syscall"
+	"bufio"
+	"regexp"
 
 	"github.com/golang/glog"
 )
@@ -250,6 +252,8 @@ func checkGpuType() (string, error) {
 		return "", err
 	}
 	switch {
+	case strings.HasPrefix(string(gpuType), NvidiaGB200):
+		return NvidiaGB200, nil
 	case strings.HasPrefix(string(gpuType), NvidiaB200):
 		return NvidiaB200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia141gbH200):
@@ -427,4 +431,8 @@ func runNvidiaSmiStatus() {
 		glog.Errorf("Failed to run nvidia-smi, output: %s, error: %v", string(out), err)
 	}
 	glog.Infof("Output:\n %s", string(out))
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 3b5af753b7ac1d3d501e3e5b5879ab9adfdd26f7
