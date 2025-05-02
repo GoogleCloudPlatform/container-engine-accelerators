@@ -416,7 +416,9 @@ func checkDesired(partitions map[string][]string, desiredMaxCount int) bool {
 	}
 
 	for _, profileIDsOnGpu := range partitions {
-		return len(profileIDsOnGpu) == desiredMaxCount
+		if len(profileIDsOnGpu) != desiredMaxCount {
+			return false
+		}
 	}
 
 	return true
