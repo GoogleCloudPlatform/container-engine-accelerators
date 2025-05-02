@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/nvmlutil"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/fsnotify/fsnotify"
@@ -63,7 +64,8 @@ const (
 )
 
 var (
-	resourceName = "nvidia.com/gpu"
+	resourceName   = "nvidia.com/gpu"
+	pciDevicesRoot = "/sys/bus/pci/devices"
 )
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
@@ -190,7 +192,7 @@ func (ngm *nvidiaGPUManager) ListDevices() map[string]pluginapi.Device {
 			for i := 0; i < ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU; i++ {
 				virtualDeviceID := fmt.Sprintf("%s/vgpu%d", device.ID, i)
 				// When sharing GPUs, the virtual GPU device will inherit the health status from its underlying physical GPU device.
-				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health}
+				virtualGPUDevices[virtualDeviceID] = pluginapi.Device{ID: virtualDeviceID, Health: device.Health, Topology: device.Topology}
 			}
 		}
 		return virtualGPUDevices
@@ -231,20 +233,36 @@ func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec
 
 // Discovers all NVIDIA GPU devices available on the local node by walking nvidiaGPUManager's devDirectory.
 func (ngm *nvidiaGPUManager) discoverGPUs() error {
-	reg := regexp.MustCompile(nvidiaDeviceRE)
-	files, err := ioutil.ReadDir(ngm.devDirectory)
-	if err != nil {
-		return err
+	if nvmlutil.NvmlDeviceInfo == nil {
+		nvmlutil.NvmlDeviceInfo = &nvmlutil.DeviceInfo{}
 	}
-	for _, f := range files {
-		if f.IsDir() {
-			continue
-		}
-		if reg.MatchString(f.Name()) {
-			glog.V(3).Infof("Found Nvidia GPU %q\n", f.Name())
-			ngm.SetDeviceHealth(f.Name(), pluginapi.Healthy)
-		}
+
+	devicesCount, ret := nvmlutil.NvmlDeviceInfo.DeviceCount()
+	if ret != nvml.SUCCESS {
+		return fmt.Errorf("failed to get devices count: %v", nvml.ErrorString(ret))
 	}
+
+	for i := 0; i < devicesCount; i++ {
+		device, ret := nvmlutil.NvmlDeviceInfo.DeviceHandleByIndex((i))
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("failed to get the device handle for index %d: %v", i, nvml.ErrorString(ret))
+		}
+
+		minor, ret := nvmlutil.NvmlDeviceInfo.MinorNumber(device)
+		if ret != nvml.SUCCESS {
+			return fmt.Errorf("failed to get the minor number for device with index %d: %v", i, nvml.ErrorString(ret))
+		}
+
+		path := fmt.Sprintf("nvidia%d", minor)
+		glog.V(3).Infof("Found Nvidia GPU %q\n", path)
+
+		topologyInfo, err := nvmlutil.Topology(device, pciDevicesRoot)
+		if err != nil {
+			glog.Errorf("unable to get topology for device with index %d", i, err)
+		}
+		ngm.SetDeviceHealth(path, pluginapi.Healthy, topologyInfo)
+	}
+
 	return nil
 }
 
@@ -257,6 +275,7 @@ func (ngm *nvidiaGPUManager) hasAdditionalGPUsInstalled() bool {
 		glog.Errorln(err)
 		return false
 	}
+
 	if deviceCount > originalDeviceCount {
 		glog.Infof("Found %v GPUs, while only %v are registered. Stopping device-plugin server.", deviceCount, originalDeviceCount)
 		return true
@@ -327,15 +346,16 @@ func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 }
 
 // SetDeviceHealth sets the health status for a GPU device or partition if MIG is enabled
-func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string) {
+func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string, topology *pluginapi.TopologyInfo) {
 	ngm.devicesMutex.Lock()
 	defer ngm.devicesMutex.Unlock()
 
 	reg := regexp.MustCompile(nvidiaDeviceRE)
+
 	if reg.MatchString(name) {
-		ngm.devices[name] = pluginapi.Device{ID: name, Health: health}
+		ngm.devices[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 	} else {
-		ngm.migDeviceManager.SetDeviceHealth(name, health)
+		ngm.migDeviceManager.SetDeviceHealth(name, health, topology)
 	}
 }
 

@@ -250,6 +250,8 @@ func checkGpuType() (string, error) {
 		return "", err
 	}
 	switch {
+	case strings.HasPrefix(string(gpuType), NvidiaGB200):
+		return NvidiaGB200, nil
 	case strings.HasPrefix(string(gpuType), NvidiaB200):
 		return NvidiaB200, nil
 	case strings.HasPrefix(string(gpuType), Nvidia141gbH200):
