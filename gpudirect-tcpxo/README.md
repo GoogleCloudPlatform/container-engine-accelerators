@@ -37,6 +37,7 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 
 
 ## Releases
+- [May 01, 2025](./README.md#may-01-2025)
 - [Feb 27, 2025](./README.md#feb-27-2025)
 - [Feb 06, 2025](./README.md#feb-06-2025)
 - [Nov 27, 2024](./README.md#nov-27-2024)
@@ -44,10 +45,75 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 - [Sept 19, 2024](./README.md#sept-19-2024)
 - [Sept 06, 2024](./README.md#sept-06-2024)
 - [Aug 06, 2024](./README.md#aug-06-2024)
-- [Jun 27, 2024](./README.md#jun-06-2024)
+- [Jun 27, 2024](./README.md#jun-27-2024)
 - [May 30, 2024](./README.md#may-30-2024)
 - [May 20, 2024](./README.md#may-20-2024)
 - [Apr 17, 2024](./README.md#apr-17-2024)
+
+## May 01, 2025
+#### NCCL plugin installer image:
+```
+us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.9-1
+```
+#### TCPXO-daemon image:
+```
+us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.15 
+```
+#### Compatible NCCL version:
+```
+default NCCl version: nccl-2.23, which is provided by the NCCL plugin installer
+qualified and supported: NCCL 2.21.5-2.23.4 
+```
+#### NCCL configs:
+```
+"NCCL_FASTRAK_CTRL_DEV=eth0",
+"NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8",
+"NCCL_SOCKET_IFNAME=eth0",
+"NCCL_CROSS_NIC=0",
+"NCCL_ALGO=Ring,Tree",
+"NCCL_PROTO=Simple,LL128",
+
+"NCCL_MIN_NCHANNELS=4",
+"NCCL_TUNER_PLUGIN=libnccl-tuner.so",
+"NCCL_TUNER_CONFIG_PATH=/usr/local/nvidia/lib64/a3plus_tuner_config.textproto",
+# Please replace `/usr/local/nvidia/lib64/` as the NCCL lib directory installd inside the workload container,
+# the mounted library path are controlled in nccl installer destination, link. 
+"NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config.textproto",
+# Please replace `/usr/local/nvidia/lib64/` as the NCCL lib directory installed inside the workload container.
+# the mounted library path are controlled in nccl installer destination, link.
+"NCCL_DYNAMIC_CHUNK_SIZE=524288",
+"NCCL_P2P_NET_CHUNKSIZE=524288",
+"NCCL_P2P_PCI_CHUNKSIZE=524288",
+"NCCL_P2P_NVL_CHUNKSIZE=1048576",
+"NCCL_FASTRAK_NUM_FLOWS=2",
+"NCCL_FASTRAK_USE_SNAP=1",
+"NCCL_FASTRAK_PLUGIN_ACCEPT_TIMEOUT_MS=600000",
+"NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL=0",
+"NCCL_BUFFSIZE=8388608",
+"NCCL_NET_GDR_LEVEL=PIX",
+"NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING=0",
+"NCCL_FASTRAK_USE_LLCM=1",
+"NCCL_NVLS_ENABLE=0"
+"NCCL_DEBUG=WARN",
+```
+#### What is new with in release:
+* Following the release of v1.0.8 which introduced support for NCCL LL128, this release now makes LL128 the default tuning parameter. About NCCL LL128, check [Best practice to run workload with GPUDirect-TCPX(O)](./best-practice.md) for more details.
+  * This change has been reflected in the provided `nccl-env-profile.sh`.
+  * The new default profile sets the following environment variables:
+  ```
+  NCCL_PROTO=Simple,LL128
+  NCCL_TUNER_CONFIG_PATH=/usr/local/nvidia/lib64/a3plus_tuner_config.textproto
+  NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config.textproto
+  ```
+* Note that the default tuner configuration file (`a3plus_tuner_config.textproto`) and the config checker configuration file (`a3plus_guest_config.textproto`) expect `NCCL_PROTO=Simple,LL128` to be set.
+  * To disable LL128, please source `nccl-env-profile-simple.sh` instead.
+  * `nccl-env-profile-simple.sh ` links configuration files which do not leverage LL128 (`a3plus_tuner_config_simple.textproto` and `a3plus_guest_config_simple.textproto`)
+* For convenience and ease of use, the following LL128 specific files from the previous release exist as symbolic links
+  ```
+  nccl-env-profile-ll128.sh
+  a3plus_tuner_config_ll128.textproto
+  a3plus_guest_config_ll128.textproto
+  ```
 
 ## Feb 27, 2025
 #### GKE 1.32 starts to support TCPXO:
@@ -65,7 +131,7 @@ us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.14
 ```
 #### Compatible NCCL version:
 ```
-default NCCl version: nccl-2.21.5, which is provided by the NCCL plugin installer
+default NCCl version: nccl-2.23, which is provided by the NCCL plugin installer
 qualified and supported: NCCL 2.21.5-2.23.4 
 ```
 #### NCCL configs:
@@ -427,7 +493,7 @@ nccl-2.21.5
 ```
 #### What is new in this release:  
 * Two additional environment variables are configured for validation and stability:
-`NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/tcpxo/lib64/a3plus_guest_config.textproto`,
+`NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config.textproto`,
 `NCCL_FASTRAK_PLUGIN_ACCEPT_TIMEOUT_MS=600000`
 
 ## May 20, 2024
@@ -496,7 +562,7 @@ us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.6-sctp
 ```
 #### NCCL configs:
 ```
-LD_LIBRARY_PATH=\"${LD_LIBRARY_PATH}:/usr/local/tcpxo/lib64\"
+LD_LIBRARY_PATH=\"${LD_LIBRARY_PATH}:/usr/local/nvidia/lib64\"
 NCCL_FASTRAK_CTRL_DEV=eth0
 NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8
 NCCL_SOCKET_IFNAME=eth0
