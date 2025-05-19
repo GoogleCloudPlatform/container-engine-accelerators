@@ -51,6 +51,15 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 - [Apr 17, 2024](./README.md#apr-17-2024)
 
 ## May 01, 2025
+
+#### Important Note:
+Starting from this release, workloads have the following requirements:
+```
+glibc version 2.35 or higher
+Ubuntu version 22.04 or higher
+Debian version Debian 12 or higher
+```
+
 #### NCCL plugin installer image:
 ```
 us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.9-1
