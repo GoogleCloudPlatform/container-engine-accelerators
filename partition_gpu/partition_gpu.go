@@ -356,7 +356,7 @@ func checkCurrentPartitionProfileCounts(desiredMaxCount int) bool {
 	return desiredPartition
 }
 
-// figure out return type
+// returns profile id map and if uniform
 func parseLGIOutput(lgiOutput string) (map[string][]string, bool) {
 	dataLineRegex, err := regexp.Compile(`^\s*(\d+)\s+(MIG\s+[\w\.]+)\s+(\d+)\s+(\d+)\s+([\d:]+)\s*$`)
 	if err != nil {
