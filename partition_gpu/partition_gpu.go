@@ -15,12 +15,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -182,6 +184,16 @@ func main() {
 
 	glog.Infof("MIG mode is enabled on all GPUs, proceeding to create GPU partitions.")
 
+	// get the current partitions
+	desiredMaxCount := partitionSizeMaxCount[gpuConfig.GPUPartitionSize]
+	isDesiredPartition := checkCurrentPartitionProfileCounts(desiredMaxCount)
+	if isDesiredPartition {
+		glog.Infof("Current GPU partition configuration matches the desired state. No changes needed.")
+		runNvidiaSmiStatus()
+		return
+	}
+
+	glog.Infof("Current GPU partition configuration does not match the desired state. Reconfiguring partitions...")
 	glog.Infof("Cleaning up any existing GPU partitions")
 	if err := cleanupAllGPUPartitions(); err != nil {
 		glog.Errorf("Failed to cleanup GPU partitions: %v", err)
@@ -194,13 +206,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	glog.Infof("Running %s", *nvidiaSmiPath)
-	out, err := exec.Command(*nvidiaSmiPath).Output()
-	if err != nil {
-		glog.Errorf("Failed to run nvidia-smi, output: %s, error: %v", string(out), err)
-	}
-	glog.Infof("Output:\n %s", string(out))
-
+	runNvidiaSmiStatus()
 }
 
 func parseGPUConfig(gpuConfigFile string) (GPUConfig, error) {
@@ -328,4 +334,106 @@ func buildPartitionStr(partitionSize string) (string, error) {
 	}
 
 	return partitionStr, nil
+}
+
+// getCurrentPartitionProfileCounts checks for active MIG GPU instances,
+// and outputs a map of their profileIDs -> counts
+func checkCurrentPartitionProfileCounts(desiredMaxCount int) bool {
+	args := []string{"mig", "-lgi"}
+	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
+	if err != nil {
+		glog.Errorf("failed to execute 'nvidia-smi mig -lgi': %v", err)
+		return false
+	}
+
+	glog.Infof("Output:\n %s", string(out))
+	outputText := string(out)
+	partitions, uniform, lgiError := parseLGIOutput(outputText)
+	if lgiError != nil {
+		glog.Errorf("failed to parse 'nvidia-smi mig -lgi' output: %v", lgiError)
+		return false
+	}
+	if !uniform {
+		glog.Info("Partitions are not uniform, partition reconstruction needed.")
+		return uniform
+	}
+	desiredPartition := checkDesired(partitions, desiredMaxCount)
+
+	return desiredPartition
+}
+
+// returns profile id map and if uniform
+func parseLGIOutput(lgiOutput string) (map[string][]string, bool, error) {
+	dataLineRegex, err := regexp.Compile(`^\s*(\d+)\s+(MIG\s+[\w\.]+)\s+(\d+)\s+(\d+)\s+([\d:]+)\s*$`)
+	if err != nil {
+		glog.Errorf("Internal error: failed to compile regex: %v", err)
+		return make(map[string][]string), false, err
+	}
+
+	gpuProfileIDsMap := make(map[string][]string)
+	profileIDFirst := ""
+
+	scanner := bufio.NewScanner(strings.NewReader(lgiOutput))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if strings.Contains(line, "====") {
+			continue
+		}
+		if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
+			continue
+		}
+
+		contentInPipes := strings.TrimSpace(line[1 : len(line)-1])
+		matches := dataLineRegex.FindStringSubmatch(contentInPipes)
+
+		if len(matches) == 6 {
+			gpuIndex := matches[1]
+			profileID := matches[3]
+			if profileIDFirst == "" {
+				profileIDFirst = profileID
+			} else {
+				if profileIDFirst != profileID {
+					return gpuProfileIDsMap, false, nil
+				}
+			}
+			gpuProfileIDsMap[gpuIndex] = append(gpuProfileIDsMap[gpuIndex], profileID)
+			glog.Infof("Parsed GI on GPU %s: Profile ID %s", gpuIndex, profileID)
+		} else if contentInPipes != "" {
+			glog.Infof("Line did not match expected GI data format: '%s' (Content: '%s')", line, contentInPipes)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return gpuProfileIDsMap, false, err
+	}
+
+	if len(gpuProfileIDsMap) == 0 {
+		return gpuProfileIDsMap, false, nil
+	}
+	glog.Infof("map: %v", gpuProfileIDsMap)
+	return gpuProfileIDsMap, true, nil
+}
+
+func checkDesired(partitions map[string][]string, desiredMaxCount int) bool {
+	if len(partitions) == 0 {
+		return false
+	}
+
+	for _, profileIDsOnGpu := range partitions {
+		if len(profileIDsOnGpu) != desiredMaxCount {
+			return false
+		}
+	}
+
+	return true
+}
+
+func runNvidiaSmiStatus() {
+	glog.Infof("Running %s", *nvidiaSmiPath)
+	out, err := exec.Command(*nvidiaSmiPath).Output()
+	if err != nil {
+		glog.Errorf("Failed to run nvidia-smi, output: %s, error: %v", string(out), err)
+	}
+	glog.Infof("Output:\n %s", string(out))
 }
