@@ -126,14 +126,6 @@ spec:
                 echo "${CONFIDENTIAL_INSTANCE_TYPE}" > /etc/nvidia/confidential_node_type.txt
             fi
           done
-          LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
-          IFS=,; for label in $LABELS; do
-            IFS==; read -r LABEL VALUE <<< "$label"
-            if [[ "${LABEL}" == "cloud.google.com/gke-confidential-nodes-instance-type" ]]; then
-                CONFIDENTIAL_INSTANCE_TYPE=$VALUE
-                echo "${CONFIDENTIAL_INSTANCE_TYPE}" > /etc/nvidia/confidential_node_type.txt
-            fi
-          done
           if lsmod | grep nvidia; then
             echo "GPU driver is already installed, the installed version may or may not be the driver version being tried to install, skipping installation"
             exit 0
