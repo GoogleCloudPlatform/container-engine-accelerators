@@ -22,13 +22,10 @@ import (
 
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 
-	"k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
-
-	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
-
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/fake"
+	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 func pointer[T any](s T) *T {
@@ -43,17 +40,17 @@ func (gp *mockGPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, er
 
 func TestCatchError(t *testing.T) {
 	gp := mockGPUDevice{}
-	device1 := v1beta1.Device{
+	device1 := pluginapi.Device{
 		ID: "device1",
 	}
-	udevice1 := v1beta1.Device{
+	udevice1 := pluginapi.Device{
 		ID:     "device1",
 		Health: pluginapi.Unhealthy,
 	}
-	device2 := v1beta1.Device{
+	device2 := pluginapi.Device{
 		ID: "device2",
 	}
-	udevice2 := v1beta1.Device{
+	udevice2 := pluginapi.Device{
 		ID:     "device2",
 		Health: pluginapi.Unhealthy,
 	}
@@ -61,7 +58,7 @@ func TestCatchError(t *testing.T) {
 		name             string
 		event            nvml.Event
 		hc               GPUHealthChecker
-		wantErrorDevices []v1beta1.Device
+		wantErrorDevices []pluginapi.Device
 	}{
 		{
 			name: "non-critical error",
@@ -73,7 +70,7 @@ func TestCatchError(t *testing.T) {
 				Edata:             uint64(72),
 			},
 			hc: GPUHealthChecker{
-				devices: map[string]v1beta1.Device{
+				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
@@ -90,7 +87,7 @@ func TestCatchError(t *testing.T) {
 					48: true,
 				},
 			},
-			wantErrorDevices: []v1beta1.Device{},
+			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
 			name: "xid error not included ",
@@ -102,7 +99,7 @@ func TestCatchError(t *testing.T) {
 				Edata:             uint64(88),
 			},
 			hc: GPUHealthChecker{
-				devices: map[string]v1beta1.Device{
+				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
@@ -119,7 +116,7 @@ func TestCatchError(t *testing.T) {
 					48: true,
 				},
 			},
-			wantErrorDevices: []v1beta1.Device{},
+			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
 			name: "catching xid 72",
@@ -131,7 +128,7 @@ func TestCatchError(t *testing.T) {
 				Edata:             uint64(72),
 			},
 			hc: GPUHealthChecker{
-				devices: map[string]v1beta1.Device{
+				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
@@ -148,7 +145,7 @@ func TestCatchError(t *testing.T) {
 					48: true,
 				},
 			},
-			wantErrorDevices: []v1beta1.Device{udevice1},
+			wantErrorDevices: []pluginapi.Device{udevice1},
 		},
 		{
 			name: "unknown device",
@@ -160,7 +157,7 @@ func TestCatchError(t *testing.T) {
 				Edata:             uint64(72),
 			},
 			hc: GPUHealthChecker{
-				devices: map[string]v1beta1.Device{
+				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
@@ -177,7 +174,7 @@ func TestCatchError(t *testing.T) {
 					48: true,
 				},
 			},
-			wantErrorDevices: []v1beta1.Device{},
+			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
 			name: "not catching xid 72",
@@ -189,7 +186,7 @@ func TestCatchError(t *testing.T) {
 				Edata:             uint64(72),
 			},
 			hc: GPUHealthChecker{
-				devices: map[string]v1beta1.Device{
+				devices: map[string]pluginapi.Device{
 					"device1": device1,
 				},
 				nvmlDevices: map[string]*nvml.Device{
@@ -199,7 +196,7 @@ func TestCatchError(t *testing.T) {
 				},
 				healthCriticalXid: map[uint64]bool{},
 			},
-			wantErrorDevices: []v1beta1.Device{},
+			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
 			name: "catching all devices error",
@@ -211,7 +208,7 @@ func TestCatchError(t *testing.T) {
 				Edata:             uint64(48),
 			},
 			hc: GPUHealthChecker{
-				devices: map[string]v1beta1.Device{
+				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
@@ -228,15 +225,15 @@ func TestCatchError(t *testing.T) {
 					48: true,
 				},
 			},
-			wantErrorDevices: []v1beta1.Device{udevice1, udevice2},
+			wantErrorDevices: []pluginapi.Device{udevice1, udevice2},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.hc.health = make(chan v1beta1.Device, len(tt.hc.devices))
+			tt.hc.health = make(chan pluginapi.Device, len(tt.hc.devices))
 			tt.hc.catchError(tt.event, &gp)
-			gotErrorDevices := make(map[string]v1beta1.Device)
-			for _, _ = range tt.wantErrorDevices {
+			gotErrorDevices := make(map[string]pluginapi.Device)
+			for range tt.wantErrorDevices {
 				if len(tt.hc.health) == 0 {
 					t.Errorf("Fewer error devices was caught than expected.")
 				} else {
@@ -247,7 +244,7 @@ func TestCatchError(t *testing.T) {
 			if len(tt.hc.health) != 0 {
 				t.Errorf("More error devices was caught than expected.")
 			}
-			wantErrorDevicesMap := make(map[string]v1beta1.Device)
+			wantErrorDevicesMap := make(map[string]pluginapi.Device)
 			for _, d := range tt.wantErrorDevices {
 				wantErrorDevicesMap[d.ID] = d
 			}
