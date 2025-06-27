@@ -21,7 +21,6 @@ limitations under the License.
 
  #include <stdio.h>
  #include <cuda_runtime.h>
-//  #include <helper_cuda.h>
 
  /**
   * Computes the vector addition and intentionally triggers memory error

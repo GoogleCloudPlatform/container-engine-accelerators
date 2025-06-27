@@ -112,9 +112,9 @@ func (hc *GPUHealthChecker) resetXIDCondition() error {
 		_, err := hc.kubeClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 		if err != nil {
 			glog.Errorf("Failed to update node %s status after removing XID condition: %v", hc.nodeName, err)
-		} else {
-			glog.Infof("Successfully removed XIDCriticalError condition from node %s.", hc.nodeName)
+			return err
 		}
+		glog.Infof("Successfully removed XIDCriticalError condition from node %s.", hc.nodeName)
 	} else {
 		glog.Infof("XIDCriticalError condition doesn't exist for node %s.", hc.nodeName)
 	}
@@ -125,12 +125,12 @@ func (hc *GPUHealthChecker) resetXIDCondition() error {
 func (hc *GPUHealthChecker) Start() error {
 	nodeName, err := metadata.InstanceNameWithContext(context.Background())
 	if err != nil {
-		return err
+		glog.Errorf("failed to get nodeName, err: %v", err)
 	}
 	hc.nodeName = nodeName
 	err = hc.resetXIDCondition()
 	if err != nil {
-		return fmt.Errorf("failed to reset XID Condition %v", err)
+		glog.Errorf("failed to reset XID Condition, err: %v", err)
 	}
 	go hc.setXIDheartbeat()
 
@@ -254,7 +254,7 @@ func (hc *GPUHealthChecker) monitorXidevent(e nvml.Event) {
 		// Set XID condition
 		node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
 		if err != nil {
-			glog.Error("Failed to get node %s: %v", hc.nodeName, err)
+			glog.Errorf("Failed to get node %s: %v", hc.nodeName, err)
 			return
 		}
 		conditionFound := false
@@ -265,29 +265,29 @@ func (hc *GPUHealthChecker) monitorXidevent(e nvml.Event) {
 				var genericMap map[string]interface{}
 				err := json.Unmarshal([]byte(condition.Reason), &genericMap)
 				if err != nil {
-					glog.Error("Can't decode the value of condition.Reason %s", condition.Reason)
+					glog.Errorf("Can't decode the value of condition.Reason %s", condition.Reason)
 					return
 				}
 				xidStr := strconv.FormatUint(e.Edata, 10)
 				if _, ok := genericMap[xidStr]; ok {
-					glog.Info("XIDCritialError Condition already includes this XID %v, skip", e.Edata)
+					glog.Infof("XIDCritialError Condition already includes this XID %v, skip", e.Edata)
 					return
 				}
 				genericMap[xidStr] = true
 				jsonStr, err := json.Marshal(genericMap)
 				if err != nil {
-					glog.Error("Can't encode the value of condition.Reason %s", condition.Reason)
+					glog.Errorf("Can't encode the value of condition.Reason %s", condition.Reason)
 					return
 				}
 				condition.Reason = string(jsonStr)
 			}
 		}
 		if !conditionFound {
-			glog.Info("XIDCritialError Condition not exists, adding:", e.Edata)
+			glog.Infof("XIDCritialError Condition not exists, adding:", e.Edata)
 			genericMap := map[string]interface{}{strconv.FormatUint(e.Edata, 10): true}
 			jsonStr, err := json.Marshal(genericMap)
 			if err != nil {
-				glog.Error("Can't encode the value of genericMap %s", genericMap)
+				glog.Errorf("Can't encode the value of genericMap: %s", genericMap)
 				return
 			}
 			node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
