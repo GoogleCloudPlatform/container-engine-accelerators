@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc. All rights reserved.
+# Copyright 2024 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,15 +12,23 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM nvidia/cuda:11.0-devel-ubuntu18.04
+# Use a recent CUDA development image (includes nvcc compiler)
+# --- Stage 1: Build ---
+FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        cuda-samples-11-0 && \
-    rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY vectorAdd.cu .
 
-WORKDIR /usr/local/cuda/samples/0_Simple/vectorAdd
-COPY vectorAdd.cu /usr/local/cuda/samples/0_Simple/vectorAdd/
+# Compile the CUDA code
+RUN nvcc vectorAdd.cu -o vectorAdd
 
-RUN make
+# --- Stage 2: Runtime ---
+# Use a smaller base image containing only the CUDA runtime and nvidia-smi
+FROM nvidia/cuda:12.2.2-base-ubuntu22.04
 
-CMD nvidia-smi && ./vectorAdd
+WORKDIR /app
+# Copy only the compiled executable from the build stage
+COPY --from=builder /app/vectorAdd .
+
+# Command to run nvidia-smi for diagnostics and then the compiled program
+CMD ["sh", "-c", "while true; do nvidia-smi && ./vectorAdd; echo '--- Waiting 30 seconds ---'; sleep 30; done"]
