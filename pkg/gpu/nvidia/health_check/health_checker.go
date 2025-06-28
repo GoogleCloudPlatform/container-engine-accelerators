@@ -27,15 +27,19 @@ import (
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/client-go/kubernetes/scheme"
+	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	client "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/record"
 
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
 const (
 	XIDConditionType = "XidCriticalError"
+	eventSource      = "GPUHealthChecker"
 )
 
 // GPUHealthChecker checks the health of nvidia GPUs. Note that with the current
@@ -52,6 +56,7 @@ type GPUHealthChecker struct {
 	monitorCriticalXid map[uint64]bool
 	kubeClient         client.Interface
 	nodeName           string
+	recorder           record.EventRecorder
 }
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
@@ -65,6 +70,12 @@ func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan plugin
 		monitorCriticalXid: make(map[uint64]bool),
 	}
 	hc.kubeClient = kubeClient
+
+	// Create an event broadcaster
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartLogging(glog.Infof)
+	eventBroadcaster.StartRecordingToSink(&clientv1.EventSinkImpl{Interface: hc.kubeClient.CoreV1().Events("")})
+	hc.recorder = eventBroadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: eventSource})
 
 	// Cloning the device map to avoid interfering with the device manager
 	for id, d := range devices {
@@ -340,6 +351,23 @@ func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
 	}
 }
 
+func (hc *GPUHealthChecker) recordXIDEvent(e nvml.Event) error {
+	event := &v1.Event{
+		Type:    v1.EventTypeWarning,
+		Reason:  "XIDError",
+		Message: "Catch XID error, XID=" + strconv.FormatUint(e.Edata, 10),
+		Source: v1.EventSource{
+			Component: "gpu-device-plugin:health_checker",
+		},
+	}
+	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	hc.recorder.Event(node, event.Type, event.Reason, event.Message)
+	return nil
+}
+
 func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 	// Skip the error if it's not Xid critical
 	if e.Etype != nvml.XidCriticalError {
@@ -347,6 +375,7 @@ func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 		return
 	}
 
+	hc.recordXIDEvent(e)
 	hc.monitorXidevent(e)
 
 	// Only marking device unhealthy on Double Bit ECC Error or customer-configured codes

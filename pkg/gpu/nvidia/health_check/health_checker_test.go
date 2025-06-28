@@ -228,8 +228,12 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{udevice1, udevice2},
 		},
 	}
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.hc.kubeClient = fakeClient
 			tt.hc.health = make(chan pluginapi.Device, len(tt.hc.devices))
 			tt.hc.catchError(tt.event, &gp)
 			gotErrorDevices := make(map[string]pluginapi.Device)
