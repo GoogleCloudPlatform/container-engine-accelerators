@@ -73,6 +73,11 @@ var partitionSizeToProfileID = map[string]string{
 	"3g.93gb":  "9",
 	"4g.93gb":  "5",
 	"7g.186gb": "0",
+
+	// nvidia-rtx-pro-6000
+	"1g.24gb":  "14",
+	"2g.48gb":  "5",
+	"4g.96gb ": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -111,16 +116,21 @@ var partitionSizeMaxCount = map[string]int{
 	"3g.93gb":  2,
 	"4g.93gb":  1,
 	"7g.186gb": 1,
+	//nvidia-rtx-pro-6000
+	"1g.24gb":  4,
+	"2g.48gb":  2,
+	"4g.96gb ": 1,
 }
 
 const (
-	SIGRTMIN        = 34
-	NvidiaGB200     = "NVIDIA GB200"          //nvidia-gb200
-	NvidiaB200      = "NVIDIA B200"           //nvidia-b200
-	Nvidia141gbH200 = "NVIDIA H200"           //nvidia-h200-141gb
-	Nvidia80gbH100  = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
-	Nvidia40gbA100  = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
-	Nvidia80gbA100  = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+	SIGRTMIN         = 34
+	NvidiaGB200      = "NVIDIA GB200"          //nvidia-gb200
+	NvidiaB200       = "NVIDIA B200"           //nvidia-b200
+	Nvidia141gbH200  = "NVIDIA H200"           //nvidia-h200-141gb
+	Nvidia80gbH100   = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
+	Nvidia40gbA100   = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
+	Nvidia80gbA100   = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+	NvidiaRtxPro6000 = "NVIDIA RTX-PRO-6000"   // nvidia-rtx-pro-6000
 )
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
@@ -262,6 +272,8 @@ func checkGpuType() (string, error) {
 		return Nvidia40gbA100, nil
 	case strings.HasPrefix(string(gpuType), Nvidia80gbA100):
 		return Nvidia80gbA100, nil
+	case strings.HasPrefix(string(gpuType), NvidiaRtxPro6000):
+		return NvidiaRtxPro6000, nil
 	}
 	return "", fmt.Errorf("nvidia-smi returned invalid GPU type for MIG: %s", gpuType)
 }
