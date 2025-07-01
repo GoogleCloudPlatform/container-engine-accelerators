@@ -1,4 +1,4 @@
-# Copyright 2017 Google Inc. All rights reserved.
+# Copyright 2025 Google Inc. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -132,7 +132,7 @@ spec:
           else
             if [[ "${CONFIDENTIAL_INSTANCE_TYPE}" == "TDX" ]]; then
               echo "No GPU driver module detected, installing now"
-              /cos-gpu-installer install --no-verify --version=default || exit 1
+              /cos-gpu-installer install --no-verify --version=latest || exit 1
               sbin/modprobe -d /root drm_kms_helper; /sbin/insmod /usr/local/nvidia/drivers/nvidia.ko; sbin/insmod /usr/local/nvidia/drivers/nvidia-uvm.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-modeset.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-drm.ko
               /usr/local/nvidia/bin/nvidia-modprobe -c0 -u -m
               chmod 755 /root/home/kubernetes/bin/nvidia
