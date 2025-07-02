@@ -49,6 +49,8 @@ spec:
                 operator: Exists
               - key: cloud.google.com/gke-gpu-driver-version
                 operator: DoesNotExist
+              - key: cloud.google.com/gke-confidential-nodes-instance-type
+                operator: DoesNotExist
       tolerations:
       - operator: "Exists"
       hostNetwork: true

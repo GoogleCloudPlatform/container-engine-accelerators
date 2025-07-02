@@ -23,7 +23,7 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: nvidia-driver-installer
+  name: nvidia-driver-installer-confidential
   namespace: kube-system
   labels:
     k8s-app: nvidia-driver-installer
@@ -118,14 +118,6 @@ spec:
         - -c
         - |
           echo "Checking for existing GPU driver modules"
-          LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
-          IFS=,; for label in $LABELS; do
-            IFS==; read -r LABEL VALUE <<< "$label"
-            if [[ "${LABEL}" == "cloud.google.com/gke-confidential-nodes-instance-type" ]]; then
-                CONFIDENTIAL_INSTANCE_TYPE=$VALUE
-                echo "${CONFIDENTIAL_INSTANCE_TYPE}" > /etc/nvidia/confidential_node_type.txt
-            fi
-          done
           LABELS=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/attributes/kube-labels || exit 1 )
           IFS=,; for label in $LABELS; do
             IFS==; read -r LABEL VALUE <<< "$label"
