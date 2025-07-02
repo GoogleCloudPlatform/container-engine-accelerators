@@ -27,8 +27,12 @@ import (
 	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
 	"github.com/golang/glog"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/fields"
+	"k8s.io/apimachinery/pkg/util/wait"
+	"k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes/scheme"
 	clientv1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	listersv1 "k8s.io/client-go/listers/core/v1"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	client "k8s.io/client-go/kubernetes"
@@ -39,7 +43,7 @@ import (
 
 const (
 	XIDConditionType = "XidCriticalError"
-	eventSource      = "GPUHealthChecker"
+	eventSource      = "gpu-device-plugin"
 )
 
 // GPUHealthChecker checks the health of nvidia GPUs. Note that with the current
@@ -56,7 +60,9 @@ type GPUHealthChecker struct {
 	monitorCriticalXid map[uint64]bool
 	kubeClient         client.Interface
 	nodeName           string
+	nodeLister         listersv1.NodeLister
 	recorder           record.EventRecorder
+	informerFactory    informers.SharedInformerFactory
 }
 
 // NewGPUHealthChecker returns a GPUHealthChecker object for a given device name
@@ -100,7 +106,7 @@ func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan plugin
 // 1. If the bootId changes, consider the node fixed through auto-repair
 // 2. If the bootId stay unchanged, consider a pure gpu-device-plugin restart
 func (hc *GPUHealthChecker) resetXIDCondition() error {
-	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	node, err := hc.nodeLister.Get(hc.nodeName)
 	if err != nil {
 		return err
 	}
@@ -134,11 +140,24 @@ func (hc *GPUHealthChecker) resetXIDCondition() error {
 
 // Start registers NVML events and starts listening to them
 func (hc *GPUHealthChecker) Start() error {
-	nodeName, err := metadata.InstanceNameWithContext(context.Background())
+	ctx := context.Background()
+	nodeName, err := metadata.InstanceNameWithContext(ctx)
 	if err != nil {
 		glog.Errorf("failed to get nodeName, err: %v", err)
 	}
 	hc.nodeName = nodeName
+	hc.informerFactory = informers.NewSharedInformerFactoryWithOptions(
+		hc.kubeClient,
+		0,
+		informers.WithTweakListOptions(func(options *metav1.ListOptions) {
+			options.FieldSelector = fields.OneTermEqualSelector("metadata.name", hc.nodeName).String()
+		}),
+	)
+
+	hc.nodeLister = hc.informerFactory.Core().V1().Nodes().Lister()
+	hc.informerFactory.Start(ctx.Done())
+	hc.informerFactory.WaitForCacheSync(wait.NeverStop)
+
 	err = hc.resetXIDCondition()
 	if err != nil {
 		glog.Errorf("failed to reset XID Condition, err: %v", err)
@@ -263,7 +282,7 @@ func (hc *GPUHealthChecker) monitorXidevent(e nvml.Event) {
 	if _, ok := hc.monitorCriticalXid[e.Edata]; ok {
 		glog.Info("Monitoring XID event")
 		// Set XID condition
-		node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+		node, err := hc.nodeLister.Get(hc.nodeName)
 		if err != nil {
 			glog.Errorf("Failed to get node %s: %v", hc.nodeName, err)
 			return
@@ -333,7 +352,7 @@ func (hc *GPUHealthChecker) setXIDheartbeat() {
 
 func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
 	glog.Info("XID heartbeat check")
-	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	node, err := hc.nodeLister.Get(hc.nodeName)
 	if err != nil {
 		return
 	}
@@ -352,19 +371,11 @@ func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
 }
 
 func (hc *GPUHealthChecker) recordXIDEvent(e nvml.Event) error {
-	event := &v1.Event{
-		Type:    v1.EventTypeWarning,
-		Reason:  "XIDError",
-		Message: "Catch XID error, XID=" + strconv.FormatUint(e.Edata, 10),
-		Source: v1.EventSource{
-			Component: "gpu-device-plugin:health_checker",
-		},
-	}
-	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	node, err := hc.nodeLister.Get(hc.nodeName)
 	if err != nil {
 		return err
 	}
-	hc.recorder.Event(node, event.Type, event.Reason, event.Message)
+	hc.recorder.Eventf(node, v1.EventTypeWarning, "XIDError", "Caught XID error, XID=%d", e.Edata)
 	return nil
 }
 
@@ -442,6 +453,8 @@ func (hc *GPUHealthChecker) listenToEvents() error {
 
 // Stop deletes the NVML events and stops the listening go routine
 func (hc *GPUHealthChecker) Stop() {
+	hc.informerFactory.Shutdown()
+	hc.recorder.(record.EventBroadcaster).Shutdown()
 	nvml.DeleteEventSet(hc.eventSet)
 	hc.stop <- true
 	<-hc.stop
