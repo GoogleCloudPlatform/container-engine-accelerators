@@ -15,12 +15,14 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
+	"regexp"
 	"strings"
 	"syscall"
 
@@ -71,6 +73,11 @@ var partitionSizeToProfileID = map[string]string{
 	"3g.93gb":  "9",
 	"4g.93gb":  "5",
 	"7g.186gb": "0",
+
+	// nvidia-rtx-pro-6000
+	"1g.24gb":  "14",
+	"2g.48gb":  "5",
+	"4g.96gb ": "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -109,16 +116,21 @@ var partitionSizeMaxCount = map[string]int{
 	"3g.93gb":  2,
 	"4g.93gb":  1,
 	"7g.186gb": 1,
+	//nvidia-rtx-pro-6000
+	"1g.24gb":  4,
+	"2g.48gb":  2,
+	"4g.96gb ": 1,
 }
 
 const (
-	SIGRTMIN        = 34
-	NvidiaGB200     = "NVIDIA GB200"          //nvidia-gb200
-	NvidiaB200      = "NVIDIA B200"           //nvidia-b200
-	Nvidia141gbH200 = "NVIDIA H200"           //nvidia-h200-141gb
-	Nvidia80gbH100  = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
-	Nvidia40gbA100  = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
-	Nvidia80gbA100  = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+	SIGRTMIN         = 34
+	NvidiaGB200      = "NVIDIA GB200"          //nvidia-gb200
+	NvidiaB200       = "NVIDIA B200"           //nvidia-b200
+	Nvidia141gbH200  = "NVIDIA H200"           //nvidia-h200-141gb
+	Nvidia80gbH100   = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
+	Nvidia40gbA100   = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
+	Nvidia80gbA100   = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
+	NvidiaRtxPro6000 = "NVIDIA RTX-PRO-6000"   // nvidia-rtx-pro-6000
 )
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
@@ -182,6 +194,16 @@ func main() {
 
 	glog.Infof("MIG mode is enabled on all GPUs, proceeding to create GPU partitions.")
 
+	// get the current partitions
+	desiredMaxCount := partitionSizeMaxCount[gpuConfig.GPUPartitionSize]
+	isDesiredPartition := checkCurrentPartitionProfileCounts(desiredMaxCount)
+	if isDesiredPartition {
+		glog.Infof("Current GPU partition configuration matches the desired state. No changes needed.")
+		runNvidiaSmiStatus()
+		return
+	}
+
+	glog.Infof("Current GPU partition configuration does not match the desired state. Reconfiguring partitions...")
 	glog.Infof("Cleaning up any existing GPU partitions")
 	if err := cleanupAllGPUPartitions(); err != nil {
 		glog.Errorf("Failed to cleanup GPU partitions: %v", err)
@@ -194,13 +216,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	glog.Infof("Running %s", *nvidiaSmiPath)
-	out, err := exec.Command(*nvidiaSmiPath).Output()
-	if err != nil {
-		glog.Errorf("Failed to run nvidia-smi, output: %s, error: %v", string(out), err)
-	}
-	glog.Infof("Output:\n %s", string(out))
-
+	runNvidiaSmiStatus()
 }
 
 func parseGPUConfig(gpuConfigFile string) (GPUConfig, error) {
@@ -256,6 +272,8 @@ func checkGpuType() (string, error) {
 		return Nvidia40gbA100, nil
 	case strings.HasPrefix(string(gpuType), Nvidia80gbA100):
 		return Nvidia80gbA100, nil
+	case strings.HasPrefix(string(gpuType), NvidiaRtxPro6000):
+		return NvidiaRtxPro6000, nil
 	}
 	return "", fmt.Errorf("nvidia-smi returned invalid GPU type for MIG: %s", gpuType)
 }
@@ -328,4 +346,106 @@ func buildPartitionStr(partitionSize string) (string, error) {
 	}
 
 	return partitionStr, nil
+}
+
+// getCurrentPartitionProfileCounts checks for active MIG GPU instances,
+// and outputs a map of their profileIDs -> counts
+func checkCurrentPartitionProfileCounts(desiredMaxCount int) bool {
+	args := []string{"mig", "-lgi"}
+	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
+	if err != nil {
+		glog.Errorf("failed to execute 'nvidia-smi mig -lgi': %v", err)
+		return false
+	}
+
+	glog.Infof("Output:\n %s", string(out))
+	outputText := string(out)
+	partitions, uniform, lgiError := parseLGIOutput(outputText)
+	if lgiError != nil {
+		glog.Errorf("failed to parse 'nvidia-smi mig -lgi' output: %v", lgiError)
+		return false
+	}
+	if !uniform {
+		glog.Info("Partitions are not uniform, partition reconstruction needed.")
+		return uniform
+	}
+	desiredPartition := checkDesired(partitions, desiredMaxCount)
+
+	return desiredPartition
+}
+
+// returns profile id map and if uniform
+func parseLGIOutput(lgiOutput string) (map[string][]string, bool, error) {
+	dataLineRegex, err := regexp.Compile(`^\s*(\d+)\s+(MIG\s+[\w\.]+)\s+(\d+)\s+(\d+)\s+([\d:]+)\s*$`)
+	if err != nil {
+		glog.Errorf("Internal error: failed to compile regex: %v", err)
+		return make(map[string][]string), false, err
+	}
+
+	gpuProfileIDsMap := make(map[string][]string)
+	profileIDFirst := ""
+
+	scanner := bufio.NewScanner(strings.NewReader(lgiOutput))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		if strings.Contains(line, "====") {
+			continue
+		}
+		if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
+			continue
+		}
+
+		contentInPipes := strings.TrimSpace(line[1 : len(line)-1])
+		matches := dataLineRegex.FindStringSubmatch(contentInPipes)
+
+		if len(matches) == 6 {
+			gpuIndex := matches[1]
+			profileID := matches[3]
+			if profileIDFirst == "" {
+				profileIDFirst = profileID
+			} else {
+				if profileIDFirst != profileID {
+					return gpuProfileIDsMap, false, nil
+				}
+			}
+			gpuProfileIDsMap[gpuIndex] = append(gpuProfileIDsMap[gpuIndex], profileID)
+			glog.Infof("Parsed GI on GPU %s: Profile ID %s", gpuIndex, profileID)
+		} else if contentInPipes != "" {
+			glog.Infof("Line did not match expected GI data format: '%s' (Content: '%s')", line, contentInPipes)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return gpuProfileIDsMap, false, err
+	}
+
+	if len(gpuProfileIDsMap) == 0 {
+		return gpuProfileIDsMap, false, nil
+	}
+	glog.Infof("map: %v", gpuProfileIDsMap)
+	return gpuProfileIDsMap, true, nil
+}
+
+func checkDesired(partitions map[string][]string, desiredMaxCount int) bool {
+	if len(partitions) == 0 {
+		return false
+	}
+
+	for _, profileIDsOnGpu := range partitions {
+		if len(profileIDsOnGpu) != desiredMaxCount {
+			return false
+		}
+	}
+
+	return true
+}
+
+func runNvidiaSmiStatus() {
+	glog.Infof("Running %s", *nvidiaSmiPath)
+	out, err := exec.Command(*nvidiaSmiPath).Output()
+	if err != nil {
+		glog.Errorf("Failed to run nvidia-smi, output: %s, error: %v", string(out), err)
+	}
+	glog.Infof("Output:\n %s", string(out))
 }

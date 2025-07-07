@@ -19,6 +19,11 @@ import (
 	"regexp"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/golang/glog"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	client "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 func DeviceNameFromPath(path string) (string, error) {
@@ -45,4 +50,21 @@ func Files(files ...string) (*fsnotify.Watcher, error) {
 		}
 	}
 	return watcher, nil
+}
+
+func BuildKubeClient() (client.Interface, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		glog.Errorf("failed to get kube config. Error: %v", err)
+		return nil, err
+	}
+	config.ContentType = runtime.ContentTypeProtobuf
+
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		glog.Errorf("failed to get kube client. Error: %v", err)
+		return nil, err
+	}
+
+	return kubeClient, nil
 }

@@ -37,6 +37,7 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 
 
 ## Releases
+- [Jun 27, 2025](./README.md#jun-27-2025)
 - [May 01, 2025](./README.md#may-01-2025)
 - [Feb 27, 2025](./README.md#feb-27-2025)
 - [Feb 06, 2025](./README.md#feb-06-2025)
@@ -50,7 +51,103 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 - [May 20, 2024](./README.md#may-20-2024)
 - [Apr 17, 2024](./README.md#apr-17-2024)
 
+## Jun 27, 2025
+
+#### Important Note:
+Starting from this release - [May 01, 2025](./README.md#may-01-2025), workloads have the following requirements:
+```
+glibc version 2.35 or higher
+Ubuntu version 22.04 or higher
+Debian version Debian 12 or higher
+```
+
+#### NCCL plugin installer image:
+```
+us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.11
+```
+#### TCPXO-daemon image:
+```
+us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.17
+```
+#### Compatible NCCL version:
+```
+default NCCl version: nccl-2.23, which is provided by the NCCL plugin installer
+qualified and supported: NCCL 2.23.4 
+```
+#### NCCL configs:
+```
+"NCCL_FASTRAK_CTRL_DEV=eth0",
+"NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8",
+"NCCL_SOCKET_IFNAME=eth0",
+"NCCL_CROSS_NIC=0",
+"NCCL_ALGO=Ring,Tree",
+"NCCL_PROTO=Simple,LL128",
+
+"NCCL_MIN_NCHANNELS=4",
+"NCCL_TUNER_PLUGIN=libnccl-tuner.so",
+"NCCL_TUNER_CONFIG_PATH=/usr/local/nvidia/lib64/a3plus_tuner_config.textproto",
+# Please replace `/usr/local/nvidia/lib64/` as the NCCL lib directory installd inside the workload container,
+# the mounted library path are controlled in nccl installer destination, link. 
+"NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config.textproto",
+# Please replace `/usr/local/nvidia/lib64/` as the NCCL lib directory installed inside the workload container.
+# the mounted library path are controlled in nccl installer destination, link.
+"NCCL_DYNAMIC_CHUNK_SIZE=524288",
+"NCCL_P2P_NET_CHUNKSIZE=524288",
+"NCCL_P2P_PCI_CHUNKSIZE=524288",
+"NCCL_P2P_NVL_CHUNKSIZE=1048576",
+"NCCL_FASTRAK_NUM_FLOWS=2",
+"NCCL_FASTRAK_USE_SNAP=1",
+"NCCL_FASTRAK_PLUGIN_ACCEPT_TIMEOUT_MS=600000",
+"NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL=0",
+"NCCL_BUFFSIZE=8388608",
+"NCCL_NET_GDR_LEVEL=PIX",
+"NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING=0",
+"NCCL_FASTRAK_USE_LLCM=1",
+"NCCL_NVLS_ENABLE=0"
+"NCCL_DEBUG=WARN",
+```
+#### What is new with in release:
+* This release adds support for NCCL NVLSTree Algorithm, which enables intra-node communication with NVLS Algorithm and inter-node communication with Tree Algorithm.
+  * For Hypercomputing customers, NVLSTree may require host machine upgrades to reach optimal performance. Reach out to your customer service representative for more details.
+  * To enable NVLSTree, please use: `nccl-env-profile-nvlstree.sh` instead of the default `nccl-env-profile.sh`, which will achieve the following environment setup:
+  ```
+  "NCCL_FASTRAK_CTRL_DEV=eth0",
+  "NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8",
+  "NCCL_SOCKET_IFNAME=eth0",
+  "NCCL_CROSS_NIC=0",
+  "NCCL_PROTO=Simple,LL128",
+  "NCCL_MIN_NCHANNELS=4",
+  "NCCL_TUNER_PLUGIN=libnccl-tuner.so",
+  "NCCL_TUNER_CONFIG_PATH=/usr/local/nvidia/lib64/a3plus_tuner_config_nvlstree.textproto",
+  "NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config_nvlstree.textproto",
+  "CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7"
+  "NCCL_NVLSTREE_MAX_CHUNKSIZE=131072"
+  "NCCL_P2P_NET_CHUNKSIZE=524288",
+  "NCCL_P2P_PCI_CHUNKSIZE=524288",
+  "NCCL_P2P_NVL_CHUNKSIZE=1048576",
+  "NCCL_FASTRAK_NUM_FLOWS=2",
+  "NCCL_FASTRAK_USE_SNAP=1",
+  "NCCL_FASTRAK_PLUGIN_ACCEPT_TIMEOUT_MS=600000",
+  "NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL=0",
+  "NCCL_BUFFSIZE=8388608",
+  "NCCL_NET_GDR_LEVEL=PIX",
+  "NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING=0",
+  "NCCL_FASTRAK_USE_LLCM=1",
+  "NCCL_DEBUG=WARN",
+  "NCCL_DEBUG_SUBSYS=INIT,NET,ENV,COLL,GRAPH"
+  ```
+
+
 ## May 01, 2025
+
+#### Important Note:
+Starting from this release, workloads have the following requirements:
+```
+glibc version 2.35 or higher
+Ubuntu version 22.04 or higher
+Debian version Debian 12 or higher
+```
+
 #### NCCL plugin installer image:
 ```
 us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.9-1
