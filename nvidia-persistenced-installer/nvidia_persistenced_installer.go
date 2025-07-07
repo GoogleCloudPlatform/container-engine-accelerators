@@ -32,6 +32,7 @@ import (
 
 const (
 	minUVMSupportedVersion = 550
+	SIGRTMIN               = 34
 )
 
 var (
@@ -64,8 +65,18 @@ func main() {
 		// Add small delay before setting the ready state for consistency.
 		// If the workload starts too close to when the persistence daemon has started sometimes there can be errors.
 		time.Sleep(time.Duration(*readyDelay) * time.Millisecond)
-		if err := setGPUReadyState(ctx); err != nil {
-			glog.ExitContextf(ctx, "failed to set gpu to ready state: %v", err)
+
+		// Mark GPU with ready state. If encounter no devices were found issue, reboot the node.
+		if output, err := setGPUReadyState(ctx); err != nil {
+			glog.Infof("failed to set gpu to ready state: %v, output: %s", err, output)
+			if strings.Contains(output, "No devices were found") {
+				glog.Infof("No devices were found, rebooting node to resolve")
+				if err := rebootNode(); err != nil {
+					glog.Errorf("Failed to trigger node reboot: %v", err)
+				}
+			}
+			// Exit, since we cannot proceed when encounter error.
+			os.Exit(1)
 		}
 	} else {
 		glog.InfoContext(ctx, "Confidential GPU is NOT enabled, skipping nvidia persistenced enablement.")
@@ -101,13 +112,13 @@ func enablePersistenceMode(ctx context.Context) error {
 	return nil
 }
 
-func setGPUReadyState(ctx context.Context) error {
+func setGPUReadyState(ctx context.Context) (string, error) {
 	gpuReadyCMD := exec.Command(*containerPathPrefix+"/bin/nvidia-smi", "conf-compute", "-srs", "1")
-	if err := gpuReadyCMD.Run(); err != nil {
-		return err
+	if output, err := gpuReadyCMD.CombinedOutput(); err != nil {
+		return string(output), err
 	}
 	glog.InfoContext(ctx, "Confidential GPU is ready.")
-	return nil
+	return "", nil
 }
 
 func updateContainerLdCache() error {
@@ -171,4 +182,9 @@ func checkConfidentialGPUEnablement(ctx context.Context) (bool, error) {
 	// Remove any trailing spaces and null strings to avoid issues in comparison.
 	confidentialNodeType := strings.ToLower(strings.Trim(string(file), " \r\n\x00"))
 	return confidentialNodeType == "tdx", nil
+}
+
+func rebootNode() error {
+	// Gracefully reboot systemd: https://man7.org/linux/man-pages/man1/systemd.1.html#SIGNALS
+	return syscall.Kill(1, SIGRTMIN+5)
 }
