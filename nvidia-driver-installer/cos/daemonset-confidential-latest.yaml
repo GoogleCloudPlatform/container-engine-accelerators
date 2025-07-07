@@ -161,23 +161,6 @@ spec:
           mountPath: /etc/nvidia
         - name: dev
           mountPath: /dev
-      - image: "gcr.io/gke-release/nvidia-partition-gpu@sha256:116be6b7335c1d34366223b9a3780fe80d862fcf06cd2c580426fdc1697af693"
-        name: partition-gpus
-        env:
-          - name: LD_LIBRARY_PATH
-            value: /usr/local/nvidia/lib64
-        resources:
-          requests:
-            cpu: 150m
-        securityContext:
-          privileged: true
-        volumeMounts:
-        - name: nvidia-install-dir-host
-          mountPath: /usr/local/nvidia
-        - name: dev
-          mountPath: /dev
-        - name: nvidia-config
-          mountPath: /etc/nvidia
       containers:
       - image: "gke.gcr.io/pause:3.8@sha256:880e63f94b145e46f1b1082bb71b85e21f16b99b180b9996407d61240ceb9830"
         name: pause
