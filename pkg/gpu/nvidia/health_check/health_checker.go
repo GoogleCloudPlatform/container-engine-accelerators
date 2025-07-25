@@ -43,7 +43,7 @@ import (
 
 const (
 	XIDConditionType = "XidCriticalError"
-	eventSource      = "gpu-device-plugin"
+	eventSource      = "nvidia-gpu-device-plugin"
 )
 
 // GPUHealthChecker checks the health of nvidia GPUs. Note that with the current
@@ -386,7 +386,10 @@ func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 		return
 	}
 
-	hc.recordXIDEvent(e)
+	err := hc.recordXIDEvent(e)
+	if err != nil {
+		glog.Errorf("Failed to record XID=%d for node %s with err %v", e.Edata, hc.nodeName, err)
+	}
 	hc.monitorXidevent(e)
 
 	// Only marking device unhealthy on Double Bit ECC Error or customer-configured codes
