@@ -82,6 +82,11 @@ nri-device-injector:
 nvidia_persistenced_installer:
 	docker buildx build --pull --load -t ${REGISTRY}/${NVIDIA_PERSISTENCED_IMAGE}:${TAG} -f nvidia-persistenced-installer/Dockerfile .
 
+nvidia-persistenced-installer-multi-arch:
+	@for arch in $(ALL_ARCHITECTURES); do \
+	  docker buildx build --pull --load --platform linux/$${arch} -t ${REGISTRY}/${NVIDIA_PERSISTENCED_IMAGE}-$${arch}:${TAG} -f partition_gpu/Dockerfile . ; \
+	done
+
 .PHONY: all format test vet presubmit build container push partition-gpu
 
 bin/device-injector-test:
