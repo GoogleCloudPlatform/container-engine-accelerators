@@ -84,7 +84,7 @@ nvidia_persistenced_installer:
 
 nvidia-persistenced-installer-multi-arch:
 	@for arch in $(ALL_ARCHITECTURES); do \
-	  docker buildx build --pull --load --platform linux/$${arch} -t ${REGISTRY}/${NVIDIA_PERSISTENCED_IMAGE}-$${arch}:${TAG} -f partition_gpu/Dockerfile . ; \
+	  docker buildx build --pull --load --platform linux/$${arch} -t ${REGISTRY}/${NVIDIA_PERSISTENCED_IMAGE}-$${arch}:${TAG} -f nvidia-persistenced-installer/Dockerfile . ; \
 	done
 
 .PHONY: all format test vet presubmit build container push partition-gpu
