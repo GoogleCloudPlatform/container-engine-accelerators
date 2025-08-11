@@ -14,7 +14,7 @@
 
 # Use a recent CUDA development image (includes nvcc compiler)
 # --- Stage 1: Build ---
-FROM nvidia/cuda:12.2.2-devel-ubuntu22.04 AS builder
+FROM nvidia/cuda:13.0.0-devel-ubuntu22.04 AS builder
 
 WORKDIR /app
 COPY vectorAdd.cu .
@@ -24,7 +24,7 @@ RUN nvcc vectorAdd.cu -o vectorAdd
 
 # --- Stage 2: Runtime ---
 # Use a smaller base image containing only the CUDA runtime and nvidia-smi
-FROM nvidia/cuda:12.2.2-base-ubuntu22.04
+FROM nvidia/cuda:13.0.0-base-ubuntu22.04
 
 WORKDIR /app
 # Copy only the compiled executable from the build stage
