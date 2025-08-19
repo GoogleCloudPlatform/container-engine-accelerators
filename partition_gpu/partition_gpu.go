@@ -130,7 +130,7 @@ const (
 	Nvidia80gbH100   = "NVIDIA H100 80GB HBM3" //nvidia-h100-80gb
 	Nvidia40gbA100   = "NVIDIA A100-SXM4-40GB" //nvidia-tesla-a100
 	Nvidia80gbA100   = "NVIDIA A100-SXM4-80GB" //nvidia-a100-80gb
-	NvidiaRtxPro6000 = "NVIDIA RTX-PRO-6000"   // nvidia-rtx-pro-6000
+	NvidiaRtxPro6000 = "NVIDIA RTX PRO 6000"   // nvidia-rtx-pro-6000
 )
 
 // GPUConfig stores the settings used to configure the GPUs on a node.
