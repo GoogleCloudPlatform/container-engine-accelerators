@@ -172,9 +172,14 @@ func main() {
 		}
 		nodeName, err := util.GetEnv(nodeNameEnv)
 		if err != nil {
-			glog.Infof("Failed to get node name from environment variable %s: %v", nodeNameEnv, err)
-			return
+			glog.Warningf("Failed to get node name from env %q: %v. Falling back to hostname.", nodeNameEnv, err)
+			var hostnameErr error
+			if nodeName, hostnameErr = os.Hostname(); hostnameErr != nil {
+				glog.Errorf("Failed to get hostname: %v", hostnameErr)
+				return
+			}
 		}
+
 		watchfunc := func(options metav1.ListOptions) (watch.Interface, error) {
 			return kubeClient.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{
 				FieldSelector: "metadata.name=" + nodeName,
