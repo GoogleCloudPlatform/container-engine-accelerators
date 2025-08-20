@@ -286,6 +286,10 @@ func TestUpdateLastHeartbeatTime(t *testing.T) {
 		Reason:             "XID",
 		Message:            node.Status.NodeInfo.BootID,
 	})
+	node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
+		Type:   v1.NodeReady,
+		Status: "True",
+	})
 	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
 
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
@@ -298,6 +302,9 @@ func TestUpdateLastHeartbeatTime(t *testing.T) {
 	updatedNode, _ := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
 	if updatedNode.Status.Conditions[0].LastHeartbeatTime == initialTime {
 		t.Errorf("The XID condition HeartbeatTime was not updated")
+	}
+	if updatedNode.Status.Conditions[1] != node.Status.Conditions[1] {
+		t.Errorf("The Ready condition was wrongly updated")
 	}
 }
 
@@ -313,6 +320,10 @@ func TestResetXIDCondition(t *testing.T) {
 		Reason:             "XID",
 		Message:            "0",
 	})
+	node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
+		Type:   v1.NodeReady,
+		Status: "True",
+	})
 	node.Status.NodeInfo.BootID = "0"
 	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
 
@@ -323,7 +334,7 @@ func TestResetXIDCondition(t *testing.T) {
 	// Try reset without rebootId changed, conditions remain the same
 	hc.resetXIDCondition()
 	updatedNode, _ := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
-	if len(updatedNode.Status.Conditions) == 0 {
+	if len(updatedNode.Status.Conditions) < 2 {
 		t.Errorf("The XID condition should persist without reboot")
 	}
 	// Try reset with rebootId changed, conditions get reset
@@ -335,7 +346,7 @@ func TestResetXIDCondition(t *testing.T) {
 	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{updatedNode}}
 	hc.resetXIDCondition()
 	updatedNode, _ = fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
-	if len(updatedNode.Status.Conditions) != 0 {
+	if len(updatedNode.Status.Conditions) == 2 {
 		t.Errorf("The XID condition should be reset after reboot")
 	}
 }

@@ -119,8 +119,8 @@ func (hc *GPUHealthChecker) resetXIDCondition() error {
 			if bootId != "" && lastBootId != "" && bootId != lastBootId {
 				continue
 			}
-			newConditions = append(newConditions, condition)
 		}
+		newConditions = append(newConditions, condition)
 	}
 	// Remove condition
 	if len(newConditions) != len(node.Status.Conditions) {
@@ -351,19 +351,25 @@ func (hc *GPUHealthChecker) setXIDheartbeat() {
 }
 
 func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
-	glog.Info("XID heartbeat check")
 	node, err := hc.nodeLister.Get(hc.nodeName)
 	if err != nil {
+		glog.Errorf("Failed to get node %s for heartbeat update: %v", hc.nodeName, err)
 		return
 	}
-	newConditions := []v1.NodeCondition{}
-	for _, condition := range node.Status.Conditions {
-		if condition.Type == XIDConditionType && condition.Status == "True" {
-			condition.LastHeartbeatTime = metav1.Now()
-			newConditions = append(newConditions, condition)
+
+	nodeModified := false
+	for i := range node.Status.Conditions {
+		if node.Status.Conditions[i].Type == XIDConditionType && node.Status.Conditions[i].Status == "True" {
+			node.Status.Conditions[i].LastHeartbeatTime = metav1.Now()
+			nodeModified = true
 		}
 	}
-	node.Status.Conditions = newConditions
+
+	if !nodeModified {
+		return
+	}
+
+	glog.Info("XID heartbeat check")
 	_, err = hc.kubeClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 	if err != nil {
 		glog.Errorf("Failed to update node %s status to update XIDCondition heartbeat: %v", hc.nodeName, err)
