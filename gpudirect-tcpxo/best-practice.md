@@ -95,7 +95,7 @@ When TCPXO-daemon sidecar starts, it will execute an initialization process. If 
         - |
           set -ex
           chmod 755 /fts/entrypoint_rxdm_container.sh
-          /fts/entrypoint_rxdm_container.sh --num_hops=2 --num_nics=8 --uid= --alsologtostderr
+          /fts/entrypoint_rxdm_container.sh --num_hops=2 --num_nics=8
       volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
