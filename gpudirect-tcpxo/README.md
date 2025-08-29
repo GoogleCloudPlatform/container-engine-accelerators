@@ -37,6 +37,7 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 
 
 ## Releases
+- [Aug 21, 2025](./README.md#aug-21-2025)
 - [Jun 27, 2025](./README.md#jun-27-2025)
 - [May 01, 2025](./README.md#may-01-2025)
 - [Feb 27, 2025](./README.md#feb-27-2025)
@@ -50,6 +51,90 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 - [May 30, 2024](./README.md#may-30-2024)
 - [May 20, 2024](./README.md#may-20-2024)
 - [Apr 17, 2024](./README.md#apr-17-2024)
+
+## Aug 21, 2025
+
+#### NCCL plugin installer image:
+```
+us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-dev:v1.0.12
+```
+#### TCPXO-daemon image:
+```
+us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.18
+```
+#### Compatible NCCL version:
+```
+Default NCCl version: nccl-2.26, which is provided by the NCCL plugin installer
+qualified and supported: NCCL 2.26.5
+```
+#### NCCL configs:
+```
+"NCCL_FASTRAK_CTRL_DEV=eth0",
+"NCCL_FASTRAK_IFNAME=eth1,eth2,eth3,eth4,eth5,eth6,eth7,eth8",
+"NCCL_SOCKET_IFNAME=eth0",
+"NCCL_CROSS_NIC=0",
+"NCCL_PROTO=Simple,LL128",
+
+"NCCL_MIN_NCHANNELS=4",
+"NCCL_TUNER_PLUGIN=libnccl-tuner.so",
+"NCCL_TUNER_CONFIG_PATH=/usr/local/nvidia/lib64/a3plus_tuner_config.textproto",
+# Please replace `/usr/local/nvidia/lib64/` as the NCCL lib directory installed inside the workload container,
+# the mounted library path are controlled in nccl installer destination, link.
+"NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config.textproto",
+# Please replace `/usr/local/nvidia/lib64/` as the NCCL lib directory installed inside the workload container.
+# the mounted library path are controlled in nccl installer destination, link.
+"NCCL_NVLSTREE_MAX_CHUNKSIZE=131072",
+"NCCL_DYNAMIC_CHUNK_SIZE=524288",
+"NCCL_P2P_NET_CHUNKSIZE=524288",
+"NCCL_P2P_PCI_CHUNKSIZE=524288",
+"NCCL_P2P_NVL_CHUNKSIZE=1048576",
+"NCCL_FASTRAK_NUM_FLOWS=2",
+"NCCL_FASTRAK_USE_SNAP=1",
+"NCCL_FASTRAK_PLUGIN_ACCEPT_TIMEOUT_MS=600000",
+"NCCL_FASTRAK_ENABLE_CONTROL_CHANNEL=0",
+"NCCL_BUFFSIZE=8388608",
+"NCCL_NET_GDR_LEVEL=PIX",
+"NCCL_FASTRAK_ENABLE_HOTPATH_LOGGING=0",
+"NCCL_FASTRAK_USE_LLCM=1",
+"NCCL_DEBUG=WARN",
+```
+#### What is new with in release:
+* This release coincides with the open-source release of GPUDirect-TCPXO: [https://github.com/google/nccl-plugin-gpudirect-tcpxo](https://github.com/google/nccl-plugin-gpudirect-tcpxo)
+  * The docker images provided are built from the open-source versions of RxDM and the NCCL network plugin.
+  * These open-source based image are **drop-in** **replacements** for the previous closed-source releases.
+* The open-source version of the RxDM image obsoletes two arguments.
+  * Previous:
+
+    ```
+    --num_hops=2 --num_nics=8  --uid= --alsologtostderr
+    ```
+
+  * Current:
+
+    ```
+    --num_hops=2 --num_nics=8
+    ```
+
+    Please update your deployments to reflect these changes.
+
+* This release now incorporates `NVLSTree` into the default configuration for the environment setup.
+  * This follows from the Jun 27, 2025 release where we provided NVLSTree as an option.
+  * For convenience and ease of transitioning, symlinks are still provided to the `_ll128` and `_nvlstree` profiles. Both of these are symlinks to the default profile.
+  * The default `nccl-env-profile.sh` now sets:
+
+    ```
+    # This has been added, and must be set in your deployments:
+    NCCL_NVLSTREE_MAX_CHUNKSIZE=131072
+    # The following have been removed:
+    # NCCL_NVLS_ENABLE=0
+    # NCCL_ALGO=Ring,Tree
+    ```
+
+  * The guest config checker **will enforce** that `NCCL_NVLSTREE_MAX_CHUNKSIZE` is set to this value and will abort any workload where it is not set.
+  * The presence of `NCCL_NVLS_ENABLE` or `NCCL_ALGO` will only be flagged as unexpected environment variables.
+    * Moving forward, we recommend that `NCCL_ALGO` remains unset to allow NCCL core and the tuner plugin to select the most appropriate algorithm.
+* If you do not wish to use NVLSTree nor LL128, you may use the `simple` profile (`nccl-env-profile-simple.sh`).
+  * This profiles does not enable LL128 nor NVLSTree, and uses a tuner config (`a3plus_tuner_config_simple.textproto`) and guest config (`a3plus_guest_config_simple.textproto`) that work with them disabled..
 
 ## Jun 27, 2025
 
