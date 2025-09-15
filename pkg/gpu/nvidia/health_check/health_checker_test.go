@@ -24,9 +24,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/tools/record"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -38,17 +36,6 @@ type mockGPUDevice struct{}
 
 func (gp *mockGPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error) {
 	return UUID, 3173334309191009974, 1015241, nil
-}
-
-type mockNodeLister struct {
-	nodes []*v1.Node
-}
-
-func (nlister mockNodeLister) List(selector labels.Selector) (ret []*v1.Node, err error) {
-	return nlister.nodes, nil
-}
-func (nlister mockNodeLister) Get(name string) (*v1.Node, error) {
-	return nlister.nodes[0], nil
 }
 
 func TestCatchError(t *testing.T) {
@@ -248,8 +235,6 @@ func TestCatchError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.hc.kubeClient = fakeClient
 			tt.hc.health = make(chan pluginapi.Device, len(tt.hc.devices))
-			tt.hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-			tt.hc.recorder = record.NewFakeRecorder(200)
 			tt.hc.catchError(tt.event, &gp)
 			gotErrorDevices := make(map[string]pluginapi.Device)
 			for range tt.wantErrorDevices {
@@ -294,8 +279,6 @@ func TestUpdateLastHeartbeatTime(t *testing.T) {
 
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 	hc.nodeName = "test-node"
-	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-	hc.recorder = record.NewFakeRecorder(200)
 
 	time.Sleep(2 * time.Second)
 	hc.updateLastHeartbeatTime()
@@ -329,8 +312,6 @@ func TestResetXIDCondition(t *testing.T) {
 
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 	hc.nodeName = "test-node"
-	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-	hc.recorder = record.NewFakeRecorder(200)
 	// Try reset without rebootId changed, conditions remain the same
 	hc.resetXIDCondition()
 	updatedNode, _ := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
@@ -343,7 +324,6 @@ func TestResetXIDCondition(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to update node: %v", err)
 	}
-	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{updatedNode}}
 	hc.resetXIDCondition()
 	updatedNode, _ = fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
 	if len(updatedNode.Status.Conditions) == 2 {
@@ -429,8 +409,6 @@ func TestMonitorXidevent(t *testing.T) {
 
 		hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 		hc.nodeName = "test-node"
-		hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-		hc.recorder = record.NewFakeRecorder(200)
 
 		for _, event := range test.events {
 			hc.monitorXidevent(event)
