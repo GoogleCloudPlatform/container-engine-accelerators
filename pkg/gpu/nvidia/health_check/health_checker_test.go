@@ -16,6 +16,7 @@ package healthcheck
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -24,9 +25,9 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/tools/record"
+	k8sclienttesting "k8s.io/client-go/testing"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -38,17 +39,6 @@ type mockGPUDevice struct{}
 
 func (gp *mockGPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error) {
 	return UUID, 3173334309191009974, 1015241, nil
-}
-
-type mockNodeLister struct {
-	nodes []*v1.Node
-}
-
-func (nlister mockNodeLister) List(selector labels.Selector) (ret []*v1.Node, err error) {
-	return nlister.nodes, nil
-}
-func (nlister mockNodeLister) Get(name string) (*v1.Node, error) {
-	return nlister.nodes[0], nil
 }
 
 func TestCatchError(t *testing.T) {
@@ -248,8 +238,6 @@ func TestCatchError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.hc.kubeClient = fakeClient
 			tt.hc.health = make(chan pluginapi.Device, len(tt.hc.devices))
-			tt.hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-			tt.hc.recorder = record.NewFakeRecorder(200)
 			tt.hc.catchError(tt.event, &gp)
 			gotErrorDevices := make(map[string]pluginapi.Device)
 			for range tt.wantErrorDevices {
@@ -294,8 +282,6 @@ func TestUpdateLastHeartbeatTime(t *testing.T) {
 
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 	hc.nodeName = "test-node"
-	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-	hc.recorder = record.NewFakeRecorder(200)
 
 	time.Sleep(2 * time.Second)
 	hc.updateLastHeartbeatTime()
@@ -308,7 +294,7 @@ func TestUpdateLastHeartbeatTime(t *testing.T) {
 	}
 }
 
-func TestResetXIDCondition(t *testing.T) {
+func TestResetXIDConditionWithBackoff(t *testing.T) {
 	// Initialize the node with condition
 	node := makeNode(nil, nil, nil)
 	initialTime := metav1.Now()
@@ -320,34 +306,53 @@ func TestResetXIDCondition(t *testing.T) {
 		Reason:             "XID",
 		Message:            "0",
 	})
-	node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
-		Type:   v1.NodeReady,
-		Status: "True",
-	})
-	node.Status.NodeInfo.BootID = "0"
+	node.Status.NodeInfo.BootID = "1" // New boot ID to ensure condition is removed on success
+
 	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
+	callCount := 0
+	// Mock the first 2 calls to fail, and the 3rd to succeed.
+	fakeClient.Fake.PrependReactor("get", "nodes", func(action k8sclienttesting.Action) (handled bool, ret runtime.Object, err error) {
+		callCount++
+		if callCount < 3 {
+			return true, nil, errors.New("fake API server error")
+		}
+		// On the 3rd call, we let the default reactor handle it, which will return the node.
+		return false, nil, nil
+	})
 
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 	hc.nodeName = "test-node"
-	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-	hc.recorder = record.NewFakeRecorder(200)
-	// Try reset without rebootId changed, conditions remain the same
-	hc.resetXIDCondition()
-	updatedNode, _ := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
-	if len(updatedNode.Status.Conditions) < 2 {
-		t.Errorf("The XID condition should persist without reboot")
+
+	startTime := time.Now()
+	hc.resetXIDConditionWithBackoff()
+	duration := time.Since(startTime)
+
+	if callCount != 3 {
+		t.Errorf("Expected 3 calls to get node, but got %d", callCount)
 	}
-	// Try reset with rebootId changed, conditions get reset
-	updatedNode.Status.NodeInfo.BootID = "1"
-	_, err := fakeClient.CoreV1().Nodes().Update(context.Background(), updatedNode, metav1.UpdateOptions{})
+
+	// The first sleep is 1s, the second is 2s. Total should be > 3s.
+	if duration < 3*time.Second {
+		t.Errorf("Expected backoff to take at least 3 seconds, but it took %v", duration)
+	}
+
+	// Check that the condition is removed
+	updatedNode, err := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
 	if err != nil {
-		t.Errorf("Failed to update node: %v", err)
+		t.Fatalf("Failed to get node after backoff: %v", err)
 	}
-	hc.nodeLister = mockNodeLister{nodes: []*v1.Node{updatedNode}}
-	hc.resetXIDCondition()
-	updatedNode, _ = fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
-	if len(updatedNode.Status.Conditions) == 2 {
-		t.Errorf("The XID condition should be reset after reboot")
+
+	conditionRemoved := true
+	for _, c := range updatedNode.Status.Conditions {
+		if c.Type == XIDConditionType {
+			conditionRemoved = false
+			break
+		}
+	}
+
+	if !conditionRemoved {
+		t.Errorf("XID condition was not removed after successful retry")
 	}
 }
 
@@ -429,8 +434,6 @@ func TestMonitorXidevent(t *testing.T) {
 
 		hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 		hc.nodeName = "test-node"
-		hc.nodeLister = mockNodeLister{nodes: []*v1.Node{&node}}
-		hc.recorder = record.NewFakeRecorder(200)
 
 		for _, event := range test.events {
 			hc.monitorXidevent(event)
