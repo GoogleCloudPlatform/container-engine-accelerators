@@ -40,6 +40,8 @@ import (
 const (
 	XIDConditionType = "XidCriticalError"
 	eventSource      = "nvidia-gpu-device-plugin"
+
+	resetXIDConditionTimeout = 2 * time.Minute
 )
 
 // GPUHealthChecker checks the health of nvidia GPUs. Note that with the current
@@ -96,6 +98,31 @@ func NewGPUHealthChecker(devices map[string]pluginapi.Device, health chan plugin
 	return hc
 }
 
+// resetXIDConditionWithBackoff tries to reset XID condition with exponential backoff.
+// It retries with a 1s sleep and backs off to 30s. It times out after 2 minutes.
+func (hc *GPUHealthChecker) resetXIDConditionWithBackoff() {
+	backoff := 1 * time.Second
+	timeout := time.After(resetXIDConditionTimeout)
+	for {
+		select {
+		case <-timeout:
+			glog.Errorf("Timeout resetting XID condition after 2 minutes.")
+			return
+		default:
+			err := hc.resetXIDCondition()
+			if err == nil {
+				return
+			}
+			glog.Errorf("Failed to reset XID condition, will retry in %v. Error: %v", backoff, err)
+			time.Sleep(backoff)
+			backoff *= 2
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+		}
+	}
+}
+
 // Check whether the XID condition should be removed. If the conditions exists,
 // 1. If the bootId changes, consider the node fixed through auto-repair
 // 2. If the bootId stay unchanged, consider a pure gpu-device-plugin restart
@@ -140,10 +167,8 @@ func (hc *GPUHealthChecker) Start() error {
 	}
 	hc.nodeName = nodeName
 
-	err = hc.resetXIDCondition()
-	if err != nil {
-		glog.Errorf("failed to reset XID Condition, err: %v", err)
-	}
+	go hc.resetXIDConditionWithBackoff()
+
 	go hc.setXIDheartbeat()
 
 	glog.Info("Starting GPU Health Checker")
