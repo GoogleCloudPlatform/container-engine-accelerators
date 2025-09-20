@@ -15,10 +15,12 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
@@ -27,6 +29,8 @@ import (
 	util "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -35,6 +39,9 @@ const (
 	kubeletEndpoint      = "kubelet.sock"
 	pluginEndpointPrefix = "nvidiaGPU"
 	devDirectory         = "/dev"
+	nodeNameEnv          = "NODE_NAME"
+	lockFilePath         = "/device-plugin/tpu-device-plugin.lock"
+
 	// Proc directory is used to lookup the access files for each GPU partition.
 	procDirectory = "/proc"
 )
@@ -47,6 +54,7 @@ var (
 	pluginMountPath                = flag.String("plugin-directory", "/device-plugin", "The directory path to create plugin socket")
 	enableContainerGPUMetrics      = flag.Bool("enable-container-gpu-metrics", false, "If true, the device plugin will expose GPU metrics for containers with allocated GPU")
 	enableHealthMonitoring         = flag.Bool("enable-health-monitoring", false, "If true, the device plugin will detect critical Xid errors and mark the GPUs unallocatable")
+	enableFlockWait                = flag.Bool("enable-flock-wait", false, "If true, the device plugin will wait until the old device plugin release the lock")
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Collection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
@@ -73,6 +81,8 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 
 func main() {
 	flag.Parse()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure the context is canceled when main exits
 	glog.Infoln("device-plugin started")
 	mountPaths := []pluginapi.Mount{
 		{HostPath: *hostPathPrefix, ContainerPath: *containerPathPrefix, ReadOnly: true},
@@ -151,6 +161,29 @@ func main() {
 			return
 		}
 		defer hc.Stop()
+
+	}
+
+	if *enableFlockWait {
+		kubeClient, err := util.BuildKubeClient()
+		if err != nil {
+			glog.Infof("Failed to build kube client: %v", err)
+			return
+		}
+		nodeName, err := util.GetEnv(nodeNameEnv)
+		if err != nil {
+			glog.Infof("Failed to get node name from environment variable %s: %v", nodeNameEnv, err)
+			return
+		}
+		watchfunc := func(options metav1.ListOptions) (watch.Interface, error) {
+			return kubeClient.CoreV1().Nodes().Watch(ctx, metav1.ListOptions{
+				FieldSelector: "metadata.name=" + nodeName,
+			})
+		}
+		if err := util.SafelyUsingFlockWait(ctx, lockFilePath, watchfunc, util.CheckLockFileExists, util.UseRetryWatch); err != nil {
+			glog.Errorf("Failed to safely use flock wait, exiting... %v", err)
+			os.Exit(1)
+		}
 	}
 
 	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
