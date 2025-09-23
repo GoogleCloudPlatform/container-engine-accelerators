@@ -62,7 +62,7 @@ spec:
             path: /home/kubernetes/bin/nvidia
             type: Directory
       initContainers:
-        - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-arm64:v1.0.6
+        - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-arm64:v1.0.7
           name: nccl-rdma-installer
           resources:
             requests:

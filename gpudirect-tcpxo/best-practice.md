@@ -1,6 +1,6 @@
 # Best practice to run workload with GPUDirect-TCPX(O)
 * [Automatic Sidecar Termination](./best-practice.md#automatic-sidecar-termination)
-* [Enable LL128 for latency reduction](./best-practice.md#enable-ll128-for-latency-reduction)
+* [Use NVLSTree and LL128 (Default)](./best-practice.md#use-nvlstree-and-ll128)
 * [Setup Startup Probe for the TCPXO-daemon Sidecar](./best-practice.md#setup-startup-probe-for-the-tcpxo-daemon-sidecar)
 * [Topology awareness scheduling](./best-practice.md#topology-awareness-scheduling)
 
@@ -57,28 +57,34 @@ metadata:
 
 Using the sidecar containers feature, the tcpxo-daemon is guaranteed to auto-terminate after the main application container completes. Reference: https://kccnceu2024.sched.com/event/1YeS0
 
-## Enable LL128 for Latency Reduction
-LL128 is a NCCL feature that gives non-trivial latency reductions for small-medium msg sizes.
+## Use NVLSTree and LL128
+For TCPXO, NVLSTree and LL128 provide performance improvements to workloads for small and medium message sizes. For this reason, we have made the use of these two features part of our default configuration.
 
-You could update the following NCCL configs in your workload to enable LL128: 
-- Ensure the NCCL plugin installer image is in release >= Feb 06, 2025 in [GPUDirect-TCPXO release notes](./README.md), with this version or later:
+- NVLSTree is an improved NCCL algorithm for all-reduce that provides improvements in performance for small msg sizes.
+- LL128 is a NCCL feature that gives non-trivial latency reductions for small-medium msg sizes.
+
+Use the default NCCL configs in your workload to enable these features: 
+- Ensure the NCCL plugin installer image is in release >= Aug 21, 2025 in [GPUDirect-TCPXO release notes](./README.md), with this version or later:
 ```
 us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/nccl-plugin-gpudirecttcpx-
-dev:v1.0.8-1
+dev:v1.0.12
 ```
 - Set the following environment variable in your workload manifest:
 ```
-NCCL_LIB_DIR="/usr/local/nvidia/lib64
+NCCL_LIB_DIR="/usr/local/nvidia/lib64"
 ```
-- Configure your workload to execute the `nccl-env-profile-ll128.sh` script when the container starts. Set the following command in your workload manifest:
+- Configure your workload to execute the `nccl-env-profile.sh` script when the container starts. Set the following command in your workload manifest:
 ```
-source ${NCCL_LIB_DIR}/nccl-env-profile-ll128.sh
-``` 
-The `nccl-env-profile-ll128.sh` script has different values for the following environment variables compared to the `n`ccl-env-profile.sh` script:
+source ${NCCL_LIB_DIR}/nccl-env-profile.sh
 ```
-NCCL_PROTO=Simple,LL128
-NCCL_TUNER_CONFIG_PATH=/usr/local/nvidia/lib64/a3plus_tuner_config_ll128.textproto
-NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/usr/local/nvidia/lib64/a3plus_guest_config_ll128.textproto
+### Not using NVLSTree nor LL128
+For users who prefer to not use LL128 nor NVLSTree, we have provided a environment profiles script without these features. The `nccl-env-profile-simple.sh` script has different values for the following environment variables compared to the `nccl-env-profile.sh` script:
+```
+# NCCL_NVLSTREE_MAX_CHUNKSIZE is removed
+NCCL_PROTO=Simple
+NCCL_NVLS_ENABLE=0
+NCCL_TUNER_CONFIG_PATH=${NCCL_LIB_DIR}/a3plus_tuner_config_simple.textproto
+NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=${NCCL_LIB_DIR}/a3plus_guest_config_simple.textproto
 ```
 ## Setup Startup Probe for the TCPXO-daemon Sidecar
 When TCPXO-daemon sidecar starts, it will execute an initialization process. If the container lands on a bad node(with host component issues), the TCPXO-daemon will not continue to work. Setup a [startup probe](https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/#startup-probe) to fail the container earlier with such cases.
@@ -95,7 +101,7 @@ When TCPXO-daemon sidecar starts, it will execute an initialization process. If 
         - |
           set -ex
           chmod 755 /fts/entrypoint_rxdm_container.sh
-          /fts/entrypoint_rxdm_container.sh --num_hops=2 --num_nics=8 --uid= --alsologtostderr
+          /fts/entrypoint_rxdm_container.sh --num_hops=2 --num_nics=8
       volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /usr/local/nvidia
