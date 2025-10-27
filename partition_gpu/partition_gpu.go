@@ -119,6 +119,7 @@ var partitionSizeMaxCount = map[string]int{
 	"7g.186gb": 1,
 	//nvidia-rtx-pro-6000
 	"1g.24gb": 4,
+	"1g.24gb+gfx": 4,
 	"2g.48gb": 2,
 	"4g.96gb": 1,
 }
