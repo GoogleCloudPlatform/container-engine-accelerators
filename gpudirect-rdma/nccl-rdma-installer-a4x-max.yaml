@@ -1,0 +1,143 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nccl-host-1
+spec:
+  selector:
+    name: nccl-host-1
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nccl-host-2
+spec:
+  selector:
+    name: nccl-host-2
+  clusterIP: None
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: nccl-test-compute-domain
+spec:
+  numNodes: 2
+  channel:
+    resourceClaimTemplate:
+      name: nccl-test-compute-domain-channel
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nccl-test-host-1
+  labels:
+    name: nccl-host-1
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: cloud.google.com/gke-accelerator
+            operator: In
+            values:
+            - nvidia-gb300
+          - key: kubernetes.io/arch
+            operator: In
+            values:
+            - arm64
+  hostNetwork: false
+  hostPID: false
+  volumes:
+  - name: library-dir-host
+    hostPath:
+      path: /home/kubernetes/bin/nvidia
+  - name: shared-memory
+    emptyDir:
+      medium: "Memory"
+      sizeLimit: 250Gi
+  containers:
+  - image: us-docker.pkg.dev/kernel-net-team/clouda4-nccl-dev/nccl-gib-a4x-max-diagnostic:20250929 
+    name: test
+    resources:
+      requests:
+        cpu: 150m
+    volumeMounts:
+    - name: library-dir-host
+      mountPath: /usr/local/nvidia
+    - name: shared-memory
+      mountPath: /dev/shm
+    env:
+    - name: LD_LIBRARY_PATH
+      value: /usr/local/nvidia/lib64
+    resources:
+      limits:
+        nvidia.com/gpu: 4
+      claims:
+        - name: compute-domain-channel
+    command: ["/bin/bash", "-c"]
+    args:
+    - |
+      /scripts/container_entry.sh shell
+      sleep infinity
+  resourceClaims:
+  - name: compute-domain-channel
+    resourceClaimTemplateName: nccl-test-compute-domain-channel
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nccl-test-host-2
+  labels:
+    name: nccl-host-2
+spec:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: cloud.google.com/gke-accelerator
+            operator: In
+            values:
+            - nvidia-gb300
+          - key: kubernetes.io/arch
+            operator: In
+            values:
+            - arm64
+  hostNetwork: false
+  hostPID: false
+  volumes:
+  - name: library-dir-host
+    hostPath:
+      path: /home/kubernetes/bin/nvidia
+  - name: shared-memory
+    emptyDir:
+      medium: "Memory"
+      sizeLimit: 250Gi
+  containers:
+  - image: us-docker.pkg.dev/kernel-net-team/clouda4-nccl-dev/nccl-gib-a4x-max-diagnostic:20250929 
+    name: test
+    resources:
+      requests:
+        cpu: 150m
+    volumeMounts:
+    - name: library-dir-host
+      mountPath: /usr/local/nvidia
+    - name: shared-memory
+      mountPath: /dev/shm
+    env:
+    - name: LD_LIBRARY_PATH
+      value: /usr/local/nvidia/lib64
+    resources:
+      limits:
+        nvidia.com/gpu: 4
+      claims:
+        - name: compute-domain-channel
+    command: ["/bin/bash", "-c"]
+    args:
+    - |
+      /scripts/container_entry.sh shell
+      sleep infinity
+  resourceClaims:
+  - name: compute-domain-channel
+    resourceClaimTemplateName: nccl-test-compute-domain-channel
