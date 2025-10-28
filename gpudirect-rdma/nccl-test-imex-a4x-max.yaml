@@ -115,7 +115,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/kernel-net-team/clouda4-nccl-dev/nccl-gib-a4x-max-diagnostic:20250929 
+  - image: us-docker.pkg.dev/kernel-net-team/clouda4-nccl-dev/nccl-gib-a4x-max 
     name: test
     resources:
       requests:
