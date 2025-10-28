@@ -57,7 +57,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/kernel-net-team/clouda4-nccl-dev/nccl-gib-a4x-max
+  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64:1.0.7
     name: test
     resources:
       requests:
@@ -115,7 +115,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/kernel-net-team/clouda4-nccl-dev/nccl-gib-a4x-max 
+  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64:1.0.7 
     name: test
     resources:
       requests:
