@@ -75,10 +75,10 @@ var partitionSizeToProfileID = map[string]string{
 	"7g.186gb": "0",
 
 	// nvidia-rtx-pro-6000
-	"1g.24gb": "14",
+	"1g.24gb":     "14",
 	"1g.24gb+gfx": "47",
-	"2g.48gb": "5",
-	"4g.96gb": "0",
+	"2g.48gb":     "5",
+	"4g.96gb":     "0",
 }
 
 var partitionSizeMaxCount = map[string]int{
@@ -118,10 +118,10 @@ var partitionSizeMaxCount = map[string]int{
 	"4g.93gb":  1,
 	"7g.186gb": 1,
 	//nvidia-rtx-pro-6000
-	"1g.24gb": 4,
+	"1g.24gb":     4,
 	"1g.24gb+gfx": 4,
-	"2g.48gb": 2,
-	"4g.96gb": 1,
+	"2g.48gb":     2,
+	"4g.96gb":     1,
 }
 
 const (
