@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.23-bullseye as builder
+FROM golang:1.24-bullseye as builder
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
 RUN go build -o device_injector nri_device_injector/nri_device_injector.go
