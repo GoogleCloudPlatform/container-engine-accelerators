@@ -22,6 +22,6 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o gpu_partitioner partition_gpu/partition_gpu.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner
 
-FROM us.gcr.io/gke-release/gke-distroless/bash:gke_distroless_20250407.00_p0@sha256:b903ad51976ccd68a817f445c5b6df8bf3655bfd1b30ca989472f7a99f930fc5
+FROM gke.gcr.io/gke-distroless/bash:gke_distroless_20251007.00_p0@sha256:5f7662498b88f633236d8421e29807221b9059a6878f24cfea7eb6b16f9cdb44
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_partitioner /usr/bin/gpu_partitioner
 CMD ["/usr/bin/gpu_partitioner", "-logtostderr"]
