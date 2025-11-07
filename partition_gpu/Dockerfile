@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM --platform=$BUILDPLATFORM golang:1.24-bullseye as builder
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm as builder
 
 ARG TARGETOS
 ARG TARGETARCH
