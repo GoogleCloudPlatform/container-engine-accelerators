@@ -4,13 +4,11 @@ metadata:
   name: asapd-lite
   namespace: kube-system
   labels:
-    app: asapd-lite
+    k8s-app: asapd-lite
 spec:
   selector:
     matchLabels:
       k8s-app: asapd-lite
-  updateStrategy:
-    type: RollingUpdate
   template:
     metadata:
       labels:
@@ -37,10 +35,6 @@ spec:
       # Use the host's network namespace. This is essential for managing the
       # host's CX PFs.
       hostNetwork: true
-
-      # Use the host's PID namespace. This can be useful for debugging and
-      # interacting with host processes.
-      hostPID: true
 
       containers:
       - name: asapd-lite
