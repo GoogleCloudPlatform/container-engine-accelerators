@@ -43,6 +43,7 @@ spec:
         command: ["/bin/bash", "-c"]
         args:
           - |
+            set -x
             echo "Copying ipam binary to host persistent storage..."
             cp -f /usr/local/sbin/ipam /var/lib/google/asapd-lite/ipam
             if [ $? -ne 0 ]; then
@@ -50,7 +51,31 @@ spec:
               exit 1
             fi
             echo "ipam binary copied successfully. Starting controller..."
-            exec /asapd-lite/controller/asapd-lite-controller
+            /asapd-lite/controller/asapd-lite-controller &
+
+            # Wait for a bit to let interfaces come up.
+            sleep 15
+
+            DADFAILED_FOUND=0
+            INTERFACES=$(ip -o link show | awk -F': ' '{print $2}' | grep 'gpu')
+
+            for iface in $INTERFACES; do
+              if ip -6 addr show dev "$iface" | grep -q 'dadfailed'; then
+                echo "Found dadfailed on interface $iface. Bringing it down and up."
+                ip link set dev "$iface" down
+                ip link set dev "$iface" up
+                DADFAILED_FOUND=1
+              fi
+            done
+
+            if [ "$DADFAILED_FOUND" -eq 1 ]; then
+              echo "Found and attempted to fix dadfailed on one or more interfaces. Exiting to allow container restart."
+              exit 1
+            fi
+
+            # Keep the container running
+            echo "No dadfailed detected on interfaces."
+            wait
 
         env:
         - name: LD_LIBRARY_PATH
