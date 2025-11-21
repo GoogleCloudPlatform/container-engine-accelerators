@@ -79,6 +79,11 @@ fastsocket_installer:
 nri-device-injector:
 	docker build --pull -t ${REGISTRY}/${DEVICE_INJECTOR_IMAGE}:${TAG} -f nri_device_injector/Dockerfile .
 
+nri-device-injector-multi-arch:
+	@for arch in $(ALL_ARCHITECTURES); do \
+	  docker buildx build --pull --load --platform linux/$${arch} -t ${REGISTRY}/${DEVICE_INJECTOR_IMAGE}-$${arch}:${TAG} -f nri_device_injector/Dockerfile . ; \
+	done
+
 nvidia_persistenced_installer:
 	docker buildx build --pull --load -t ${REGISTRY}/${NVIDIA_PERSISTENCED_IMAGE}:${TAG} -f nvidia-persistenced-installer/Dockerfile .
 
