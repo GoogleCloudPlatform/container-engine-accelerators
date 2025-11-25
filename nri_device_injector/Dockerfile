@@ -12,10 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM golang:1.24-bookworm as builder
+FROM --platform=$BUILDPLATFORM golang:1.24-bookworm as builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
 WORKDIR /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators
 COPY . .
-RUN go build -o device_injector nri_device_injector/nri_device_injector.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o device_injector nri_device_injector/nri_device_injector.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/device_injector
 
 FROM gke.gcr.io/gke-distroless/bash:gke_distroless_20251007.00_p0@sha256:5f7662498b88f633236d8421e29807221b9059a6878f24cfea7eb6b16f9cdb44
