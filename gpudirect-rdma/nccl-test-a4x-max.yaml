@@ -1,3 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nccl-host-1
+spec:
+  selector:
+    name: nccl-host-1
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nccl-host-2
+spec:
+  selector:
+    name: nccl-host-2
+  clusterIP: None
+---
 apiVersion: resource.nvidia.com/v1beta1
 kind: ComputeDomain
 metadata:
@@ -25,7 +43,9 @@ spec:
 apiVersion: v1
 kind: Pod
 metadata:
-  name: all-mrdma
+  name: nccl-test-host-1
+  labels:
+    name: nccl-host-1
 spec:
   tolerations:
   - key: "kubernetes.io/arch"
@@ -89,16 +109,7 @@ spec:
     resourceClaimTemplateName: nccl-test-all-mrdma
 ---
 apiVersion: v1
-kind: Service
-metadata:
-  name: nccl-test
-spec:
-  selector:
-    app: nccl-test
-  clusterIP: None
----
-apiVersion: apps/v1
-kind: StatefulSet
+kind: Pod
 metadata:
   name: nccl-test-host-2
   labels:
