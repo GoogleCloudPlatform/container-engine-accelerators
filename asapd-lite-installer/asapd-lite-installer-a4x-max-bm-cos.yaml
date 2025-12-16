@@ -1,90 +1,49 @@
+Current HEAD does not match the latest origin/main, which is:
+commit ffd04bcb69d1c8dedd71b21cc9ad64f8b4638721
+Author: Barbara Moretto Barron <bmorettodama@google.com>
+Date:   Tue Dec 16 09:14:38 2025 -0800
+
+    Change get_pf_interface_name function to look for the right interface there. There will be no up_rep interface name.
+    
+    Change-Id: Ib4d914bbc354d3d4a52995817b594c74c0bd1a0b
+    Reviewed-on: https://asapd-lite-review.googlesource.com/c/asapd-lite/+/5902
+    Reviewed-by: Weilong Cui <cuiwl@google.com>
+    Tested-by: Louhi_Bot <587340091677-compute@developer.gserviceaccount.com>
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
   name: asapd-lite
-  namespace: kube-system
   labels:
-    k8s-app: asapd-lite
+    app: asapd-lite
 spec:
   selector:
     matchLabels:
-      k8s-app: asapd-lite
+      app: asapd-lite
   template:
     metadata:
       labels:
-        k8s-app: asapd-lite
+        app: asapd-lite
     spec:
-      priorityClassName: system-node-critical
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node.kubernetes.io/instance-type
-                    operator: In
-                    values:
-                      - a4x-maxgpu-4g-metal
-                      - a4x-maxgpu-4g-metal-nolssd
-                  - key: cloud.google.com/gke-os-distribution
-                    operator: In
-                    values:
-                      - cos
+      # Allow the pod to run on any node
       tolerations:
       - operator: Exists
 
-      # Use the host's network namespace. This is essential for managing the
-      # host's CX PFs.
+      # Use the host's network namespace. This is essential for
+      # managing the host's CX PFs.
       hostNetwork: true
 
       # Use the host's PID namespace. This can be useful for
       # debugging and interacting with host processes.
       hostPID: true
+
       containers:
       - name: asapd-lite
-        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.2
+        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.3
 
-        command: ["/bin/bash", "-c"]
-        args:
-          - |
-            set -x
-            /usr/local/bin/run_asapd_lite.sh
-
-            # Wait for a bit to let interfaces come up.
-            sleep 15
-
-            DADFAILED_FOUND=0
-            INTERFACES=$(ip -o link show | awk -F': ' '{print $2}' | grep 'gpu')
-
-            for iface in $INTERFACES; do
-              if ip -6 addr show dev "$iface" | grep -q 'dadfailed'; then
-                echo "Found dadfailed on interface $iface. Bringing it down and up."
-                ip link set dev "$iface" down
-                ip link set dev "$iface" up
-                DADFAILED_FOUND=1
-              fi
-            done
-
-            if [ "$DADFAILED_FOUND" -eq 1 ]; then
-              echo "Found and attempted to fix dadfailed on one or more interfaces. Exiting to allow container restart."
-              exit 1
-            fi
-
-            # Keep the container running
-            echo "No dadfailed detected on interfaces."
-            wait
-
+        command: ["/usr/local/bin/run_asapd_lite.sh"]
         env:
         - name: LD_LIBRARY_PATH
           value: /asapd-lite/controller
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 19540
-          initialDelaySeconds: 60
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 19540
 
         securityContext:
           # 'privileged: true' is required for modifying most host-level
@@ -94,16 +53,13 @@ spec:
         volumeMounts:
         - name: host-sys
           mountPath: /sys
-        - name: host-proc
-          mountPath: /proc
+          readOnly: true
         - name: host-udev-rules
           mountPath: /etc/udev/rules.d
         - name: host-run-udev
           mountPath: /run/udev
         - name: host-run-asapd-lite
           mountPath: /run/asapd-lite
-        - mountPath: /hugepages-2Mi
-          name: hugepage-2mi
         - name: var-log-google-asapd-lite
           mountPath: /var/log/google/asapd-lite
         - name: var-lib-google-asapd-lite
@@ -112,21 +68,18 @@ spec:
           mountPath: /etc/systemd/system
         - name: host-run-systemd
           mountPath: /run/systemd
-        resources:
-          limits:
-            hugepages-2Mi: 8192Mi
-            memory: 1024Mi
 
       volumes:
+      # These define the host paths we want to mount
+      # Mount /sys to read sysfs
       - name: host-sys
         hostPath:
           path: /sys
-      - name: host-proc
-        hostPath:
-          path: /proc
+      # Mount for managing udev rules
       - name: host-udev-rules
         hostPath:
           path: /etc/udev/rules.d
+      # I'm not sure we need this, but AI suggests it may be needed for udevadm trigger
       - name: host-run-udev
         hostPath:
           path: /run/udev
@@ -134,9 +87,6 @@ spec:
         hostPath:
           path: /run/asapd-lite
           type: DirectoryOrCreate
-      - name: hugepage-2mi
-        emptyDir:
-          medium: HugePages-2Mi
       - name: var-log-google-asapd-lite
         hostPath:
           path: /var/log/google/asapd-lite
@@ -145,8 +95,7 @@ spec:
       # the ipam binary on the host, allowing it to be executed from the host.
       # This location was choosen based on this documentation
       # https://docs.cloud.google.com/container-optimized-os/docs/concepts/disks-and-filesystem#working_with_the_file_system
-      # Hence, this may not necessarily be a suitable location for non-COS based
-      # systems.
+      # Hence, this may not necessarily be a suitable location for non-COS based systems.
       - name: var-lib-google-asapd-lite
         hostPath:
           path: /var/lib/google/asapd-lite
@@ -157,7 +106,3 @@ spec:
       - name: host-run-systemd
         hostPath:
           path: /run/systemd
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1%
