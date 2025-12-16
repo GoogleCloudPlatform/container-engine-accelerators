@@ -8,6 +8,20 @@ spec:
     resourceClaimTemplate:
       name: nccl-test-compute-domain-channel
 ---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: nccl-test-all-mrdma
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          deviceClassName: mrdma.google.com
+          allocationMode: ExactCount
+          count: 8
+---
 apiVersion: jobset.x-k8s.io/v1alpha2
 kind: JobSet
 metadata:
@@ -29,8 +43,6 @@ spec:
               terminationGracePeriodSeconds: 5
               activeDeadlineSeconds: 3600
               restartPolicy: Never
-              hostNetwork: true
-              dnsPolicy: ClusterFirstWithHostNet
               nodeSelector:
                 cloud.google.com/gke-accelerator: nvidia-gb300
               tolerations:
@@ -60,13 +72,16 @@ spec:
               resourceClaims:
               - name: compute-domain-channel
                 resourceClaimTemplateName: nccl-test-compute-domain-channel
+              - name: rdma
+                resourceClaimTemplateName: nccl-test-all-mrdma
               containers:
               - name: nccl-test
                 stdin: true
                 tty: true
                 image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64@sha256:a0a914c56b8eeb8130ed4d8a5fb811d87826964b4458cbd87740a33bd1e66d33
                 securityContext:
-                  privileged: true
+                  capabilities:
+                    add: ["IPC_LOCK"]
                 env:
                 - name: MY_NODE_NAME
                   valueFrom:
@@ -171,4 +186,5 @@ spec:
                     nvidia.com/gpu: 4
                   claims:
                     - name: compute-domain-channel
+                    - name: rdma
               restartPolicy: Never
