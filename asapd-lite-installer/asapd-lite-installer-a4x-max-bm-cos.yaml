@@ -36,22 +36,18 @@ spec:
       # host's CX PFs.
       hostNetwork: true
 
+      # Use the host's PID namespace. This can be useful for
+      # debugging and interacting with host processes.
+      hostPID: true
       containers:
       - name: asapd-lite
-        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.1
+        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.2
 
         command: ["/bin/bash", "-c"]
         args:
           - |
             set -x
-            echo "Copying ipam binary to host persistent storage..."
-            cp -f /usr/local/sbin/ipam /var/lib/google/asapd-lite/ipam
-            if [ $? -ne 0 ]; then
-              echo "Error: Failed to copy ipam binary. Exiting."
-              exit 1
-            fi
-            echo "ipam binary copied successfully. Starting controller..."
-            /asapd-lite/controller/asapd-lite-controller &
+            /usr/local/bin/run_asapd_lite.sh
 
             # Wait for a bit to let interfaces come up.
             sleep 15
@@ -101,7 +97,7 @@ spec:
         - name: host-proc
           mountPath: /proc
         - name: host-udev-rules
-          mountPath: /usr/lib/udev/rules.d
+          mountPath: /etc/udev/rules.d
         - name: host-run-udev
           mountPath: /run/udev
         - name: host-run-asapd-lite
@@ -112,6 +108,10 @@ spec:
           mountPath: /var/log/google/asapd-lite
         - name: var-lib-google-asapd-lite
           mountPath: /var/lib/google/asapd-lite
+        - name: host-systemd-system
+          mountPath: /etc/systemd/system
+        - name: host-run-systemd
+          mountPath: /run/systemd
         resources:
           limits:
             hugepages-2Mi: 8192Mi
@@ -126,7 +126,7 @@ spec:
           path: /proc
       - name: host-udev-rules
         hostPath:
-          path: /usr/lib/udev/rules.d
+          path: /etc/udev/rules.d
       - name: host-run-udev
         hostPath:
           path: /run/udev
@@ -151,6 +151,12 @@ spec:
         hostPath:
           path: /var/lib/google/asapd-lite
           type: DirectoryOrCreate
+      - name: host-systemd-system
+        hostPath:
+          path: /etc/systemd/system
+      - name: host-run-systemd
+        hostPath:
+          path: /run/systemd
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
