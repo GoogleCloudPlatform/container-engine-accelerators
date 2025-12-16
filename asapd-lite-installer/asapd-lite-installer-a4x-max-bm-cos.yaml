@@ -1,3 +1,14 @@
+Current HEAD does not match the latest origin/main, which is:
+commit ffd04bcb69d1c8dedd71b21cc9ad64f8b4638721
+Author: Barbara Moretto Barron <bmorettodama@google.com>
+Date:   Tue Dec 16 09:14:38 2025 -0800
+
+    Change get_pf_interface_name function to look for the right interface there. There will be no up_rep interface name.
+    
+    Change-Id: Ib4d914bbc354d3d4a52995817b594c74c0bd1a0b
+    Reviewed-on: https://asapd-lite-review.googlesource.com/c/asapd-lite/+/5902
+    Reviewed-by: Weilong Cui <cuiwl@google.com>
+    Tested-by: Louhi_Bot <587340091677-compute@developer.gserviceaccount.com>
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -41,7 +52,7 @@ spec:
       hostPID: true
       containers:
       - name: asapd-lite
-        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.2
+        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.3
 
         command: ["/bin/bash", "-c"]
         args:
