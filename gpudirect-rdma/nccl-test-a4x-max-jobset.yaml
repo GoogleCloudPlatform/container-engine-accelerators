@@ -78,7 +78,7 @@ spec:
               - name: nccl-test
                 stdin: true
                 tty: true
-                image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64@sha256:a0a914c56b8eeb8130ed4d8a5fb811d87826964b4458cbd87740a33bd1e66d33
+                image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64:v1.1.1
                 securityContext:
                   capabilities:
                     add: ["IPC_LOCK"]
@@ -136,22 +136,14 @@ spec:
                       # World Level = 0x0, Rail Aligned = 0x7
                       export NCCL_TESTS_SPLIT_MASK="0x0";
 
-                      # Force use of libnccl-gib
-                      # export NCCL_NET=gIB
-
-                      # Set all the correct libnccl-gib environment variables
-                      # source /usr/local/gib/scripts/set_nccl_env.sh
-
                       # Get all relevant NCCL / env vars to pass to all workers
                       export NCCL_DEBUG_SUBSYS="INIT,NET"
                       export NCCL_DEBUG="INFO"
-                      LD_LIBRARY_PATH="/usr/local/gib/lib64:${LD_LIBRARY_PATH}"
                       ENV_VARS=$(echo ${!NCCL*} ${!OMPI*} LD_LIBRARY_PATH PATH | sed 's/ / -x /g')
 
                       mpirun --hostfile /tmp/hostfile \
                         -x PATH -x LD_LIBRARY_PATH="/usr/local/gib/lib64:${LD_LIBRARY_PATH}" \
                         -x $ENV_VARS \
-                        -x NCCL_IB_GID_INDEX=3 \
                         -x NCCL_DEBUG="${NCCL_DEBUG}" \
                         -x NCCL_DEBUG_SUBSYS="${NCCL_DEBUG_SUBSYS}" \
                         -x NCCL_TESTS_SPLIT_MASK="${NCCL_TESTS_SPLIT_MASK}" \
@@ -175,8 +167,6 @@ spec:
                 volumeMounts:
                 - name: nvidia
                   mountPath: /usr/local/nvidia
-                # - name: gib
-                #   mountPath: /usr/local/gib
                 - name: shared-memory
                   mountPath: /dev/shm
                 resources:

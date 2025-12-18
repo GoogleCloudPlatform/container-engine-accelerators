@@ -75,7 +75,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64@sha256:a0a914c56b8eeb8130ed4d8a5fb811d87826964b4458cbd87740a33bd1e66d33
+  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64:v1.1.1
     securityContext:
       capabilities:
         add: ["IPC_LOCK"]
@@ -143,7 +143,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64@sha256:a0a914c56b8eeb8130ed4d8a5fb811d87826964b4458cbd87740a33bd1e66d33
+  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-gib-a4x-max-arm64:v1.1.1
     securityContext:
       capabilities:
         add: ["IPC_LOCK"]
