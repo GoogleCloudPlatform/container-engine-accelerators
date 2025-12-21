@@ -98,7 +98,7 @@ spec:
                 - name: OMPI_ALLOW_RUN_AS_ROOT_CONFIRM
                   value: "1"
                 - name: N_NODES
-                  value: "2"
+                  value: "__NUM_NODES__"
                 - name: LD_LIBRARY_PATH
                   value: /usr/local/nvidia/lib64
                 command:
