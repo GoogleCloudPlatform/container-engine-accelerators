@@ -49,34 +49,6 @@ spec:
         - operator: "Exists"
       hostNetwork: true
       hostPID: true
-      initContainers:
-        - image: "gke.gcr.io/gke-distroless/bash:latest"
-          name: enable-nri
-          resources:
-            limits:
-              cpu: 150m
-              memory: 160Mi
-              ephemeral-storage: 10Mi
-          securityContext:
-            privileged: true
-          volumeMounts:
-          - name: root
-            mountPath: /
-          command:
-          - '/bin/bash'
-          - '-c'
-          - |
-            if ! grep -q nri /etc/containerd/config.toml; then
-              echo "[plugins.\"io.containerd.nri.v1.nri\"]
-               disable = false
-               disable_connections = false
-               plugin_config_path = \"/etc/nri/conf.d\"
-               plugin_path = \"/home/kubernetes/nri/plugins\"
-               plugin_registration_timeout = \"5s\"
-               plugin_request_timeout = \"5s\"
-               socket_path = \"/var/run/nri/nri.sock\"">> /etc/containerd/config.toml
-              systemctl restart containerd.service
-            fi
       containers:
         - image: "gcr.io/gke-release/nri-device-injector@sha256:7704e2bd74b8edbb76b6913c7904cc2362f1fa887c4d4aba7b19778ea353537c"
           name: device-injector
