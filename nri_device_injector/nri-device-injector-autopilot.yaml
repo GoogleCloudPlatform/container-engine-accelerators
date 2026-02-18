@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This daemonset installs nvidia driver 450.80.02 and invokes the
-# partition_gpu tool to enable MIG mode and create GPU instances as specified
-# in the GPU config.
+# NRI device injector plugin daemonset that injects GPU devices into containers
+# specified by pod annotations.
 
 apiVersion: apps/v1
 kind: DaemonSet
@@ -40,11 +39,8 @@ spec:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
               - matchExpressions:
-                  - key: cloud.google.com/gke-accelerator
-                    operator: In
-                    values:
-                      - nvidia-h100-80gb
-                      - nvidia-h100-mega-80gb
+                  - key: cloud.google.com/gke-gpu
+                    operator: Exists
       tolerations:
         - operator: "Exists"
       hostNetwork: true
