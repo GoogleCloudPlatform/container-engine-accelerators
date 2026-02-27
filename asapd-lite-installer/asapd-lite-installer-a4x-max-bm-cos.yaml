@@ -41,13 +41,13 @@ spec:
       hostPID: true
       containers:
       - name: asapd-lite
-        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.5
+        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.6
 
         command: ["/bin/bash", "-c"]
         args:
           - |
             set -x
-            /usr/local/bin/run_asapd_lite.sh
+            /usr/local/bin/run_asapd_lite.sh --run_hairpin_probe=true --hairpin_sender_port_start=12345 --hairpin_receiver_port_start=23456
 
             # Wait for a bit to let interfaces come up.
             sleep 15
