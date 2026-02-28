@@ -1,0 +1,140 @@
+## Opt-in Error Codes Detection in Device Plugin Health Checker
+
+### Why do we want to make it opt-in rather than hard-coded in device plugin?
+
+If it's a hardware issue, we want to catch that in the health check and kubectl
+describe nodes will show it to customers so that they can migrate their
+workloads. The next step is GKE migrate the workload through graceful node
+shutdown.
+
+xid 79 could be a software issue. Migrating the workload to other nodes could
+have the same issue. We only want health check code to catch hardware errors, so
+we won't hardcode 79 in the health check code. We want the customers to do their
+investigation to rule out the possible user errors before treating it as a
+hardware failure. Once the customers actively opt in with configuration files,
+we assume they are aware of the possible user errors and they intend to treat 79
+as a hardware failure.
+
+### Xid Code ConfigMap
+
+Create a yaml file like this and put the xid codes you intend to add under
+data.HealthCriticalXid with the following format. Apply the yaml file to your
+cluster.
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+ name: xid-config
+ namespace: kube-system
+data:
+ HealthCriticalXid: "32,79,74"
+```
+
+### GPU config Generator ConfigMap
+
+Create a yaml file of the following code. Apply the yaml file to your cluster.
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gpu-config-generator
+  namespace: kube-system
+data:
+  gpu-config-generator.py: |-
+    import argparse
+    import json
+    import string
+    import os
+
+    def dump_to_file(conf, filename):
+      with open(filename, 'w+') as file:
+        file.write(json.dumps(conf, indent=2))
+        file.write('\n')
+
+    def main(health_critical_xid):
+      filename = "/etc/nvidia/gpu_config.json"
+      if (os.path.exists(filename)):
+        with open(filename, 'r') as file:
+          accelerator_config = json.load(file)
+      else:
+        accelerator_config = {}
+      if (len(health_critical_xid)):
+        accelerator_config["HealthCriticalXid"] = list(map(int, health_critical_xid.split(",")))
+
+      dump_to_file(accelerator_config, filename)
+
+    if __name__ == '__main__':
+        PARSER = argparse.ArgumentParser(
+            description='Generates the GPU configuration file for GKE nodes.')
+        PARSER.add_argument(
+        '--health-critical-xid',
+            type=str,
+            required=True,
+            help='Xid codes that are treated as hardware error')
+        ARGS = PARSER.parse_args()
+
+        main(ARGS.health_critical_xid)
+```
+
+### YAML File to Change the gpu_config.json
+
+Create a patch.yaml and copy paste the following code into the yaml file.
+
+```
+spec:
+  template:
+    spec:
+      initContainers:
+      - name: gpu-config-generator
+        image: "marketplace.gcr.io/google/python:latest"
+        command: ["python3", "/bin/gpu-config-generator.py", "--health-critical-xid=$(HealthCriticalXid_KEY)"]
+        volumeMounts:
+        - name: configmap-volume
+          mountPath: /bin/gpu-config-generator.py
+          readOnly: true
+          subPath: gpu-config-generator.py
+        - name: nvidia-config
+          mountPath: /etc/nvidia
+        env:
+          - name: HealthCriticalXid_KEY
+            valueFrom:
+              configMapKeyRef:
+                name: xid-config
+                key: HealthCriticalXid
+      volumes:
+      - name: configmap-volume
+        configMap:
+          defaultMode: 0700
+          name: gpu-config-generator
+```
+
+Then run the following command to patch the yaml file into device plugin so that
+gpu-config-generator can run as a init-container to device plugin.
+
+```
+kubectl patch -R -n kube-system daemonset/nvidia-gpu-device-plugin --patch-file patch.yaml
+```
+
+### Restart the device plugin
+
+You need to restart the device plugin for the gpu_config.json to be updated and
+picked up by device plugin.
+
+```
+kubectl rollout --namespace kube-system restart daemonset/nvidia-gpu-device-plugin
+```
+
+### Rollback
+
+If you want the device plugin to fix on the list of xid codes and stop picking
+up new changes in xid codes, you can remove the initcontainer from the device
+plugin yaml file using the following command:
+
+```
+kubectl rollout --namespace kube-system undo daemonset/nvidia-gpu-device-plugin
+```
+
+If you want to opt-out the customer-defined xid codes list, you can remove the
+Xid codes in the Xid Code ConfigMap and restart the device plugin.
