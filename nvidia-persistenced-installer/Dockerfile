@@ -33,6 +33,6 @@ RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerato
 FROM marketplace.gcr.io/google/debian12 AS sbin_builder
 
 FROM gcr.io/distroless/base:latest
-COPY --from=sbin_builder /usr/sbin/ldconfig /usr/sbin
+COPY --from=sbin_builder /usr/sbin/ldconfig /usr/sbin/ldconfig
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_persistenced_installer /usr/bin/nvidia-persistenced-installer
 CMD ["/usr/bin/nvidia-persistenced-installer", "-logtostderr"]
