@@ -70,7 +70,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.0.7
+  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.0
     name: test
     resources:
       requests:
@@ -78,8 +78,6 @@ spec:
     volumeMounts:
     - name: library-dir-host
       mountPath: /usr/local/nvidia
-    - name: gib
-      mountPath: /usr/local/gib
     - name: shared-memory
       mountPath: /dev/shm
     env:
@@ -144,7 +142,7 @@ spec:
       medium: "Memory"
       sizeLimit: 250Gi
   containers:
-  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.0.7
+  - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.0
     name: test
     resources:
       requests:
@@ -152,8 +150,6 @@ spec:
     volumeMounts:
     - name: library-dir-host
       mountPath: /usr/local/nvidia
-    - name: gib
-      mountPath: /usr/local/gib
     - name: shared-memory
       mountPath: /dev/shm
     env:
