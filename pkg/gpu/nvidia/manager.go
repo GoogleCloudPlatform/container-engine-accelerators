@@ -61,6 +61,7 @@ const (
 	mpsActiveThreadCmd = "get_default_active_thread_percentage"
 	mpsMemLimitEnv     = "CUDA_MPS_PINNED_DEVICE_MEM_LIMIT"
 	mpsThreadLimitEnv  = "CUDA_MPS_ACTIVE_THREAD_PERCENTAGE"
+	NvidiaRtxPro6000   = "NVIDIA RTX PRO 6000"
 )
 
 var (
@@ -151,7 +152,7 @@ type nvidiaGPUManager struct {
 	gpuConfig           GPUConfig
 	migDeviceManager    mig.DeviceManager
 	Health              chan pluginapi.Device
-	totalMemPerGPU      uint64 // Total memory available per GPU (in MB)
+	totalMemPerGPU uint64 // Total memory available per GPU (in MB)
 }
 
 func NewNvidiaGPUManager(devDirectory, procDirectory string, mountPaths []pluginapi.Mount, gpuConfig GPUConfig) *nvidiaGPUManager {
@@ -393,6 +394,11 @@ func (ngm *nvidiaGPUManager) Start() error {
 		if err := ngm.migDeviceManager.Start(ngm.gpuConfig.GPUPartitionSize); err != nil {
 			return fmt.Errorf("failed to start mig device manager: %v", err)
 		}
+	} else if supportsVGPU() {
+		// For vGPU, we don't initialize the MIG manager as vGPU is already built on top of MIG at the GCE-level. 
+		if _, err := ngm.migDeviceManager.DiscoverMIGDevices(); err != nil {
+			return fmt.Errorf("failed to discover MIG devices: %v", err)
+		}
 	}
 
 	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == "mps" {
@@ -427,6 +433,42 @@ func totalMemPerGPU() (uint64, error) {
 		return 0, fmt.Errorf("failed to get GPU memory: %v", nvml.ErrorString(ret))
 	}
 	return memory.Total, nil
+}
+
+// supportsVGPU checks if any of the attached GPUs support vGPU.
+func supportsVGPU() bool {
+	supportedModels := map[string]bool{
+		NvidiaRtxPro6000: true,
+	}
+
+	if nvmlutil.NvmlDeviceInfo == nil {
+		nvmlutil.NvmlDeviceInfo = &nvmlutil.DeviceInfo{}
+	}
+
+	devicesCount, ret := nvmlutil.NvmlDeviceInfo.DeviceCount()
+	if ret != nvml.SUCCESS {
+		return false
+	}
+
+	for i := 0; i < devicesCount; i++ {
+		device, ret := nvmlutil.NvmlDeviceInfo.DeviceHandleByIndex(i)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+
+		name, ret := nvmlutil.NvmlDeviceInfo.Name(device)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+
+		for model := range supportedModels {
+			if strings.Contains(name, model) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {

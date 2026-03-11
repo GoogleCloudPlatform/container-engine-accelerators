@@ -130,7 +130,7 @@ func (d *DeviceManager) Start(partitionSize string) error {
 
 	d.gpuPartitionSpecs = make(map[string][]pluginapi.DeviceSpec)
 
-	numPartitionsPerGPU, err := d.discoverMIGDevices()
+	numPartitionsPerGPU, err := d.DiscoverMIGDevices()
 	if err != nil {
 		return err
 	}
@@ -154,8 +154,8 @@ func (d *DeviceManager) Start(partitionSize string) error {
 	return nil
 }
 
-// discoverMIGDevices discovers all the MIG devices on the node and returns a map of GPU ID to the number of partitions.
-func (d *DeviceManager) discoverMIGDevices() (map[string]int, error) {
+// DiscoverMIGDevices discovers all the MIG devices on the node and returns a map of GPU ID to the number of partitions.
+func (d *DeviceManager) DiscoverMIGDevices() (map[string]int, error) {
 	nvidiaCapDir := path.Join(d.procDirectory, "driver/nvidia/capabilities")
 	capFiles, err := ioutil.ReadDir(nvidiaCapDir)
 	if err != nil {
