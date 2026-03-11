@@ -15,16 +15,19 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
 	healthcheck "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/health_check"
 	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/metrics"
 	util "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/util"
+	versionvisibility "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/version_visibility"
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
@@ -50,6 +53,7 @@ var (
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Collection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
+	publishDriverVersion           = flag.Bool("publish-driver-version", false, "If true, the device plugin will publish NVIDIA driver versions to the Kubernetes Node annotation")
 )
 
 func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
@@ -151,6 +155,31 @@ func main() {
 			return
 		}
 		defer hc.Stop()
+	}
+
+	if *publishDriverVersion {
+		glog.Infoln("Publishing NVIDIA driver version annotations to Node")
+		kubeClient, err := util.BuildKubeClient()
+		if err != nil {
+			glog.Warningf("Failed to build kube client for annotating: %v", err)
+		} else {
+			nodeName := os.Getenv("NODE_NAME")
+			if nodeName == "" {
+				glog.Warning("NODE_NAME environment variable not set, skipping publishing driver version annotations")
+			} else {
+				apiTimeout := 10 * time.Second
+				ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
+				defer cancel()
+				go func() {
+					err := versionvisibility.PublishDriverVersionAnnotations(ctx, kubeClient, nodeName)
+					if err != nil {
+						glog.Errorf("Failed to publish driver version annotations: %v", err)
+					} else {
+						glog.Info("Successfully published NVIDIA driver version annotations")
+					}
+				}()
+			}
+		}
 	}
 
 	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
