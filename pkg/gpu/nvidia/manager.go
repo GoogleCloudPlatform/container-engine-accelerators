@@ -471,6 +471,42 @@ func supportsVGPU() bool {
 	return false
 }
 
+// supportsVGPU checks if any of the attached GPUs support vGPU.
+func supportsVGPU() bool {
+	supportedModels := map[string]bool{
+		NvidiaRtxPro6000: true,
+	}
+
+	if nvmlutil.NvmlDeviceInfo == nil {
+		nvmlutil.NvmlDeviceInfo = &nvmlutil.DeviceInfo{}
+	}
+
+	devicesCount, ret := nvmlutil.NvmlDeviceInfo.DeviceCount()
+	if ret != nvml.SUCCESS {
+		return false
+	}
+
+	for i := 0; i < devicesCount; i++ {
+		device, ret := nvmlutil.NvmlDeviceInfo.DeviceHandleByIndex(i)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+
+		name, ret := nvmlutil.NvmlDeviceInfo.Name(device)
+		if ret != nvml.SUCCESS {
+			continue
+		}
+
+		for model := range supportedModels {
+			if strings.Contains(name, model) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (ngm *nvidiaGPUManager) Serve(pMountPath, kEndpoint, pluginEndpoint string) {
 	registerWithKubelet := false
 	// Check if the unix socket device-plugin/kubelet.sock is at the host path.
