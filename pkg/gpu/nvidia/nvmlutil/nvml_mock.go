@@ -65,6 +65,10 @@ func (gpuDeviceInfo *MockDeviceInfo) MinorNumber(d nvml.Device) (int, nvml.Retur
 	return gpuDeviceInfo.CurrentDevice, nvml.SUCCESS
 }
 
+func (m *MockDeviceInfo) Name(device nvml.Device) (string, nvml.Return) {
+	return "", nvml.SUCCESS
+}
+
 func (gpuDeviceInfo *MockDeviceInfo) PciInfo(d nvml.Device) (nvml.PciInfo, nvml.Return) {
 	return nvml.PciInfo{BusId: gpuDeviceInfo.BusID}, nvml.SUCCESS
 }
