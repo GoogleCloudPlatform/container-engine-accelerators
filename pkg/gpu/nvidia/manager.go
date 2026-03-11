@@ -171,10 +171,11 @@ func NewNvidiaGPUManager(devDirectory, procDirectory string, mountPaths []plugin
 
 // ListPhysicalDevices lists all physical GPU devices (including partitions) available on this node.
 func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
-	if ngm.gpuConfig.GPUPartitionSize == "" {
-		return ngm.devices
+	migDevices := ngm.migDeviceManager.ListGPUPartitionDevices()
+	if len(migDevices) > 0 {
+		return migDevices
 	}
-	return ngm.migDeviceManager.ListGPUPartitionDevices()
+	return ngm.devices
 }
 
 func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []int {
@@ -213,6 +214,12 @@ func (ngm *nvidiaGPUManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec
 		}
 		deviceID = physicalDeviceID
 	}
+
+	// Prefer MIG device spec if it exists.
+	if specs, err := ngm.migDeviceManager.DeviceSpec(deviceID); err == nil {
+		return specs, nil
+	}
+
 	if ngm.gpuConfig.GPUPartitionSize == "" {
 		dev, ok := ngm.devices[deviceID]
 		if !ok {
@@ -359,6 +366,41 @@ func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string, topolog
 	}
 }
 
+// supportsVGPU detects if the machine supports VGPU
+func (ngm *nvidiaGPUManager) supportsVGPU() bool {
+	// This function relies on thhe machine types listed below to ALWAYS have a GPU attached.
+	// Otherwise, mounting the GPU devices will not work.
+	vGPUSupportedMachines := map[string]bool{
+		"NVIDIA RTX PRO 6000": true,
+	}
+
+	if nvmlutil.NvmlDeviceInfo == nil {
+		nvmlutil.NvmlDeviceInfo = &nvmlutil.DeviceInfo{}
+	}
+
+	count, ret := nvmlutil.NvmlDeviceInfo.DeviceCount()
+	if ret != nvml.SUCCESS || count <= 0 {
+		return false
+	}
+
+	for i := 0; i < count; i++ {
+		device, ret := nvmlutil.NvmlDeviceInfo.DeviceHandleByIndex(i)
+		if ret != nvml.SUCCESS || device == (nvml.Device{}) {
+			return false
+		}
+
+		name, ret := device.GetName()
+		if ret != nvml.SUCCESS {
+			return false
+		}
+
+		if !vGPUSupportedMachines[name] {
+			return false
+		}
+	}
+	return true
+}
+
 // Checks if the two nvidia paths exist. Could be used to verify if the driver
 // has been installed correctly
 func (ngm *nvidiaGPUManager) CheckDevicePaths() error {
@@ -393,6 +435,11 @@ func (ngm *nvidiaGPUManager) Start() error {
 		if err := ngm.migDeviceManager.Start(ngm.gpuConfig.GPUPartitionSize); err != nil {
 			return fmt.Errorf("failed to start mig device manager: %v", err)
 		}
+	} else if ngm.supportsVGPU() {
+		glog.Infof("VGPU supported machine detected, enabling VGPU device mounting")
+		if _, err := ngm.migDeviceManager.DiscoverDevices(); err != nil {
+			return fmt.Errorf("failed to discover MIG devices: %v", err)
+		}
 	}
 
 	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == "mps" {
@@ -419,7 +466,7 @@ func totalMemPerGPU() (uint64, error) {
 		return 0, fmt.Errorf("no GPUs on node, count: %d", count)
 	}
 	device, ret := nvml.DeviceGetHandleByIndex(0)
-	if ret != nvml.SUCCESS {
+	if ret != nvml.SUCCESS || device == (nvml.Device{}) {
 		return 0, fmt.Errorf("failed to query GPU with nvml: %v", nvml.ErrorString(ret))
 	}
 	memory, ret := device.GetMemoryInfo()
