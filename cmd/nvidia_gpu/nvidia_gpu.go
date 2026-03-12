@@ -19,6 +19,7 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
@@ -50,6 +51,7 @@ var (
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Collection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
+	publishDriverVersionLabels     = flag.Bool("publish-driver-version-labels", false, "If true, the device plugin will publish NVIDIA driver version labels to the Kubernetes Node object")
 )
 
 func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
@@ -151,6 +153,28 @@ func main() {
 			return
 		}
 		defer hc.Stop()
+	}
+
+	if *publishDriverVersionLabels {
+		glog.Infoln("Publishing NVIDIA driver version labels to Node")
+		kubeClient, err := util.BuildKubeClient()
+		if err != nil {
+			glog.Warningf("Failed to build kube client for labeling: %v", err)
+		} else {
+			nodeName := os.Getenv("NODE_NAME")
+			if nodeName == "" {
+				glog.Warning("NODE_NAME environment variable not set, skipping publishing driver version labels")
+			} else {
+				go func() {
+					err := gpumanager.PublishDriverVersionLabels(kubeClient, nodeName)
+					if err != nil {
+						glog.Errorf("Failed to publish driver version labels: %v", err)
+					} else {
+						glog.Info("Successfully published NVIDIA driver version labels")
+					}
+				}()
+			}
+		}
 	}
 
 	ngm.Serve(*pluginMountPath, kubeletEndpoint, fmt.Sprintf("%s-%d.sock", pluginEndpointPrefix, time.Now().Unix()))
