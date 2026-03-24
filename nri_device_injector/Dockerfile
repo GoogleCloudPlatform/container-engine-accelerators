@@ -22,6 +22,6 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -o device_injector nri_device_injector/nri_device_injector.go
 RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/device_injector
 
-FROM gke.gcr.io/gke-distroless/bash:gke_distroless_20251007.00_p0@sha256:5f7662498b88f633236d8421e29807221b9059a6878f24cfea7eb6b16f9cdb44
+FROM gke.gcr.io/gke-distroless/bash:gke_distroless_20260207.00_p0@sha256:002b4b70bf122aaed02d9ba7158a5ce8424a5cc4342cc304ab6c254943f6a5da
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/device_injector /usr/bin/device_injector
 CMD ["/usr/bin/device_injector"]

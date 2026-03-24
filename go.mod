@@ -1,8 +1,6 @@
 module github.com/GoogleCloudPlatform/container-engine-accelerators
 
-go 1.24.0
-
-toolchain go1.24.9
+go 1.25.8
 
 require (
 	cloud.google.com/go/compute/metadata v0.7.0
