@@ -181,7 +181,7 @@ func checkConfidentialGPUEnablement(ctx context.Context) (bool, error) {
 	}
 	// Remove any trailing spaces and null strings to avoid issues in comparison.
 	confidentialNodeType := strings.ToLower(strings.Trim(string(file), " \r\n\x00"))
-	return confidentialNodeType == "tdx", nil
+	return confidentialNodeType == "tdx" || confidentialNodeType == "sev", nil
 }
 
 func rebootNode() error {
