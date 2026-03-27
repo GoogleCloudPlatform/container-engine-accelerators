@@ -40,6 +40,7 @@ spec:
       # debugging and interacting with host processes.
       hostPID: true
       containers:
+      # Container 1: asapd-lite
       - name: asapd-lite
         image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.7
 
@@ -117,10 +118,52 @@ spec:
             hugepages-2Mi: 8192Mi
             memory: 1024Mi
 
+      # Container 2: netslo-ebpf-manager
+      - name: netslo-ebpf-manager
+        image: us-docker.pkg.dev/gce-ai-infra/netslo-ebpf-manager/ebpf_manager:release
+        imagePullPolicy: Always
+
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            echo "Waiting for asapd-lite to be healthy..."
+            while ! curl -s -o /dev/null http://localhost:19540/healthz; do
+              echo "asapd-lite not healthy yet, sleeping..."
+              sleep 5
+            done
+            echo "asapd-lite is healthy. Starting NETSLO eBPF Manager..."
+            exec /usr/local/bin/bpf_manager
+
+        securityContext:
+          privileged: true
+
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+
+        volumeMounts:
+        - name: sys-fs-bpf
+          mountPath: /sys/fs/bpf
+        - name: kernel-debug
+          mountPath: /sys/kernel/debug
+        - name: lib-modules
+          mountPath: /lib/modules
+          readOnly: true
+        - name: host-sys
+          mountPath: /sys
+          readOnly: true
+        - name: var-log-google-netslo
+          mountPath: /var/log/google/netslo-ebpf-manager
+
       volumes:
+      # common volumes.
       - name: host-sys
         hostPath:
           path: /sys
+
+      # asapd-lite volumes.
       - name: host-proc
         hostPath:
           path: /proc
@@ -157,6 +200,23 @@ spec:
       - name: host-run-systemd
         hostPath:
           path: /run/systemd
+
+      # netslo-ebpf-manager volumes.
+      - name: sys-fs-bpf
+        hostPath:
+          path: /sys/fs/bpf
+          type: DirectoryOrCreate
+      - name: kernel-debug
+        hostPath:
+          path: /sys/kernel/debug
+      - name: lib-modules
+        hostPath:
+          path: /lib/modules
+      - name: var-log-google-netslo
+        hostPath:
+          path: /var/log/google/netslo-ebpf-manager
+          type: DirectoryOrCreate
+
   updateStrategy:
     type: RollingUpdate
     rollingUpdate:
