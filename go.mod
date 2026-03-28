@@ -11,10 +11,10 @@ require (
 	github.com/golang/glog v1.2.4
 	github.com/google/go-cmp v0.7.0
 	github.com/prometheus/client_golang v1.16.0
-	github.com/sirupsen/logrus v1.8.3
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/net v0.38.0
-	golang.org/x/sys v0.33.0
+	golang.org/x/net v0.51.0
+	golang.org/x/sys v0.41.0
 	google.golang.org/grpc v1.64.1
 	k8s.io/api v0.27.2
 	k8s.io/apimachinery v0.27.2
@@ -54,8 +54,8 @@ require (
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
 	golang.org/x/time v0.0.0-20220210224613-90d013bbcef8 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
 	google.golang.org/protobuf v1.33.0 // indirect
