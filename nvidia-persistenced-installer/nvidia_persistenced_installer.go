@@ -251,16 +251,26 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 		time.Sleep(10 * time.Second)
 	}
 
-	glog.InfoContext(ctx, "Starting nvidia-gridd daemon.")
-	cmd := exec.Command(griddPath)
 	rootMountDir := os.Getenv("ROOT_MOUNT_DIR")
 	if rootMountDir == "" {
 		rootMountDir = "/root"
 	}
 	hostLib64 := rootMountDir + "/lib64"
 	hostUsrLib64 := rootMountDir + "/usr/lib64"
+	linkerPath := rootMountDir + "/lib64/ld-linux-x86-64.so.2"
 
-	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH="+griddLibsPath+":"+hostLib64+":"+hostUsrLib64+":"+os.Getenv("LD_LIBRARY_PATH"))
+	glog.InfoContextf(ctx, "Waiting for dynamic linker %s to appear...", linkerPath)
+	for {
+		if _, err := os.Stat(linkerPath); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+
+	glog.InfoContextf(ctx, "Starting nvidia-gridd daemon via host dynamic linker: %s", linkerPath)
+	
+	libPathStr := strings.Join([]string{griddLibsPath, hostLib64, hostUsrLib64}, ":")
+	cmd := exec.Command(linkerPath, "--library-path", libPathStr, griddPath)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
