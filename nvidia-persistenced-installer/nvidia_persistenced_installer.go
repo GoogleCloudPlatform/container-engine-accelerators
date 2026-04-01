@@ -253,7 +253,14 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 
 	glog.InfoContext(ctx, "Starting nvidia-gridd daemon.")
 	cmd := exec.Command(griddPath)
-	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH="+griddLibsPath+":"+os.Getenv("LD_LIBRARY_PATH"))
+	rootMountDir := os.Getenv("ROOT_MOUNT_DIR")
+	if rootMountDir == "" {
+		rootMountDir = "/root"
+	}
+	hostLib64 := rootMountDir + "/lib64"
+	hostUsrLib64 := rootMountDir + "/usr/lib64"
+
+	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH="+griddLibsPath+":"+hostLib64+":"+hostUsrLib64+":"+os.Getenv("LD_LIBRARY_PATH"))
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
