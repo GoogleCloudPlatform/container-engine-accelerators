@@ -134,7 +134,7 @@ spec:
             if [[ "${CONFIDENTIAL_INSTANCE_TYPE}" == "TDX" || "${CONFIDENTIAL_INSTANCE_TYPE}" == "SEV" ]]; then
               echo "No GPU driver module detected, installing now"
               /cos-gpu-installer install --no-verify --version=default || exit 1
-              sbin/modprobe -d /root drm_kms_helper; /sbin/insmod /usr/local/nvidia/drivers/nvidia.ko; sbin/insmod /usr/local/nvidia/drivers/nvidia-uvm.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-modeset.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-drm.ko
+              /sbin/modprobe -d /root drm_kms_helper; /sbin/insmod /usr/local/nvidia/drivers/nvidia.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-uvm.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-modeset.ko; /sbin/insmod /usr/local/nvidia/drivers/nvidia-drm.ko
               /usr/local/nvidia/bin/nvidia-modprobe -c0 -u -m
               chmod 755 /root/home/kubernetes/bin/nvidia
             else
