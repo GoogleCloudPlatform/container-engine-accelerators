@@ -239,10 +239,19 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 		return nil
 	}
 
-	glog.InfoContext(ctx, "Starting nvidia-gridd daemon.")
-	griddPath := *containerPathPrefix + "/bin/nvidia-gridd"
-	griddLibsPath := *containerPathPrefix + "/gridd-libs"
+	griddPath := *hostPathPrefix + "/bin/nvidia-gridd"
+	griddLibsPath := *hostPathPrefix + "/gridd-libs"
 
+	glog.InfoContextf(ctx, "Waiting for %s to appear...", griddPath)
+	for {
+		if _, err := os.Stat(griddPath); err == nil {
+			glog.InfoContextf(ctx, "Found %s, proceeding to start daemon.", griddPath)
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
+
+	glog.InfoContext(ctx, "Starting nvidia-gridd daemon.")
 	cmd := exec.Command(griddPath)
 	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH="+griddLibsPath+":"+os.Getenv("LD_LIBRARY_PATH"))
 
