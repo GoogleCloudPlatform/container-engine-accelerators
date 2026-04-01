@@ -18,6 +18,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -33,11 +35,15 @@ import (
 const (
 	minUVMSupportedVersion = 550
 	SIGRTMIN               = 34
+	G4_STANDARD_6        = "g4-standard-6"
+	G4_STANDARD_12       = "g4-standard-12"
+	G4_STANDARD_24       = "g4-standard-24"
 )
 
 var (
 	readFile = os.ReadFile
 
+	hostPathPrefix      = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
 	containerPathPrefix = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts host nvidia install directory")
 	cgpuConfigFile      = flag.String("cgpu-config", "/etc/nvidia/confidential_node_type.txt", "File with Confidential Node Type used on Node")
 	readyDelay          = flag.Int64("ready-delay-ms", 1000, "How much time to wait before setting GPU to ready state. Adding a delay helps to reduce the chances of a start up error.")
@@ -81,6 +87,13 @@ func main() {
 	} else {
 		glog.InfoContext(ctx, "Confidential GPU is NOT enabled, skipping nvidia persistenced enablement.")
 		// Don't exit as this is intended for a side car which would cause it to restart infinitely.
+	}
+
+	machineType, err := getMachineType(ctx)
+	if err != nil {
+		glog.WarningContextf(ctx, "Failed to get machine type: %v", err)
+	} else if err := enableGriddDaemon(ctx, machineType); err != nil {
+		glog.WarningContextf(ctx, "Failed to enable nvidia-gridd: %v", err)
 	}
 
 	// Need to keep the container running so that the nvidia persistence daemon can keep running.
@@ -187,4 +200,56 @@ func checkConfidentialGPUEnablement(ctx context.Context) (bool, error) {
 func rebootNode() error {
 	// Gracefully reboot systemd: https://man7.org/linux/man-pages/man1/systemd.1.html#SIGNALS
 	return syscall.Kill(1, SIGRTMIN+5)
+}
+
+func getMachineType(ctx context.Context) (string, error) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "GET", "http://metadata.google.internal/computeMetadata/v1/instance/machine-type", nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Add("Metadata-Flavor", "Google")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("metadata server returned status %v", resp.Status)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	// Response is usually projects/PROJECT_NUM/machineTypes/MACHINE_TYPE
+	fullMachineType := strings.TrimSpace(string(body))
+	parts := strings.Split(fullMachineType, "/")
+	if len(parts) == 0 {
+		return "", fmt.Errorf("invalid machine type response")
+	}
+	return parts[len(parts)-1], nil
+}
+
+func enableGriddDaemon(ctx context.Context, machineType string) error {
+	if machineType != G4_STANDARD_6 && machineType != G4_STANDARD_12 && machineType != G4_STANDARD_24 {
+		glog.InfoContextf(ctx, "Machine type %s does not require nvidia-gridd.", machineType)
+		return nil
+	}
+
+	glog.InfoContext(ctx, "Starting nvidia-gridd daemon.")
+	griddPath := *containerPathPrefix + "/bin/nvidia-gridd"
+	griddLibsPath := *containerPathPrefix + "/gridd-libs"
+
+	cmd := exec.Command(griddPath)
+	cmd.Env = append(os.Environ(), "LD_LIBRARY_PATH="+griddLibsPath+":"+os.Getenv("LD_LIBRARY_PATH"))
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to run nvidia-gridd: %w", err)
+	}
+
+	glog.InfoContext(ctx, "nvidia-gridd daemon started.")
+	return nil
 }
