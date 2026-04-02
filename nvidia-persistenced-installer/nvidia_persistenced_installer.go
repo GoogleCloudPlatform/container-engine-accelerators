@@ -43,7 +43,6 @@ const (
 var (
 	readFile = os.ReadFile
 
-	hostPathPrefix      = flag.String("host-path", "/home/kubernetes/bin/nvidia", "Path on the host that contains nvidia libraries. This will be mounted inside the container as '-container-path'")
 	containerPathPrefix = flag.String("container-path", "/usr/local/nvidia", "Path on the container that mounts host nvidia install directory")
 	cgpuConfigFile      = flag.String("cgpu-config", "/etc/nvidia/confidential_node_type.txt", "File with Confidential Node Type used on Node")
 	readyDelay          = flag.Int64("ready-delay-ms", 1000, "How much time to wait before setting GPU to ready state. Adding a delay helps to reduce the chances of a start up error.")
@@ -251,13 +250,14 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 		time.Sleep(10 * time.Second)
 	}
 
-	rootMountDir := os.Getenv("ROOT_MOUNT_DIR")
-	if rootMountDir == "" {
-		rootMountDir = "/root"
+	hostLibMount := os.Getenv("HOST_LIB_MOUNT_DIR")
+	if hostLibMount == "" {
+		hostLibMount = "/host-libs"
 	}
-	hostLib64 := rootMountDir + "/lib64"
-	hostUsrLib64 := rootMountDir + "/usr/lib64"
-	linkerPath := rootMountDir + "/lib64/ld-linux-x86-64.so.2"
+
+	hostLib64 := hostLibMount + "/lib64"
+	hostUsrLib64 := hostLibMount + "/usr/lib64"
+	linkerPath := hostLibMount + "/lib64/ld-linux-x86-64.so.2"
 
 	glog.InfoContextf(ctx, "Waiting for dynamic linker %s to appear...", linkerPath)
 	for {

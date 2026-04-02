@@ -52,6 +52,13 @@ spec:
       - name: nvidia-config
         hostPath:
           path: /etc/nvidia
+      # --- NEW TARGETED MOUNTS ---
+      - name: host-lib64
+        hostPath:
+          path: /lib64
+      - name: host-usr-lib64
+        hostPath:
+          path: /usr/lib64
       initContainers:
       - image: "cos-nvidia-installer:fixed"
         imagePullPolicy: IfNotPresent
@@ -103,7 +110,8 @@ spec:
             /cos-gpu-installer install --version=latest
             chmod 755 /root/home/kubernetes/bin/nvidia
           fi
-      - image: "gcr.io/ankitjoju-gke-dev/nvidia_persistenced_installer@sha256:aac6e5b7b9009fdfc73a2ce7cd4e0481f882ebc7f47b8db8d3c981a938e1af23"
+      containers:
+      - image: "gcr.io/ankitjoju-gke-dev/nvidia_persistenced_installer@sha256:aac6e5b7b9009fdfc73a2ce7cd4e0481f882ebc7f47b8db8d3c981a938e1af23" 
         name: "nvidia-persistenced-installer"
         securityContext:
           privileged: true
@@ -112,17 +120,20 @@ spec:
             value: /usr/local/nvidia/lib64
           - name: NVIDIA_INSTALL_DIR_HOST
             value: /home/kubernetes/bin/nvidia
-          - name: ROOT_MOUNT_DIR
-            value: /root
+          - name: HOST_LIB_MOUNT_DIR
+            value: /host-libs
         volumeMounts:
         - name: nvidia-install-dir-host
           mountPath: /home/kubernetes/bin/nvidia
-        - name: root-mount
-          mountPath: /root
         - name: nvidia-config
           mountPath: /etc/nvidia
         - name: dev
           mountPath: /dev
-      containers:
+        - name: host-lib64
+          mountPath: /host-libs/lib64
+          readOnly: true
+        - name: host-usr-lib64
+          mountPath: /host-libs/usr/lib64
+          readOnly: true
       - image: "gke.gcr.io/pause:3.8"
         name: pause
