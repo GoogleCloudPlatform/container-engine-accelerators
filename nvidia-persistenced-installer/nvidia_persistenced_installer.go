@@ -35,9 +35,6 @@ import (
 const (
 	minUVMSupportedVersion = 550
 	SIGRTMIN               = 34
-	G4_STANDARD_6        = "g4-standard-6"
-	G4_STANDARD_12       = "g4-standard-12"
-	G4_STANDARD_24       = "g4-standard-24"
 )
 
 var (
@@ -233,6 +230,12 @@ func getMachineType(ctx context.Context) (string, error) {
 }
 
 func enableGriddDaemon(ctx context.Context, machineType string) error {
+	const (
+		G4_STANDARD_6  = "g4-standard-6"
+		G4_STANDARD_12 = "g4-standard-12"
+		G4_STANDARD_24 = "g4-standard-24"
+	)
+
 	if machineType != G4_STANDARD_6 && machineType != G4_STANDARD_12 && machineType != G4_STANDARD_24 {
 		glog.InfoContextf(ctx, "Machine type %s does not require nvidia-gridd.", machineType)
 		return nil
