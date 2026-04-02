@@ -111,7 +111,7 @@ spec:
             chmod 755 /root/home/kubernetes/bin/nvidia
           fi
       containers:
-      - image: "gcr.io/ankitjoju-gke-dev/nvidia_persistenced_installer@sha256:TBD" 
+      - image: "gcr.io/gke-release/nvidia_persistenced_installer@sha256:TBD" 
         name: "nvidia-daemon-installer"
         securityContext:
           privileged: true
