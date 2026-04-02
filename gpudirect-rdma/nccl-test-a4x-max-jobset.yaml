@@ -136,7 +136,7 @@ spec:
                       # Get all relevant NCCL / env vars to pass to all workers
                       export NCCL_DEBUG_SUBSYS="INIT,NET"
                       export NCCL_DEBUG="INFO"
-                      ENV_VARS=$(echo ${!NCCL*} ${!OMPI*} LD_LIBRARY_PATH PATH | sed 's/ / -x /g')
+                      ENV_VARS=$(echo ${!NCCL*} ${!OMPI*} | sed 's/ / -x /g')
 
                       mpirun --hostfile /tmp/hostfile \
                         -x PATH -x LD_LIBRARY_PATH="/usr/local/gib/lib64:${LD_LIBRARY_PATH}" \
