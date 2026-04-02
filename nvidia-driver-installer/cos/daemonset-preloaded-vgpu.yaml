@@ -49,8 +49,12 @@ spec:
                 operator: Exists
               - key: cloud.google.com/gke-gpu-driver-version
                 operator: DoesNotExist
-              - key: cloud.google.com/gke-confidential-nodes-instance-type
-                operator: DoesNotExist
+              - key: node.kubernetes.io/instance-type
+                operator: In
+                values:
+                  - g4-standard-6
+                  - g4-standard-12
+                  - g4-standard-24
       tolerations:
       - operator: "Exists"
       hostNetwork: true
@@ -71,9 +75,6 @@ spec:
       - name: cos-tools
         hostPath:
           path: /var/lib/cos-tools
-      - name: nvidia-config
-        hostPath:
-          path: /etc/nvidia
       initContainers:
       - image: "cos-nvidia-installer:fixed"
         imagePullPolicy: Never
@@ -113,38 +114,37 @@ spec:
         - bash
         - -c
         - |
+          echo "Initiating GPU driver setup..."
           if lsmod | grep nvidia; then
             echo "GPU driver is already installed"
           else
+            echo "Installing GPU driver..."
             /cos-gpu-installer install || exit 1
           fi
       containers:
       - name: nvidia-gridd-sidecar
-        image: "busybox:1.36"
+        image: "cos-nvidia-installer:fixed"
         restartPolicy: Always
         securityContext:
           privileged: true
         volumeMounts:
         - name: root-mount
           mountPath: /root
-        - name: dev
-          mountPath: /dev
         command:
-        - /bin/sh
+        - /bin/bash
         - -c
         - |
-          echo "Waiting for nvidia-gridd binary to be placed on host..."
+          echo "Reboot detected or Pod started. Waiting 20s for network and metadata services to stabilize..."
+          sleep 20
+          echo "Waiting for nvidia-gridd binary to be available on host filesystem..."
           while [ ! -f /root/home/kubernetes/bin/nvidia/bin/nvidia-gridd ]; do
-            sleep 2
+            sleep 5
           done
-          
-          echo "Binary found. Cleaning up old PID file..."
-          rm -f /root/var/run/nvidia-gridd.pid
-          
-          echo "Starting nvidia-gridd daemon in the background..."
-          chroot /root /bin/bash -c "LD_LIBRARY_PATH=/home/kubernetes/bin/nvidia/gridd-libs /home/kubernetes/bin/nvidia/bin/nvidia-gridd"
-          
-          echo "Daemon launched! Keeping container alive..."
+          echo "Binary located. Proceeding with environment cleanup..."
+          nsenter -t 1 -m -u -i -n -p -- /bin/bash -c "rm -f /var/run/nvidia-gridd.pid"
+          echo "Executing nvidia-gridd daemon in the host namespace via nsenter..."
+          nsenter -t 1 -m -u -i -n -p -- /bin/bash -c "env LD_LIBRARY_PATH=/home/kubernetes/bin/nvidia/gridd-libs /home/kubernetes/bin/nvidia/bin/nvidia-gridd"
+          echo "Daemon launched successfully. Holding container open."
           exec tail -f /dev/null
       - image: "gke.gcr.io/pause:3.8@sha256:880e63f94b145e46f1b1082bb71b85e21f16b99b180b9996407d61240ceb9830"
         name: pause
