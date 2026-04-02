@@ -239,8 +239,8 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 		return nil
 	}
 
-	griddPath := *hostPathPrefix + "/bin/nvidia-gridd"
-	griddLibsPath := *hostPathPrefix + "/gridd-libs"
+	griddPath := *containerPathPrefix + "/bin/nvidia-gridd"
+	griddLibsPath := *containerPathPrefix + "/gridd-libs"
 
 	glog.InfoContextf(ctx, "Waiting for %s to appear...", griddPath)
 	for {
