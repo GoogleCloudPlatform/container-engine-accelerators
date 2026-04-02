@@ -111,7 +111,7 @@ spec:
             chmod 755 /root/home/kubernetes/bin/nvidia
           fi
       containers:
-      - image: "gcr.io/ankitjoju-gke-dev/nvidia_persistenced_installer@sha256:aac6e5b7b9009fdfc73a2ce7cd4e0481f882ebc7f47b8db8d3c981a938e1af23" 
+      - image: "gcr.io/ankitjoju-gke-dev/nvidia_persistenced_installer@sha256:f999873a795430be0b850c8deb51916fe432b1cc03bd8ef37b1a4ead1b2180a3" 
         name: "nvidia-persistenced-installer"
         securityContext:
           privileged: true
@@ -124,7 +124,7 @@ spec:
             value: /host-libs
         volumeMounts:
         - name: nvidia-install-dir-host
-          mountPath: /home/kubernetes/bin/nvidia
+          mountPath: /usr/local/nvidia
         - name: nvidia-config
           mountPath: /etc/nvidia
         - name: dev
