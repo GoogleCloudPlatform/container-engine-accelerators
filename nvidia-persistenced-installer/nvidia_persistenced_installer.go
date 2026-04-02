@@ -271,7 +271,7 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 	}
 
 	glog.InfoContextf(ctx, "Starting nvidia-gridd daemon via host dynamic linker: %s", linkerPath)
-	
+
 	libPathStr := strings.Join([]string{griddLibsPath, hostLib64, hostUsrLib64}, ":")
 	cmd := exec.Command(linkerPath, "--library-path", libPathStr, griddPath)
 
