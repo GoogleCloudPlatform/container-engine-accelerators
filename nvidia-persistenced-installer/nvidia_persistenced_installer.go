@@ -206,62 +206,62 @@ func getMachineTypeFromFile(ctx context.Context) (string, error) {
 			return "", nil
 		}
 		return "", err
-  }
-  return strings.TrimSpace(string(file)), nil
+	}
+	return strings.TrimSpace(string(file)), nil
 }
 
 func enableGriddDaemon(ctx context.Context, machineType string) error {
-  const (
-    G4_STANDARD_6  = "g4-standard-6"
-    G4_STANDARD_12 = "g4-standard-12"
-    G4_STANDARD_24 = "g4-standard-24"
-  )
+	const (
+		G4_STANDARD_6  = "g4-standard-6"
+		G4_STANDARD_12 = "g4-standard-12"
+		G4_STANDARD_24 = "g4-standard-24"
+	)
 
-  if machineType != G4_STANDARD_6 && machineType != G4_STANDARD_12 && machineType != G4_STANDARD_24 {
-    glog.InfoContextf(ctx, "Machine type %s does not require nvidia-gridd.", machineType)
-    return nil
-  }
+	if machineType != G4_STANDARD_6 && machineType != G4_STANDARD_12 && machineType != G4_STANDARD_24 {
+		glog.InfoContextf(ctx, "Machine type %s does not require nvidia-gridd.", machineType)
+		return nil
+	}
 
-  griddPath := *containerPathPrefix + "/bin/nvidia-gridd"
-  griddLibsPath := *containerPathPrefix + "/gridd-libs"
+	griddPath := *containerPathPrefix + "/bin/nvidia-gridd"
+	griddLibsPath := *containerPathPrefix + "/gridd-libs"
 
-  glog.InfoContextf(ctx, "Waiting for %s to appear...", griddPath)
-  for {
-    if _, err := os.Stat(griddPath); err == nil {
-      glog.InfoContextf(ctx, "Found %s, proceeding to start daemon.", griddPath)
-      break
-    }
-    time.Sleep(10 * time.Second)
-  }
+	glog.InfoContextf(ctx, "Waiting for %s to appear...", griddPath)
+	for {
+		if _, err := os.Stat(griddPath); err == nil {
+			glog.InfoContextf(ctx, "Found %s, proceeding to start daemon.", griddPath)
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
 
-  // Reverted back to ROOT_MOUNT_DIR to match original behavior
-  rootMountDir := os.Getenv("ROOT_MOUNT_DIR")
-  if rootMountDir == "" {
-    rootMountDir = "/root"
-  }
+	// Reverted back to ROOT_MOUNT_DIR to match original behavior
+	rootMountDir := os.Getenv("ROOT_MOUNT_DIR")
+	if rootMountDir == "" {
+		rootMountDir = "/root"
+	}
 
-  hostLib64 := rootMountDir + "/lib64"
-  hostUsrLib64 := rootMountDir + "/usr/lib64"
-  linkerPath := rootMountDir + "/lib64/ld-linux-x86-64.so.2"
+	hostLib64 := rootMountDir + "/lib64"
+	hostUsrLib64 := rootMountDir + "/usr/lib64"
+	linkerPath := rootMountDir + "/lib64/ld-linux-x86-64.so.2"
 
-  glog.InfoContextf(ctx, "Waiting for dynamic linker %s to appear...", linkerPath)
-  for {
-    if _, err := os.Stat(linkerPath); err == nil {
-      break
-    }
-    time.Sleep(10 * time.Second)
-  }
+	glog.InfoContextf(ctx, "Waiting for dynamic linker %s to appear...", linkerPath)
+	for {
+		if _, err := os.Stat(linkerPath); err == nil {
+			break
+		}
+		time.Sleep(10 * time.Second)
+	}
 
-  glog.InfoContextf(ctx, "Starting nvidia-gridd daemon via host dynamic linker: %s", linkerPath)
+	glog.InfoContextf(ctx, "Starting nvidia-gridd daemon via host dynamic linker: %s", linkerPath)
 
-  libPathStr := strings.Join([]string{griddLibsPath, hostLib64, hostUsrLib64}, ":")
-  cmd := exec.Command(linkerPath, "--library-path", libPathStr, griddPath)
+	libPathStr := strings.Join([]string{griddLibsPath, hostLib64, hostUsrLib64}, ":")
+	cmd := exec.Command(linkerPath, "--library-path", libPathStr, griddPath)
 
-  output, err := cmd.CombinedOutput()
-  if err != nil {
-    return fmt.Errorf("failed to run nvidia-gridd: %w, output: %s", err, string(output))
-  }
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to run nvidia-gridd: %w, output: %s", err, string(output))
+	}
 
-  glog.InfoContext(ctx, "nvidia-gridd daemon started.")
-  return nil
+	glog.InfoContext(ctx, "nvidia-gridd daemon started.")
+	return nil
 }
