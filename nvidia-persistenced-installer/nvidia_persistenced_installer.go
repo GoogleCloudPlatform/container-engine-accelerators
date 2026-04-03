@@ -234,12 +234,12 @@ func enableGriddDaemon(ctx context.Context, machineType string) error {
 		time.Sleep(10 * time.Second)
 	}
 
-	// Reverted back to ROOT_MOUNT_DIR to match original behavior
 	rootMountDir := os.Getenv("ROOT_MOUNT_DIR")
 	if rootMountDir == "" {
 		rootMountDir = "/root"
 	}
 
+	// Link necessary libraries manually
 	hostLib64 := rootMountDir + "/lib64"
 	hostUsrLib64 := rootMountDir + "/usr/lib64"
 	linkerPath := rootMountDir + "/lib64/ld-linux-x86-64.so.2"
