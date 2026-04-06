@@ -1,0 +1,157 @@
+# Copyright 2026 Google Inc. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# The Dockerfile and other source for this daemonset are in
+# https://cos.googlesource.com/cos/tools/+/refs/heads/master/src/cmd/cos_gpu_installer/
+#
+# This is the same as ../../daemonset.yaml except that it assumes that the
+# docker image is present on the node instead of downloading from GCR. This
+# allows easier upgrades because GKE can preload the correct image on the
+# node and the daemonset can just use that image.
+
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: nvidia-driver-installer
+  namespace: kube-system
+  labels:
+    k8s-app: nvidia-driver-installer
+spec:
+  selector:
+    matchLabels:
+      k8s-app: nvidia-driver-installer
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        name: nvidia-driver-installer
+        k8s-app: nvidia-driver-installer
+    spec:
+      priorityClassName: system-node-critical
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              # Targets nodes with GPUs
+              - key: cloud.google.com/gke-accelerator
+                operator: Exists
+              # Only runs if GKE hasn't already managed the driver
+              - key: cloud.google.com/gke-gpu-driver-version
+                operator: DoesNotExist
+      tolerations:
+      - operator: "Exists"
+      hostNetwork: true
+      hostPID: true
+      volumes:
+      - name: dev
+        hostPath:
+          path: /dev
+      - name: vulkan-icd-mount
+        hostPath:
+          path: /home/kubernetes/bin/nvidia/vulkan/icd.d
+      - name: nvidia-install-dir-host
+        hostPath:
+          path: /home/kubernetes/bin/nvidia
+      - name: root-mount
+        hostPath:
+          path: /
+      - name: cos-tools
+        hostPath:
+          path: /var/lib/cos-tools
+      - name: nvidia-config
+        hostPath:
+          path: /etc/nvidia
+      initContainers:
+      - image: "cos-nvidia-installer:fixed"
+        imagePullPolicy: IfNotPresent
+        name: nvidia-driver-installer
+        resources:
+          requests:
+            cpu: 150m
+        securityContext:
+          privileged: true
+        env:
+          - name: NVIDIA_INSTALL_DIR_HOST
+            value: /home/kubernetes/bin/nvidia
+          - name: NVIDIA_INSTALL_DIR_CONTAINER
+            value: /usr/local/nvidia
+          - name: VULKAN_ICD_DIR_HOST
+            value: /home/kubernetes/bin/nvidia/vulkan/icd.d
+          - name: VULKAN_ICD_DIR_CONTAINER
+            value: /etc/vulkan/icd.d
+          - name: ROOT_MOUNT_DIR
+            value: /root
+          - name: COS_TOOLS_DIR_HOST
+            value: /var/lib/cos-tools
+          - name: COS_TOOLS_DIR_CONTAINER
+            value: /build/cos-tools
+        volumeMounts:
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
+        - name: vulkan-icd-mount
+          mountPath: /etc/vulkan/icd.d
+        - name: dev
+          mountPath: /dev
+        - name: root-mount
+          mountPath: /root
+        - name: cos-tools
+          mountPath: /build/cos-tools
+        - name: nvidia-config
+          mountPath: /etc/nvidia
+        command:
+        - bash
+        - -c
+        - |
+          set -e
+          echo "Fetching machine type from metadata server..."
+          FULL_MACHINE_TYPE=$( curl --retry 5 -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/machine-type || exit 1 )
+          MACHINE_TYPE=${FULL_MACHINE_TYPE##*/}
+          echo "${MACHINE_TYPE}" > /etc/nvidia/machine_type.txt
+          echo "Recorded machine type: ${MACHINE_TYPE}"
+
+          echo "Checking for existing GPU driver modules"
+          if lsmod | grep nvidia; then
+            echo "GPU driver is already installed, skipping installation"
+            exit 0
+          else
+            echo "No GPU driver module detected, installing now"
+            /cos-gpu-installer install --version=latest
+            chmod 755 /root/home/kubernetes/bin/nvidia
+          fi
+      containers:
+      - image: "gcr.io/gke-release/nvidia-persistenced-installer@sha256:cf78b70c83c132de3cdb0947212a44ecaa060ef89fb36636eb65f24824174ece" 
+        name: "nvidia-daemon-installer"
+        restartPolicy: Always
+        securityContext:
+          privileged: true
+        env:
+          - name: LD_LIBRARY_PATH
+            value: /usr/local/nvidia/lib64
+          - name: NVIDIA_INSTALL_DIR_HOST
+            value: /home/kubernetes/bin/nvidia
+          - name: ROOT_MOUNT_DIR
+            value: /root
+        volumeMounts:
+        - name: nvidia-install-dir-host
+          mountPath: /usr/local/nvidia
+        - name: root-mount
+          mountPath: /root
+        - name: nvidia-config
+          mountPath: /etc/nvidia
+        - name: dev
+          mountPath: /dev
+      - image: "gke.gcr.io/pause:3.8"
+        name: pause
