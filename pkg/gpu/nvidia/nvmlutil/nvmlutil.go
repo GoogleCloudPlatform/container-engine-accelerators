@@ -33,6 +33,7 @@ type NvmlOperations interface {
 	MigDeviceHandleByIndex(nvml.Device, int) (nvml.Device, nvml.Return)
 	MigMode(nvml.Device) (int, int, nvml.Return)
 	MinorNumber(nvml.Device) (int, nvml.Return)
+	Name(nvml.Device) (string, nvml.Return)
 	PciInfo(d nvml.Device) (nvml.PciInfo, nvml.Return)
 }
 
@@ -71,6 +72,10 @@ func (gpuDeviceInfo *DeviceInfo) MinorNumber(d nvml.Device) (int, nvml.Return) {
 
 func (gpuDeviceInfo *DeviceInfo) PciInfo(d nvml.Device) (nvml.PciInfo, nvml.Return) {
 	return d.GetPciInfo()
+}
+
+func (di *DeviceInfo) Name(device nvml.Device) (string, nvml.Return) {
+	return device.GetName()
 }
 
 // topology determines the NUMA topology information for a GPU device.
