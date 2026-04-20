@@ -69,7 +69,7 @@ spec:
   subdomain: nccl-host-1
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.21
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.17
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
@@ -190,7 +190,7 @@ spec:
   subdomain: nccl-host-2
   containers:
     - name: tcpxo-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.21
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpxo/tcpgpudmarxd-dev:v1.0.17
       imagePullPolicy: Always
       command: ["/bin/sh", "-c"]
       args:
