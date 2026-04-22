@@ -1,0 +1,30 @@
+presubmits:
+- name: googlecloudplatform-container-engine-accelerators-build
+  always_run: true
+  decorate: true
+  cluster: build-prow-hosted-runner
+  labels:
+    prow.k8s.io/gerrit-report-label: "Verified"
+    preset-dind-enabled: "true"
+  spec:
+    containers:
+    - image: gcr.io/gke-test-infra/kubekins-e2e:latest-master
+      command:
+      - runner.sh
+      - make
+      - build
+      - container-multi-arch
+      securityContext:
+        privileged: true
+- name: googlecloudplatform-container-engine-accelerators-test
+  always_run: true
+  decorate: true
+  cluster: build-prow-hosted-runner
+  labels:
+    prow.k8s.io/gerrit-report-label: "Verified"
+  spec:
+    containers:
+    - image: gcr.io/gke-test-infra/kubekins-e2e:latest-master
+      command:
+      - make
+      - test
