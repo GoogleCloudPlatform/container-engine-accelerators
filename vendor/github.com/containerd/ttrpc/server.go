@@ -18,14 +18,16 @@ package ttrpc
 
 import (
 	"context"
+	"errors"
 	"io"
 	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
-	"github.com/sirupsen/logrus"
+	"github.com/containerd/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -72,8 +74,17 @@ func (s *Server) RegisterService(name string, desc *ServiceDesc) {
 }
 
 func (s *Server) Serve(ctx context.Context, l net.Listener) error {
-	s.addListener(l)
+	s.mu.Lock()
+	s.addListenerLocked(l)
 	defer s.closeListener(l)
+
+	select {
+	case <-s.done:
+		s.mu.Unlock()
+		return ErrServerClosed
+	default:
+	}
+	s.mu.Unlock()
 
 	var (
 		backoff    time.Duration
@@ -107,7 +118,7 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 				}
 
 				sleep := time.Duration(rand.Int63n(int64(backoff)))
-				logrus.WithError(err).Errorf("ttrpc: failed accept; backoff %v", sleep)
+				log.G(ctx).WithError(err).Errorf("ttrpc: failed accept; backoff %v", sleep)
 				time.Sleep(sleep)
 				continue
 			}
@@ -119,12 +130,18 @@ func (s *Server) Serve(ctx context.Context, l net.Listener) error {
 
 		approved, handshake, err := handshaker.Handshake(ctx, conn)
 		if err != nil {
-			logrus.WithError(err).Errorf("ttrpc: refusing connection after handshake")
+			log.G(ctx).WithError(err).Error("ttrpc: refusing connection after handshake")
 			conn.Close()
 			continue
 		}
 
-		sc := s.newConn(approved, handshake)
+		sc, err := s.newConn(approved, handshake)
+		if err != nil {
+			log.G(ctx).WithError(err).Error("ttrpc: create connection failed")
+			conn.Close()
+			continue
+		}
+
 		go sc.run(ctx)
 	}
 }
@@ -143,15 +160,20 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()
 	for {
-		if s.closeIdleConns() {
-			return lnerr
+		s.closeIdleConns()
+
+		if s.countConnection() == 0 {
+			break
 		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
 		}
 	}
+
+	return lnerr
 }
 
 // Close the server without waiting for active connections.
@@ -175,9 +197,7 @@ func (s *Server) Close() error {
 	return err
 }
 
-func (s *Server) addListener(l net.Listener) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Server) addListenerLocked(l net.Listener) {
 	s.listeners[l] = struct{}{}
 }
 
@@ -203,11 +223,18 @@ func (s *Server) closeListeners() error {
 	return err
 }
 
-func (s *Server) addConnection(c *serverConn) {
+func (s *Server) addConnection(c *serverConn) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	select {
+	case <-s.done:
+		return ErrServerClosed
+	default:
+	}
+
 	s.connections[c] = struct{}{}
+	return nil
 }
 
 func (s *Server) delConnection(c *serverConn) {
@@ -224,20 +251,17 @@ func (s *Server) countConnection() int {
 	return len(s.connections)
 }
 
-func (s *Server) closeIdleConns() bool {
+func (s *Server) closeIdleConns() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	quiescent := true
+
 	for c := range s.connections {
-		st, ok := c.getState()
-		if !ok || st != connStateIdle {
-			quiescent = false
+		if st, ok := c.getState(); !ok || st == connStateActive {
 			continue
 		}
 		c.close()
 		delete(s.connections, c)
 	}
-	return quiescent
 }
 
 type connState int
@@ -261,7 +285,7 @@ func (cs connState) String() string {
 	}
 }
 
-func (s *Server) newConn(conn net.Conn, handshake interface{}) *serverConn {
+func (s *Server) newConn(conn net.Conn, handshake interface{}) (*serverConn, error) {
 	c := &serverConn{
 		server:    s,
 		conn:      conn,
@@ -269,8 +293,11 @@ func (s *Server) newConn(conn net.Conn, handshake interface{}) *serverConn {
 		shutdown:  make(chan struct{}),
 	}
 	c.setState(connStateIdle)
-	s.addConnection(c)
-	return c
+	if err := s.addConnection(c); err != nil {
+		c.close()
+		return nil, err
+	}
+	return c, nil
 }
 
 type serverConn struct {
@@ -318,6 +345,7 @@ func (c *serverConn) run(sctx context.Context) {
 		responses              = make(chan response)
 		recvErr                = make(chan error, 1)
 		done                   = make(chan struct{})
+		streams                = sync.Map{}
 		active       int32
 		lastStreamID uint32
 	)
@@ -347,7 +375,6 @@ func (c *serverConn) run(sctx context.Context) {
 
 	go func(recvErr chan error) {
 		defer close(recvErr)
-		streams := map[uint32]*streamHandler{}
 		for {
 			select {
 			case <-c.shutdown:
@@ -383,12 +410,13 @@ func (c *serverConn) run(sctx context.Context) {
 			}
 
 			if mh.Type == messageTypeData {
-				sh, ok := streams[mh.StreamID]
+				i, ok := streams.Load(mh.StreamID)
 				if !ok {
 					if !sendStatus(mh.StreamID, status.Newf(codes.InvalidArgument, "StreamID is no longer active")) {
 						return
 					}
 				}
+				sh := i.(*streamHandler)
 				if mh.Flags&flagNoData != flagNoData {
 					unmarshal := func(obj interface{}) error {
 						err := protoUnmarshal(p, obj)
@@ -458,7 +486,7 @@ func (c *serverConn) run(sctx context.Context) {
 					continue
 				}
 
-				streams[id] = sh
+				streams.Store(id, sh)
 				atomic.AddInt32(&active, 1)
 			}
 			// TODO: else we must ignore this for future compat. log this?
@@ -492,12 +520,12 @@ func (c *serverConn) run(sctx context.Context) {
 					Payload: response.data,
 				})
 				if err != nil {
-					logrus.WithError(err).Error("failed marshaling response")
+					log.G(ctx).WithError(err).Error("failed marshaling response")
 					return
 				}
 
 				if err := ch.send(response.id, messageTypeResponse, 0, p); err != nil {
-					logrus.WithError(err).Error("failed sending message on channel")
+					log.G(ctx).WithError(err).Error("failed sending message on channel")
 					return
 				}
 			} else {
@@ -509,7 +537,7 @@ func (c *serverConn) run(sctx context.Context) {
 					flags = flags | flagNoData
 				}
 				if err := ch.send(response.id, messageTypeData, flags, response.data); err != nil {
-					logrus.WithError(err).Error("failed sending message on channel")
+					log.G(ctx).WithError(err).Error("failed sending message on channel")
 					return
 				}
 			}
@@ -518,6 +546,7 @@ func (c *serverConn) run(sctx context.Context) {
 				// The ttrpc protocol currently does not support the case where
 				// the server is localClosed but not remoteClosed. Once the server
 				// is closing, the whole stream may be considered finished
+				streams.Delete(response.id)
 				atomic.AddInt32(&active, -1)
 			}
 		case err := <-recvErr:
@@ -525,14 +554,12 @@ func (c *serverConn) run(sctx context.Context) {
 			// branch. Basically, it means that we are no longer receiving
 			// requests due to a terminal error.
 			recvErr = nil // connection is now "closing"
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, syscall.ECONNRESET) {
 				// The client went away and we should stop processing
 				// requests, so that the client connection is closed
 				return
 			}
-			if err != nil {
-				logrus.WithError(err).Error("error receiving message")
-			}
+			log.G(ctx).WithError(err).Error("error receiving message")
 			// else, initiate shutdown
 		case <-shutdown:
 			return
