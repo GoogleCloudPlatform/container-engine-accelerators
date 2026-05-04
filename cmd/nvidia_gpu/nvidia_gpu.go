@@ -55,7 +55,7 @@ var (
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Collection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
-	gpuFractionDivisorFile         = flag.String("gpu-fraction-divisor-file", "/etc/nvidia/gpu-fraction-divisor.txt", "File containing the divisor for vGPU machine shapes")	
+	gpuFractionDivisorFile         = flag.String("gpu-fraction-divisor-file", "/etc/nvidia/gpu-fraction-divisor.txt", "File containing the divisor for vGPU machine shapes")
 	publishDriverVersion           = flag.Bool("publish-driver-version", false, "If true, the device plugin will publish NVIDIA driver versions to the Kubernetes Node annotation")
 )
 
