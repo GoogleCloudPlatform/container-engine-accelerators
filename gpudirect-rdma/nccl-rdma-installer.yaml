@@ -71,7 +71,7 @@ spec:
           args:
             - |
               set -ex
-              /scripts/container_entry.sh install --install-nccl
+              /scripts/container_entry.sh install
               cp -r /var/lib/gib/lib64/. /usr/local/home/kubernetes/bin/nvidia/lib64
               cp -r /var/lib/gib/. /usr/local/home/kubernetes/bin/gib
               echo "installation finishes"
