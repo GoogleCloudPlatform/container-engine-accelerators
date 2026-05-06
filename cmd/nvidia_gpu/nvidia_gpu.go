@@ -73,12 +73,6 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 		return gpuConfig, fmt.Errorf("failed to parse GPU config file contents: %s, error: %v", gpuConfigContent, err)
 	}
 
-	gpuConfig.GPUFractionDivisor, err = parseGPUFractionDivisor(*gpuFractionDivisorFile)
-	if err != nil {
-		// This is NOT a fatal error, but the user should be aware.
-		glog.Errorf("Encountered error while parsing GPU fraction divisor file: %v", err)
-	}
-
 	err = gpuConfig.AddDefaultsAndValidate()
 	if err != nil {
 		return gpumanager.GPUConfig{}, err
@@ -132,7 +126,15 @@ func main() {
 			gpuConfig = gpumanager.GPUConfig{}
 		}
 	}
-	err := gpuConfig.AddHealthCriticalXid()
+
+	gpuFractionDivisor, err := parseGPUFractionDivisor(*gpuFractionDivisorFile)
+	if err != nil {
+		// This is NOT a fatal error, but the user should be aware.
+		glog.Errorf("Encountered error while parsing GPU fraction divisor file: %v", err)
+	}
+	gpuConfig.GPUFractionDivisor = gpuFractionDivisor
+
+	err = gpuConfig.AddHealthCriticalXid()
 	if err != nil {
 		glog.Infof("Failed to Add HealthCriticalXid : %v", err)
 	}
