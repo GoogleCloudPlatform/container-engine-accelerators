@@ -17,8 +17,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -88,26 +90,26 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 // All GPUs have a default fraction of 1, any integer greater implies its a vGPU machine type.
 func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 	fractionDivisor := 1
-	if gpuFractionDivisorFile != "" {
-		glog.Infof("Reading GPU fraction divisor file: %s", gpuFractionDivisorFile)
-		file, err := os.ReadFile(gpuFractionDivisorFile)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return 1, fmt.Errorf("GPU fraction divisor file not found at %v, defaulting to 1", gpuFractionDivisorFile)
-			} else {
-				return 1, fmt.Errorf("Failed to read GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
-			}
-		} else {
-			gpuFractionDivisor := strings.ToLower(strings.Trim(string(file), " \r\n\x00"))
-			parsedValue, err := strconv.Atoi(gpuFractionDivisor)
-			if err != nil {
-				return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
-			} else {
-				fractionDivisor = parsedValue
-			}
-		}
+
+	if gpuFractionDivisorFile == "" {
+		return 1, fmt.Errorf("GPU fraction divisor file not defined at %v, defaulting to 1", gpuFractionDivisorFile)
 	}
 
+	glog.Infof("Reading GPU fraction divisor file: %s", gpuFractionDivisorFile)
+	file, err := os.ReadFile(gpuFractionDivisorFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 1, fmt.Errorf("GPU fraction divisor file not found at %v, defaulting to 1", gpuFractionDivisorFile)
+	} else if err != nil {
+		return 1, fmt.Errorf("Failed to read GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
+	}
+
+	gpuFractionDivisor := strings.TrimSpace(string(file))
+	parsedValue, err := strconv.Atoi(gpuFractionDivisor)
+	if err != nil {
+		return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
+	}
+
+	fractionDivisor = parsedValue
 	glog.Infof("GPU fraction divisor: %d", fractionDivisor)
 	return fractionDivisor, nil
 }
