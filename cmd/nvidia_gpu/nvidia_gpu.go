@@ -89,7 +89,6 @@ func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 		return 1, fmt.Errorf("GPU fraction divisor file not defined at %v, defaulting to 1", gpuFractionDivisorFile)
 	}
 
-	glog.Infof("Reading GPU fraction divisor file: %s", gpuFractionDivisorFile)
 	file, err := os.ReadFile(gpuFractionDivisorFile)
 	if errors.Is(err, fs.ErrNotExist) {
 		return 1, fmt.Errorf("GPU fraction divisor file not found at %v, defaulting to 1", gpuFractionDivisorFile)
@@ -97,8 +96,9 @@ func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 		return 1, fmt.Errorf("Failed to read GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
 	}
 
-	gpuFractionDivisor := strings.TrimSpace(string(file))
-	parsedValue, err := strconv.Atoi(gpuFractionDivisor)
+	gpuFractionDivisorStr := strings.TrimSpace(string(file))
+	glog.Infof("GPU fraction divisor file: %s, fraction = %s", gpuFractionDivisorFile, gpuFractionDivisorStr)
+	parsedValue, err := strconv.Atoi(gpuFractionDivisorStr)
 	if err != nil {
 		return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
 	}
