@@ -104,7 +104,6 @@ func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 	}
 
 	fractionDivisor = parsedValue
-	glog.Infof("GPU fraction divisor: %d", fractionDivisor)
 	return fractionDivisor, nil
 }
 
