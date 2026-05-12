@@ -400,7 +400,7 @@ func (ngm *nvidiaGPUManager) Start() error {
 		// This is because in the background, GCE provisions vGPU shapes using MIG, and so they are managing the MIG state but device plugin needs to be aware that MIGs are being used
 		// otherwise CUDA and other NVIDIA utilities will be unavailable to K8S.
 		glog.Info("vGPU machine type detected. Mounting MIG devices manually.")
-		if _, err := ngm.migDeviceManager.DiscoverMIGDevices(); err != nil {
+		if _, err := ngm.migDeviceManager.DiscoverAndMountMIGDevices(); err != nil {
 			return fmt.Errorf("failed to discover MIG devices: %v", err)
 		}
 	}

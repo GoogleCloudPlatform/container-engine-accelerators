@@ -83,8 +83,6 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 // parseGPUFractionDivisor reads the GPU fraction divisor from the given file and returns it.
 // All GPUs have a default fraction of 1, any integer greater implies its a vGPU machine type.
 func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
-	fractionDivisor := 1
-
 	if gpuFractionDivisorFile == "" {
 		return 1, fmt.Errorf("GPU fraction divisor file not defined at %v, defaulting to 1", gpuFractionDivisorFile)
 	}
@@ -102,8 +100,11 @@ func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 	if err != nil {
 		return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
 	}
+	if parsedValue <= 1 {
+		return 1, fmt.Errorf("Provided GPU fraction value is less than or equal to 1, defaulting to 1: %v", parsedValue)
+	}
 
-	fractionDivisor = parsedValue
+	fractionDivisor := parsedValue
 	return fractionDivisor, nil
 }
 
