@@ -101,7 +101,7 @@ func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 		return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
 	}
 	if fractionDivisor <= 1 {
-		return 1, fmt.Errorf("Provided GPU fraction value is less than or equal to 1, defaulting to 1: %v", parsedValue)
+		return 1, fmt.Errorf("Provided GPU fraction value is less than or equal to 1, defaulting to 1: %v", fractionDivisor)
 	}
 
 	return fractionDivisor, nil
