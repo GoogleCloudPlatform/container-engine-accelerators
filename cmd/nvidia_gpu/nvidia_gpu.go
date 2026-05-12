@@ -96,15 +96,14 @@ func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
 
 	gpuFractionDivisorStr := strings.TrimSpace(string(file))
 	glog.Infof("GPU fraction divisor file: %s, fraction = %s", gpuFractionDivisorFile, gpuFractionDivisorStr)
-	parsedValue, err := strconv.Atoi(gpuFractionDivisorStr)
+	fractionDivisor, err := strconv.Atoi(gpuFractionDivisorStr)
 	if err != nil {
 		return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
 	}
-	if parsedValue <= 1 {
+	if fractionDivisor <= 1 {
 		return 1, fmt.Errorf("Provided GPU fraction value is less than or equal to 1, defaulting to 1: %v", parsedValue)
 	}
 
-	fractionDivisor := parsedValue
 	return fractionDivisor, nil
 }
 
