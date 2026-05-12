@@ -17,10 +17,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"io/ioutil"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	gpumanager "github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia"
@@ -53,6 +57,7 @@ var (
 	gpuMetricsPort                 = flag.Int("gpu-metrics-port", 2112, "Port on which GPU metrics for containers are exposed")
 	gpuMetricsCollectionIntervalMs = flag.Int("gpu-metrics-collection-interval", 30000, "Collection interval (in milli seconds) for container GPU metrics")
 	gpuConfigFile                  = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
+	gpuFractionDivisorFile         = flag.String("gpu-fraction-divisor-file", "/etc/nvidia/gpu-fraction-divisor.txt", "File containing the divisor for vGPU machine shapes")
 	publishDriverVersion           = flag.Bool("publish-driver-version", false, "If true, the device plugin will publish NVIDIA driver versions to the Kubernetes Node annotation")
 )
 
@@ -75,6 +80,33 @@ func parseGPUConfig(gpuConfigFile string) (gpumanager.GPUConfig, error) {
 	return gpuConfig, nil
 }
 
+// parseGPUFractionDivisor reads the GPU fraction divisor from the given file and returns it.
+// All GPUs have a default fraction of 1, any integer greater implies its a vGPU machine type.
+func parseGPUFractionDivisor(gpuFractionDivisorFile string) (int, error) {
+	if gpuFractionDivisorFile == "" {
+		return 1, fmt.Errorf("GPU fraction divisor file not defined at %v, defaulting to 1", gpuFractionDivisorFile)
+	}
+
+	file, err := os.ReadFile(gpuFractionDivisorFile)
+	if errors.Is(err, fs.ErrNotExist) {
+		return 1, fmt.Errorf("GPU fraction divisor file not found at %v, defaulting to 1", gpuFractionDivisorFile)
+	} else if err != nil {
+		return 1, fmt.Errorf("Failed to read GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
+	}
+
+	gpuFractionDivisorStr := strings.TrimSpace(string(file))
+	glog.Infof("GPU fraction divisor file: %s, fraction = %s", gpuFractionDivisorFile, gpuFractionDivisorStr)
+	fractionDivisor, err := strconv.Atoi(gpuFractionDivisorStr)
+	if err != nil {
+		return 1, fmt.Errorf("Failed to parse GPU fraction divisor file at %v, defaulting to 1: %v", gpuFractionDivisorFile, err)
+	}
+	if fractionDivisor <= 1 {
+		return 1, fmt.Errorf("Provided GPU fraction value is less than or equal to 1, defaulting to 1: %v", fractionDivisor)
+	}
+
+	return fractionDivisor, nil
+}
+
 func main() {
 	flag.Parse()
 	glog.Infoln("device-plugin started")
@@ -93,7 +125,15 @@ func main() {
 			gpuConfig = gpumanager.GPUConfig{}
 		}
 	}
-	err := gpuConfig.AddHealthCriticalXid()
+
+	gpuFractionDivisor, err := parseGPUFractionDivisor(*gpuFractionDivisorFile)
+	if err != nil {
+		// This is NOT a fatal error, but the user should be aware.
+		glog.Errorf("Encountered error while parsing GPU fraction divisor file: %v", err)
+	}
+	gpuConfig.GPUFractionDivisor = gpuFractionDivisor
+
+	err = gpuConfig.AddHealthCriticalXid()
 	if err != nil {
 		glog.Infof("Failed to Add HealthCriticalXid : %v", err)
 	}
