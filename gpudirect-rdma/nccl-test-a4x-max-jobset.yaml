@@ -159,8 +159,6 @@ spec:
                       sleep 5
                     done
                   fi
-
-                  exit 0
                 volumeMounts:
                 - name: nvidia
                   mountPath: /usr/local/nvidia
