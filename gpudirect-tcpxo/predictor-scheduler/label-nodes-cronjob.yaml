@@ -1,0 +1,32 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: label-nodes-cronjob
+  namespace: kube-system
+spec:
+  schedule: "*/10 * * * *" # Run every 10 minutes
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: label-nodes
+              image: python:3.9
+              command:
+              - bash
+              - -c
+              - |
+                pip install --no-cache-dir kubernetes google-cloud-monitoring google-auth requests google-api-python-client
+                python -u /scripts/label-nodes.py
+              volumeMounts:
+                - name: scripts-volume
+                  mountPath: /scripts
+          restartPolicy: OnFailure
+          volumes:
+            - name: scripts-volume
+              configMap:
+                name: predictor-scheduler-scripts # Assuming ConfigMap name stays the same
+          serviceAccountName: predictor-scheduler
+  concurrencyPolicy: Forbid # Prevents starting a new job if the previous one hasn't finished
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
