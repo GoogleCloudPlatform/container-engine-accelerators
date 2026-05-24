@@ -15,7 +15,7 @@
 FROM ubuntu:18.04
 
 RUN apt-get update && \
-    apt-get install -y kmod gcc make curl xz-utils libc6-dev bc libelf-dev bison flex openssl libssl-dev && \
+    apt-get install -y kmod gcc make curl xz-utils libc6-dev bc libelf-dev bison flex openssl libssl-dev python3 && \
     rm -rf /var/lib/apt/lists/*
 
 COPY entrypoint.sh /entrypoint.sh
