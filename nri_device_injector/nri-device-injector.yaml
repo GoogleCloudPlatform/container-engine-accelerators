@@ -45,6 +45,7 @@ spec:
                     operator: In
                     values:
                       - nvidia-rtx-pro-6000
+                      - nvidia-rtx-pro-6000-vws
                       - nvidia-h100-80gb
                       - nvidia-h100-mega-80gb
       tolerations:
