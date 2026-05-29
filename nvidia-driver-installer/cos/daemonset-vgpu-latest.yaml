@@ -122,6 +122,13 @@ spec:
           echo "${MACHINE_TYPE}" > /etc/nvidia/machine_type.txt
           echo "Recorded machine type: ${MACHINE_TYPE}"
 
+          echo "Waiting for default route in /proc/net/route..."
+          until grep -E "^[a-zA-Z0-9]+[[:space:]]+00000000" /proc/net/route > /dev/null; do
+            echo "Waiting for default route..."
+            sleep 2
+          done
+          echo "Default route detected."
+
           echo "Checking for existing GPU driver modules"
           if lsmod | grep nvidia; then
             echo "GPU driver is already installed, skipping installation"
@@ -132,7 +139,7 @@ spec:
             chmod 755 /root/home/kubernetes/bin/nvidia
           fi
       containers:
-      - image: "gcr.io/gke-release/nvidia-persistenced-installer@sha256:cf78b70c83c132de3cdb0947212a44ecaa060ef89fb36636eb65f24824174ece" 
+      - image: "gcr.io/gke-release/nvidia-persistenced-installer@sha256:cf78b70c83c132de3cdb0947212a44ecaa060ef89fb36636eb65f24824174ece"
         name: "nvidia-daemon-installer"
         restartPolicy: Always
         securityContext:
