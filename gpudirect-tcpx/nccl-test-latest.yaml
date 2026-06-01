@@ -117,7 +117,7 @@ spec:
   volumes:
     - name: config-volume
       configMap:
-        name: nccl-configmap-latest
+        name: nccl-configmap
         defaultMode: 0777
     - name: libraries
       hostPath:
@@ -219,7 +219,7 @@ spec:
   volumes:
     - name: config-volume
       configMap:
-        name: nccl-configmap-latest
+        name: nccl-configmap
         defaultMode: 0777
     - name: libraries
       hostPath:
