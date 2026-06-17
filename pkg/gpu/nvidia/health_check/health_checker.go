@@ -389,12 +389,13 @@ func (hc *GPUHealthChecker) recordXIDEvent(e nvml.Event, cd callDevice) error {
 		return err
 	}
 
-	var msg string
-	if e.UUID == nil || len(*e.UUID) == 0 {
-		msg = fmt.Sprintf("Caught XID error, XID=%d", e.Edata)
-	} else {
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "Caught XID error, XID=%d", e.Edata)
+
+	if e.UUID != nil && len(*e.UUID) > 0 {
 		var affectedGpuIDs []string
 		var affectedGpuUUIDs []string
+
 		for _, d := range hc.devices {
 			nvmlDev, ok := hc.nvmlDevices[d.ID]
 			if !ok || nvmlDev == nil {
@@ -414,13 +415,16 @@ func (hc *GPUHealthChecker) recordXIDEvent(e nvml.Event, cd callDevice) error {
 				affectedGpuUUIDs = append(affectedGpuUUIDs, uuid)
 			}
 		}
+
 		if len(affectedGpuIDs) > 0 {
-			msg = fmt.Sprintf("Caught XID error, XID=%d, GPU UUID=%s, Device ID=%s", e.Edata, strings.Join(affectedGpuUUIDs, ", "), strings.Join(affectedGpuIDs, ", "))
+			fmt.Fprintf(&sb, ", GPU UUID=%s", strings.Join(affectedGpuUUIDs, ", "))
+			fmt.Fprintf(&sb, ", Device ID=%s", strings.Join(affectedGpuIDs, ", "))
 		} else {
-			msg = fmt.Sprintf("Caught XID error, XID=%d, GPU UUID=%s", e.Edata, *e.UUID)
+			fmt.Fprintf(&sb, ", GPU UUID=%s", *e.UUID)
 		}
 	}
 
+	msg := sb.String()
 	hc.recorder.Eventf(node, v1.EventTypeWarning, "XIDError", msg)
 	return nil
 }
