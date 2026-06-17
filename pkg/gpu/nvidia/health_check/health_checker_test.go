@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
 	k8sclienttesting "k8s.io/client-go/testing"
+	"k8s.io/client-go/tools/record"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
@@ -478,4 +479,88 @@ func makeNode(labels map[string]string, annotations map[string]string, condition
 		node.Status.Conditions = conditions
 	}
 	return node
+}
+
+func TestRecordXIDEvent(t *testing.T) {
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+	fakeRecorder := record.NewFakeRecorder(10)
+
+	gp := mockGPUDevice{}
+	device1 := pluginapi.Device{ID: "nvidia0"}
+	device2 := pluginapi.Device{ID: "nvidia1"}
+
+	tests := []struct {
+		name          string
+		event         nvml.Event
+		devices       map[string]pluginapi.Device
+		nvmlDevices   map[string]*nvml.Device
+		expectedEvent string
+	}{
+		{
+			name: "event with no UUID",
+			event: nvml.Event{
+				Edata: uint64(72),
+			},
+			expectedEvent: "Warning XIDError Caught XID error, XID=72",
+		},
+		{
+			name: "event with UUID matching a device",
+			event: nvml.Event{
+				UUID:              pointer("GPU-1"),
+				GpuInstanceId:     pointer(uint(3173334309191009974)),
+				ComputeInstanceId: pointer(uint(1015241)),
+				Edata:             uint64(72),
+			},
+			devices: map[string]pluginapi.Device{
+				"nvidia0": device1,
+				"nvidia1": device2,
+			},
+			nvmlDevices: map[string]*nvml.Device{
+				"nvidia0": {UUID: "GPU-1"},
+				"nvidia1": {UUID: "GPU-2"},
+			},
+			expectedEvent: "Warning XIDError Caught XID error, XID=72, GPU UUID=GPU-1, Device ID=nvidia0",
+		},
+		{
+			name: "event with UUID matching no devices",
+			event: nvml.Event{
+				UUID:              pointer("GPU-3"),
+				GpuInstanceId:     pointer(uint(3173334309191009974)),
+				ComputeInstanceId: pointer(uint(1015241)),
+				Edata:             uint64(72),
+			},
+			devices: map[string]pluginapi.Device{
+				"nvidia0": device1,
+			},
+			nvmlDevices: map[string]*nvml.Device{
+				"nvidia0": {UUID: "GPU-1"},
+			},
+			expectedEvent: "Warning XIDError Caught XID error, XID=72, GPU UUID=GPU-3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hc := &GPUHealthChecker{
+				devices:     tt.devices,
+				nvmlDevices: tt.nvmlDevices,
+				kubeClient:  fakeClient,
+				nodeName:    "test-node",
+				recorder:    fakeRecorder,
+			}
+			err := hc.recordXIDEvent(tt.event, &gp)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			select {
+			case gotEvent := <-fakeRecorder.Events:
+				if gotEvent != tt.expectedEvent {
+					t.Errorf("expected event %q, got %q", tt.expectedEvent, gotEvent)
+				}
+			case <-time.After(100 * time.Millisecond):
+				t.Errorf("expected event %q but none was recorded", tt.expectedEvent)
+			}
+		})
+	}
 }

@@ -383,12 +383,45 @@ func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
 	}
 }
 
-func (hc *GPUHealthChecker) recordXIDEvent(e nvml.Event) error {
+func (hc *GPUHealthChecker) recordXIDEvent(e nvml.Event, cd callDevice) error {
 	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	hc.recorder.Eventf(node, v1.EventTypeWarning, "XIDError", "Caught XID error, XID=%d", e.Edata)
+
+	var msg string
+	if e.UUID == nil || len(*e.UUID) == 0 {
+		msg = fmt.Sprintf("Caught XID error, XID=%d", e.Edata)
+	} else {
+		var affectedGpuIDs []string
+		var affectedGpuUUIDs []string
+		for _, d := range hc.devices {
+			nvmlDev, ok := hc.nvmlDevices[d.ID]
+			if !ok || nvmlDev == nil {
+				continue
+			}
+			uuid := nvmlDev.UUID
+			gpu, gi, ci, err := cd.parseMigDeviceUUID(uuid)
+			if err != nil {
+				gpu = uuid
+				gi = 0xFFFFFFFF
+				ci = 0xFFFFFFFF
+			}
+
+			if e.GpuInstanceId != nil && e.ComputeInstanceId != nil &&
+				gpu == *e.UUID && gi == *e.GpuInstanceId && ci == *e.ComputeInstanceId {
+				affectedGpuIDs = append(affectedGpuIDs, d.ID)
+				affectedGpuUUIDs = append(affectedGpuUUIDs, uuid)
+			}
+		}
+		if len(affectedGpuIDs) > 0 {
+			msg = fmt.Sprintf("Caught XID error, XID=%d, GPU UUID=%s, Device ID=%s", e.Edata, strings.Join(affectedGpuUUIDs, ", "), strings.Join(affectedGpuIDs, ", "))
+		} else {
+			msg = fmt.Sprintf("Caught XID error, XID=%d, GPU UUID=%s", e.Edata, *e.UUID)
+		}
+	}
+
+	hc.recorder.Eventf(node, v1.EventTypeWarning, "XIDError", msg)
 	return nil
 }
 
@@ -399,7 +432,7 @@ func (hc *GPUHealthChecker) catchError(e nvml.Event, cd callDevice) {
 		return
 	}
 
-	err := hc.recordXIDEvent(e)
+	err := hc.recordXIDEvent(e, cd)
 	if err != nil {
 		glog.Errorf("Failed to record XID=%d for node %s with err %v", e.Edata, hc.nodeName, err)
 	}
