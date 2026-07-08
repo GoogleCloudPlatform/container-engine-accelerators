@@ -21,7 +21,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml"
+	"github.com/NVIDIA/go-nvml/pkg/nvml"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -32,6 +32,15 @@ import (
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
+type mockDevice struct {
+	nvmlDevice // Embed our local interface!
+	uuid       string
+}
+
+func (m *mockDevice) GetUUID() (string, nvml.Return) {
+	return m.uuid, nvml.SUCCESS
+}
+
 func pointer[T any](s T) *T {
 	return &s
 }
@@ -39,7 +48,7 @@ func pointer[T any](s T) *T {
 type mockGPUDevice struct{}
 
 func (gp *mockGPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error) {
-	return UUID, 3173334309191009974, 1015241, nil
+	return UUID, 1, 2, nil
 }
 
 func TestCatchError(t *testing.T) {
@@ -59,32 +68,30 @@ func TestCatchError(t *testing.T) {
 		Health: pluginapi.Unhealthy,
 	}
 	tests := []struct {
-		name             string
-		event            nvml.Event
-		hc               GPUHealthChecker
-		wantErrorDevices []pluginapi.Device
+		name              string
+		eventType         uint64
+		eventData         uint64
+		deviceUUID        string
+		gpuInstanceID     uint32
+		computeInstanceID uint32
+		hc                GPUHealthChecker
+		wantErrorDevices  []pluginapi.Device
 	}{
 		{
-			name: "non-critical error",
-			event: nvml.Event{
-				UUID:              pointer("GPU-f053fce6-851c-1235-90ae-037069703604"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Etype:             0,
-				Edata:             uint64(72),
-			},
+			name:              "non-critical error",
+			eventType:         0,
+			eventData:         72,
+			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
-				nvmlDevices: map[string]*nvml.Device{
-					"device1": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-					},
-					"device2": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
-					},
+				nvmlDevices: map[string]nvmlDevice{
+					"device1": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703604"},
+					"device2": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703633"},
 				},
 				healthCriticalXid: map[uint64]bool{
 					72: true,
@@ -94,26 +101,20 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name: "xid error not included ",
-			event: nvml.Event{
-				UUID:              pointer("GPU-f053fce6-851c-1235-90ae-037069703604"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Etype:             nvml.XidCriticalError,
-				Edata:             uint64(88),
-			},
+			name:              "xid error not included ",
+			eventType:         nvml.EventTypeXidCriticalError,
+			eventData:         88,
+			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
-				nvmlDevices: map[string]*nvml.Device{
-					"device1": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-					},
-					"device2": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
-					},
+				nvmlDevices: map[string]nvmlDevice{
+					"device1": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703604"},
+					"device2": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703633"},
 				},
 				healthCriticalXid: map[uint64]bool{
 					72: true,
@@ -123,26 +124,20 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name: "catching xid 72",
-			event: nvml.Event{
-				UUID:              pointer("GPU-f053fce6-851c-1235-90ae-037069703604"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Etype:             nvml.XidCriticalError,
-				Edata:             uint64(72),
-			},
+			name:              "catching xid 72",
+			eventType:         nvml.EventTypeXidCriticalError,
+			eventData:         72,
+			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
-				nvmlDevices: map[string]*nvml.Device{
-					"device1": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-					},
-					"device2": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
-					},
+				nvmlDevices: map[string]nvmlDevice{
+					"device1": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703604"},
+					"device2": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703633"},
 				},
 				healthCriticalXid: map[uint64]bool{
 					72: true,
@@ -152,26 +147,20 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{udevice1},
 		},
 		{
-			name: "unknown device",
-			event: nvml.Event{
-				UUID:              pointer("GPU-f053fce6-90ae-037069703604"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Etype:             nvml.XidCriticalError,
-				Edata:             uint64(72),
-			},
+			name:              "unknown device",
+			eventType:         nvml.EventTypeXidCriticalError,
+			eventData:         72,
+			deviceUUID:        "GPU-f053fce6-90ae-037069703604",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
-				nvmlDevices: map[string]*nvml.Device{
-					"device1": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-					},
-					"device2": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
-					},
+				nvmlDevices: map[string]nvmlDevice{
+					"device1": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703604"},
+					"device2": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703633"},
 				},
 				healthCriticalXid: map[uint64]bool{
 					72: true,
@@ -181,48 +170,38 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name: "not catching xid 72",
-			event: nvml.Event{
-				UUID:              pointer("GPU-f053fce6-851c-1235-90ae-037069703604"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Etype:             nvml.XidCriticalError,
-				Edata:             uint64(72),
-			},
+			name:              "not catching xid 72",
+			eventType:         nvml.EventTypeXidCriticalError,
+			eventData:         72,
+			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
 				},
-				nvmlDevices: map[string]*nvml.Device{
-					"device1": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-					},
+				nvmlDevices: map[string]nvmlDevice{
+					"device1": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703604"},
 				},
 				healthCriticalXid: map[uint64]bool{},
 			},
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name: "catching all devices error",
-			event: nvml.Event{
-				UUID:              nil,
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Etype:             nvml.XidCriticalError,
-				Edata:             uint64(48),
-			},
+			name:              "catching all devices error",
+			eventType:         nvml.EventTypeXidCriticalError,
+			eventData:         48,
+			deviceUUID:        "",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
 					"device2": device2,
 				},
-				nvmlDevices: map[string]*nvml.Device{
-					"device1": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703604",
-					},
-					"device2": {
-						UUID: "GPU-f053fce6-851c-1235-90ae-037069703633",
-					},
+				nvmlDevices: map[string]nvmlDevice{
+					"device1": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703604"},
+					"device2": &mockDevice{uuid: "GPU-f053fce6-851c-1235-90ae-037069703633"},
 				},
 				healthCriticalXid: map[uint64]bool{
 					72: true,
@@ -239,7 +218,7 @@ func TestCatchError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.hc.kubeClient = fakeClient
 			tt.hc.health = make(chan pluginapi.Device, len(tt.hc.devices))
-			tt.hc.catchError(tt.event, &gp)
+			tt.hc.catchError(tt.eventType, tt.eventData, tt.deviceUUID, tt.gpuInstanceID, tt.computeInstanceID, &gp)
 			gotErrorDevices := make(map[string]pluginapi.Device)
 			for range tt.wantErrorDevices {
 				if len(tt.hc.health) == 0 {
@@ -360,7 +339,7 @@ func TestResetXIDConditionWithBackoff(t *testing.T) {
 func TestMonitorXidevent(t *testing.T) {
 	for _, test := range []struct {
 		desc                     string
-		events                   []nvml.Event
+		events                   []uint64
 		initialConditions        []v1.NodeCondition
 		expectedLength           int
 		expectedConditionType    v1.NodeConditionType
@@ -369,24 +348,13 @@ func TestMonitorXidevent(t *testing.T) {
 		expectedConditionMessage string
 	}{
 		{
-			desc: "XID not in attention set",
-			events: []nvml.Event{
-				{
-					Edata: uint64(72),
-				},
-			},
+			desc:           "XID not in attention set",
+			events:         []uint64{72},
 			expectedLength: 0,
 		},
 		{
-			desc: "XID all in attention set",
-			events: []nvml.Event{
-				{
-					Edata: uint64(79),
-				},
-				{
-					Edata: uint64(123),
-				},
-			},
+			desc:                     "XID all in attention set",
+			events:                   []uint64{79, 123},
 			expectedLength:           1,
 			expectedConditionType:    XIDConditionType,
 			expectedConditionStatus:  "True",
@@ -394,15 +362,8 @@ func TestMonitorXidevent(t *testing.T) {
 			expectedConditionMessage: "123456",
 		},
 		{
-			desc: "XID partially in attention set",
-			events: []nvml.Event{
-				{
-					Edata: uint64(72),
-				},
-				{
-					Edata: uint64(140),
-				},
-			},
+			desc:                     "XID partially in attention set",
+			events:                   []uint64{72, 140},
 			expectedLength:           1,
 			expectedConditionType:    XIDConditionType,
 			expectedConditionStatus:  "True",
@@ -410,18 +371,8 @@ func TestMonitorXidevent(t *testing.T) {
 			expectedConditionMessage: "123456",
 		},
 		{
-			desc: "repetitive XID",
-			events: []nvml.Event{
-				{
-					Edata: uint64(72),
-				},
-				{
-					Edata: uint64(140),
-				},
-				{
-					Edata: uint64(123),
-				},
-			},
+			desc:                     "repetitive XID",
+			events:                   []uint64{72, 140, 123},
 			expectedLength:           1,
 			expectedConditionType:    XIDConditionType,
 			expectedConditionStatus:  "True",
@@ -491,50 +442,48 @@ func TestRecordXIDEvent(t *testing.T) {
 	device2 := pluginapi.Device{ID: "nvidia1"}
 
 	tests := []struct {
-		name          string
-		event         nvml.Event
-		devices       map[string]pluginapi.Device
-		nvmlDevices   map[string]*nvml.Device
-		expectedEvent string
+		name              string
+		eventData         uint64
+		deviceUUID        string
+		gpuInstanceID     uint32
+		computeInstanceID uint32
+		devices           map[string]pluginapi.Device
+		nvmlDevices       map[string]nvmlDevice
+		expectedEvent     string
 	}{
 		{
-			name: "event with no UUID",
-			event: nvml.Event{
-				Edata: uint64(72),
-			},
+			name:          "event with no UUID",
+			eventData:     72,
+			deviceUUID:    "",
 			expectedEvent: "Warning XIDError Caught XID error, XID=72",
 		},
 		{
-			name: "event with UUID matching a device",
-			event: nvml.Event{
-				UUID:              pointer("GPU-1"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Edata:             uint64(72),
-			},
+			name:              "event with UUID matching a device",
+			eventData:         72,
+			deviceUUID:        "GPU-1",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			devices: map[string]pluginapi.Device{
 				"nvidia0": device1,
 				"nvidia1": device2,
 			},
-			nvmlDevices: map[string]*nvml.Device{
-				"nvidia0": {UUID: "GPU-1"},
-				"nvidia1": {UUID: "GPU-2"},
+			nvmlDevices: map[string]nvmlDevice{
+				"nvidia0": &mockDevice{uuid: "GPU-1"},
+				"nvidia1": &mockDevice{uuid: "GPU-2"},
 			},
 			expectedEvent: "Warning XIDError Caught XID error, XID=72, GPU UUID=GPU-1, Device ID=nvidia0",
 		},
 		{
-			name: "event with UUID matching no devices",
-			event: nvml.Event{
-				UUID:              pointer("GPU-3"),
-				GpuInstanceId:     pointer(uint(3173334309191009974)),
-				ComputeInstanceId: pointer(uint(1015241)),
-				Edata:             uint64(72),
-			},
+			name:              "event with UUID matching no devices",
+			eventData:         72,
+			deviceUUID:        "GPU-3",
+			gpuInstanceID:     1,
+			computeInstanceID: 2,
 			devices: map[string]pluginapi.Device{
 				"nvidia0": device1,
 			},
-			nvmlDevices: map[string]*nvml.Device{
-				"nvidia0": {UUID: "GPU-1"},
+			nvmlDevices: map[string]nvmlDevice{
+				"nvidia0": &mockDevice{uuid: "GPU-1"},
 			},
 			expectedEvent: "Warning XIDError Caught XID error, XID=72, GPU UUID=GPU-3",
 		},
@@ -549,7 +498,7 @@ func TestRecordXIDEvent(t *testing.T) {
 				nodeName:    "test-node",
 				recorder:    fakeRecorder,
 			}
-			err := hc.recordXIDEvent(tt.event, &gp)
+			err := hc.recordXIDEvent(tt.eventData, tt.deviceUUID, tt.gpuInstanceID, tt.computeInstanceID, &gp)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
