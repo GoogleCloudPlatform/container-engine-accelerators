@@ -70,7 +70,7 @@ spec:
     cloud.google.com/gke-gpu-driver-version: latest
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.12
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.15
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -101,7 +101,7 @@ spec:
         - name: proc
           mountPath: /hostprocsysfs
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.9
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.12
       imagePullPolicy: Always
       command:
         - /bin/sh
@@ -177,7 +177,7 @@ spec:
     topology.kubernetes.io/zone: us-central1-a
   containers:
     - name: tcpx-daemon
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.12
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/tcpgpudmarxd-dev:v2.0.15
       imagePullPolicy: Always
       command:
         - /tcpgpudmarxd/build/app/tcpgpudmarxd
@@ -208,7 +208,7 @@ spec:
         - name: proc-sys
           mountPath: /hostprocsysfs
     - name: nccl-test
-      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.9
+      image: us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.12
       imagePullPolicy: Always
       command:
         - /bin/sh
