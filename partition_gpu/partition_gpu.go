@@ -392,7 +392,7 @@ func checkCurrentPartitionProfileCounts(desiredMaxCount int) bool {
 
 // returns profile id map and if uniform
 func parseLGIOutput(lgiOutput string) (map[string][]string, bool, error) {
-	dataLineRegex, err := regexp.Compile(`^\s*(\d+)\s+(MIG\s+[\w\.]+)\s+(\d+)\s+(\d+)\s+([\d:]+)\s*$`)
+	dataLineRegex, err := regexp.Compile(`^\s*(\d+)\s+(MIG\s+[\w\.\+\-]+)\s+(\d+)\s+(\d+)\s+([\d:]+)\s*$`)
 	if err != nil {
 		glog.Errorf("Internal error: failed to compile regex: %v", err)
 		return make(map[string][]string), false, err
