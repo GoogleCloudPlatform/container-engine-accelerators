@@ -116,6 +116,30 @@ func Test_parseLGIOutput(t *testing.T) {
 			wantUniform: true,
 		},
 		{
+			name: "Single GPU, single GI, with plus suffix, uniform",
+			lgiOutput: `
++-----------------------------------------------------------------------------+
+| GPU   Profile Name   Profile ID   CI_ID   Address                           |
+|=============================================================================|
+|   0   MIG 2g.48gb+gfx 35           0       00000000                          |
++-----------------------------------------------------------------------------+
+			`,
+			wantMap:     map[string][]string{"0": {"35"}},
+			wantUniform: true,
+		},
+		{
+			name: "Single GPU, single GI, with hyphen suffix, uniform",
+			lgiOutput: `
++-----------------------------------------------------------------------------+
+| GPU   Profile Name   Profile ID   CI_ID   Address                           |
+|=============================================================================|
+|   0   MIG 1g.24gb-me 67           0       00000000                          |
++-----------------------------------------------------------------------------+
+			`,
+			wantMap:     map[string][]string{"0": {"67"}},
+			wantUniform: true,
+		},
+		{
 			name: "Single GPU, multiple GIs, non-uniform profile IDs",
 			lgiOutput: `
 +-----------------------------------------------------------------------------+
