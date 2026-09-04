@@ -27,6 +27,13 @@ For best practices, refer to [Best practice to run workload with GPUDirect-TCPX(
 - [Feb 15, 2024](./README.md#feb-15-2024)
 
 ## Jun 22, 2026
+#### Minimum required GKE versions:
+For GKE 1.34 and 1.35, the following minimum patch versions are required:
+- GKE 1.34: >= 1.34.5-gke.1153000
+- GKE 1.35: >= 1.35.2-gke.1485000
+
+*Note: Earlier 1.34 and 1.35 patch versions lack required Container-Optimized OS (COS) milestone 125+ kernel fixes.*
+
 #### NCCL plugin installer image:
 ```
 us-docker.pkg.dev/gce-ai-infra/gpudirect-tcpx/nccl-plugin-gpudirecttcpx-dev:v3.1.12
