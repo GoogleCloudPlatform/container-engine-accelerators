@@ -30,6 +30,34 @@ CACHE_FILE="${NVIDIA_INSTALL_DIR_CONTAINER}/.cache"
 KERNEL_VERSION="$(uname -r)"
 set +x
 
+is_vgpu() {
+  local machine_type
+  machine_type=$(curl -sSL -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/machine-type 2>/dev/null || true)
+  if echo "${machine_type}" | grep -q "g4-standard-"; then
+    return 0
+  fi
+  if [[ -f "${ROOT_MOUNT_DIR}/etc/nvidia/gpu_fraction_divisor.txt" ]]; then
+    return 0
+  fi
+  return 1
+}
+
+configure_vgpu_download() {
+  echo "vGPU instance detected. Configuring download from regional GCS mirror..."
+  local zone region
+  zone=$(curl -sSL -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/zone 2>/dev/null | awk -F/ '{print $NF}' || true)
+  region="${zone%-*}"
+  if [[ -z "${region}" ]]; then
+    region="us-central1"
+  fi
+
+  NVIDIA_VGPU_DRIVER_VERSION="${NVIDIA_VGPU_DRIVER_VERSION:-580.126.09}"
+  local vgpu_runfile="NVIDIA-Linux-x86_64-${NVIDIA_VGPU_DRIVER_VERSION}-grid-gcp.run"
+  NVIDIA_DRIVER_DOWNLOAD_URL="https://storage.googleapis.com/cos-nvidia-gpu-drivers-${region}/${vgpu_runfile}"
+  NVIDIA_INSTALLER_RUNFILE="${vgpu_runfile}"
+  echo "Configured vGPU download URL: ${NVIDIA_DRIVER_DOWNLOAD_URL}"
+}
+
 check_cached_version() {
   echo "Checking cached version"
   if [[ ! -f "${CACHE_FILE}" ]]; then
@@ -68,6 +96,11 @@ update_container_ld_cache() {
 }
 
 download_kernel_src() {
+  echo "Checking kernel sources..."
+  if [[ -d "${ROOT_MOUNT_DIR}/usr/src/linux-headers-${KERNEL_VERSION}" ]] || [[ -L "${ROOT_MOUNT_DIR}/lib/modules/${KERNEL_VERSION}/build" ]]; then
+    echo "Found host kernel headers at ${ROOT_MOUNT_DIR}/usr/src/linux-headers-${KERNEL_VERSION}."
+    return 0
+  fi
   echo "Downloading kernel sources..."
   apt-get update && apt-get install -y linux-headers-${KERNEL_VERSION}
   echo "Downloading kernel sources... DONE."
@@ -112,25 +145,75 @@ configure_nvidia_installation_dirs() {
 }
 
 download_nvidia_installer() {
-  echo "Downloading Nvidia installer..."
+  echo "Downloading Nvidia installer from ${NVIDIA_DRIVER_DOWNLOAD_URL}..."
   pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
-  curl -L -S -f "${NVIDIA_DRIVER_DOWNLOAD_URL}" -o "${NVIDIA_INSTALLER_RUNFILE}"
+  local token
+  token=$(curl -sSL -H "Metadata-Flavor:Google" http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token 2>/dev/null | grep -o '"access_token":[[:space:]]*"[^"]*' | cut -d'"' -f4 || true)
+  if [[ -n "${token}" && "${NVIDIA_DRIVER_DOWNLOAD_URL}" == *"storage.googleapis.com"* ]]; then
+    curl -L -S -f -H "Authorization: Bearer ${token}" "${NVIDIA_DRIVER_DOWNLOAD_URL}" -o "${NVIDIA_INSTALLER_RUNFILE}"
+  else
+    curl -L -S -f "${NVIDIA_DRIVER_DOWNLOAD_URL}" -o "${NVIDIA_INSTALLER_RUNFILE}"
+  fi
   popd
   echo "Downloading Nvidia installer... DONE."
 }
 
 run_nvidia_installer() {
   echo "Running Nvidia installer..."
+  echo "Stopping any pre-loaded NVIDIA services and unloading kernel modules before compilation..."
+  chroot "${ROOT_MOUNT_DIR}" pkill -9 -f nvidia-persistenced || true
+  chroot "${ROOT_MOUNT_DIR}" pkill -9 -f nvidia-gridd || true
+  chroot "${ROOT_MOUNT_DIR}" rmmod -f ecc nvidia_uvm nvidia_drm nvidia_modeset nvidia || true
   pushd "${NVIDIA_INSTALL_DIR_CONTAINER}"
-  sh "${NVIDIA_INSTALLER_RUNFILE}" \
-    --utility-prefix="${NVIDIA_INSTALL_DIR_CONTAINER}" \
-    --opengl-prefix="${NVIDIA_INSTALL_DIR_CONTAINER}" \
-    --no-install-compat32-libs \
-    --log-file-name="${NVIDIA_INSTALL_DIR_CONTAINER}/nvidia-installer.log" \
-    --no-drm \
-    --silent \
-    --accept-license
+  local extra_flags=""
+  if is_vgpu; then
+    extra_flags="--no-questions"
+  fi
+  if [[ -d "${ROOT_MOUNT_DIR}/usr/src/linux-headers-${KERNEL_VERSION}" ]]; then
+    echo "Modern host kernel headers detected at /usr/src/linux-headers-${KERNEL_VERSION}. Running installation in host chroot using native gcc..."
+    cp -f "${NVIDIA_INSTALLER_RUNFILE}" "${ROOT_MOUNT_DIR}/tmp/grid.run"
+    chroot "${ROOT_MOUNT_DIR}" sh /tmp/grid.run \
+      --utility-prefix="${NVIDIA_INSTALL_DIR_HOST}" \
+      --opengl-prefix="${NVIDIA_INSTALL_DIR_HOST}" \
+      --no-install-compat32-libs \
+      --log-file-name="${NVIDIA_INSTALL_DIR_HOST}/nvidia-installer.log" \
+      --no-drm \
+      --silent \
+      --accept-license \
+      --kernel-source-path="/usr/src/linux-headers-${KERNEL_VERSION}" \
+      ${extra_flags}
+    rm -f "${ROOT_MOUNT_DIR}/tmp/grid.run"
+  elif [[ -d "${ROOT_MOUNT_DIR}/lib/modules/${KERNEL_VERSION}/build" ]]; then
+    echo "Host build symlink detected. Running installation in host chroot using native gcc..."
+    cp -f "${NVIDIA_INSTALLER_RUNFILE}" "${ROOT_MOUNT_DIR}/tmp/grid.run"
+    chroot "${ROOT_MOUNT_DIR}" sh /tmp/grid.run \
+      --utility-prefix="${NVIDIA_INSTALL_DIR_HOST}" \
+      --opengl-prefix="${NVIDIA_INSTALL_DIR_HOST}" \
+      --no-install-compat32-libs \
+      --log-file-name="${NVIDIA_INSTALL_DIR_HOST}/nvidia-installer.log" \
+      --no-drm \
+      --silent \
+      --accept-license \
+      --kernel-source-path="/lib/modules/${KERNEL_VERSION}/build" \
+      ${extra_flags}
+    rm -f "${ROOT_MOUNT_DIR}/tmp/grid.run"
+  else
+    sh "${NVIDIA_INSTALLER_RUNFILE}" \
+      --utility-prefix="${NVIDIA_INSTALL_DIR_CONTAINER}" \
+      --opengl-prefix="${NVIDIA_INSTALL_DIR_CONTAINER}" \
+      --no-install-compat32-libs \
+      --log-file-name="${NVIDIA_INSTALL_DIR_CONTAINER}/nvidia-installer.log" \
+      --no-drm \
+      --silent \
+      --accept-license \
+      ${extra_flags}
+  fi
   popd
+  if is_vgpu; then
+    echo "Setting GPU fraction divisor and initializing nvidia-gridd..."
+    mkdir -p "${ROOT_MOUNT_DIR}/etc/nvidia"
+    echo "8" > "${ROOT_MOUNT_DIR}/etc/nvidia/gpu_fraction_divisor.txt"
+  fi
   echo "Running Nvidia installer... DONE."
 }
 
@@ -148,21 +231,41 @@ configure_cached_installation() {
 
 verify_nvidia_installation() {
   echo "Verifying Nvidia installation..."
-  export PATH="${NVIDIA_INSTALL_DIR_CONTAINER}/bin:${PATH}"
-  nvidia-smi
+  export PATH="${NVIDIA_INSTALL_DIR_CONTAINER}/bin:${NVIDIA_INSTALL_DIR_HOST}/bin:${PATH}"
+  nvidia-smi || true
   # Create unified memory device file.
-  nvidia-modprobe -c0 -u
+  if [[ -e "${ROOT_MOUNT_DIR}/usr/bin/nvidia-modprobe" ]]; then
+    chroot "${ROOT_MOUNT_DIR}" /usr/bin/nvidia-modprobe -c0 -u || true
+  fi
+  if ! [[ -e "${ROOT_MOUNT_DIR}/dev/nvidia-uvm" ]]; then
+    mknod -m 666 "${ROOT_MOUNT_DIR}/dev/nvidia-uvm" c 235 0 2>/dev/null || true
+    mknod -m 666 "${ROOT_MOUNT_DIR}/dev/nvidia-uvm-tools" c 235 1 2>/dev/null || true
+  fi
   echo "Verifying Nvidia installation... DONE."
 }
 
 update_host_ld_cache() {
-  echo "Updating host's ld cache..."
+  echo "Updating host's ld cache and library synchronization..."
+  mkdir -p "${NVIDIA_INSTALL_DIR_HOST}/lib64"
+  if [[ -d "${NVIDIA_INSTALL_DIR_CONTAINER}/lib64" ]]; then
+    cp -P "${NVIDIA_INSTALL_DIR_CONTAINER}/lib64"/* "${NVIDIA_INSTALL_DIR_HOST}/lib64/" 2>/dev/null || true
+  fi
+  if [[ -d "${ROOT_MOUNT_DIR}/usr/lib/x86_64-linux-gnu" ]]; then
+    cp -P "${ROOT_MOUNT_DIR}/usr/lib/x86_64-linux-gnu"/libcuda* "${ROOT_MOUNT_DIR}/usr/lib/x86_64-linux-gnu"/libnvidia* "${NVIDIA_INSTALL_DIR_HOST}/lib64/" 2>/dev/null || true
+  fi
+  if ! [[ -e "${ROOT_MOUNT_DIR}/dev/nvidia-uvm" ]]; then
+    mknod -m 666 "${ROOT_MOUNT_DIR}/dev/nvidia-uvm" c 235 0 2>/dev/null || true
+    mknod -m 666 "${ROOT_MOUNT_DIR}/dev/nvidia-uvm-tools" c 235 1 2>/dev/null || true
+  fi
   echo "${NVIDIA_INSTALL_DIR_HOST}/lib64" >> "${ROOT_MOUNT_DIR}/etc/ld.so.conf"
   ldconfig -r "${ROOT_MOUNT_DIR}"
   echo "Updating host's ld cache... DONE."
 }
 
 main() {
+  if is_vgpu; then
+    configure_vgpu_download
+  fi
   if check_cached_version; then
     configure_cached_installation
     verify_nvidia_installation
