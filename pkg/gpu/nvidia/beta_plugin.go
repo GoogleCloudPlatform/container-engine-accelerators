@@ -138,7 +138,6 @@ func (s *pluginServiceV1Beta1) sendDevices(stream pluginapi.DevicePlugin_ListAnd
 	glog.Infof("ListAndWatch: send devices %v\n", resp)
 	if err := stream.Send(resp); err != nil {
 		glog.Errorf("device-plugin: cannot update device states: %v\n", err)
-		s.ngm.grpcServer.Stop()
 		return err
 	}
 	return nil
