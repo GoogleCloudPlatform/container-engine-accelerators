@@ -42,7 +42,7 @@ spec:
       containers:
       # Container 1: asapd-lite
       - name: asapd-lite
-        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.9
+        image: us-docker.pkg.dev/gce-ai-infra/asapd-lite/asapd-lite:v0.0.11
 
         command: ["/bin/bash", "-c"]
         args:
