@@ -58,9 +58,8 @@ func newTestCollectorWithLog(t *testing.T, script string, timeout time.Duration)
 func TestCollectorCompleted(t *testing.T) {
 	script := writeScript(t, t.TempDir(), `
 [ "$1" = "--output-file" ] || exit 3
-[ "$(pwd)" = "$REPORTS" ] || exit 4
-[ "$TMPDIR" = "$REPORTS" ] || exit 5
-echo scratch > nvidia-nvml-temp123.log
+[ "$(pwd)" = "$TMPDIR" ] || exit 4
+echo scratch > arbitrary-scratch.txt
 echo dump > "$TMPDIR/nvidia-debugdump-temp$$.log"
 echo noisy-progress-stdout
 echo harmless-stderr >&2
@@ -78,8 +77,12 @@ exit 1  # the real script's exit code is unreliable; the marker decides
 	if !strings.HasPrefix(res.FilePath, reports+"/nvidia-bug-report-") || !strings.HasSuffix(res.FilePath, "-manual.log.gz") {
 		t.Errorf("unexpected file path %q", res.FilePath)
 	}
-	if left, _ := filepath.Glob(filepath.Join(reports, "*-temp*")); len(left) != 0 {
-		t.Errorf("temp files not cleaned: %v", left)
+	entries, err := os.ReadDir(reports)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(res.FilePath) {
+		t.Errorf("reports dir should contain only the moved report, got %v", entries)
 	}
 	if st, _ := os.Stat(reports); st.Mode().Perm() != 0o700 {
 		t.Errorf("reports dir mode %v, want 0700", st.Mode().Perm())

@@ -45,15 +45,16 @@ const (
 
 // launcher runs inside the host root (after chroot). It picks the first readable candidate,
 // derives PATH/LD_LIBRARY_PATH from the script's own driver directory, and execs the script
-// from the reports directory. TMPDIR (set in Run) also points there: the script's largest
-// temp file is the nvidia-debugdump dump (~1MiB per GPU), and /tmp is tmpfs on COS, whose
-// pages count against this container as unreclaimable shmem. It uses only shell builtins,
-// so there is exactly one extra fork before the script starts.
+// from the staging directory ($TMPDIR). Both the working directory and TMPDIR point to a
+// dedicated subdirectory under ReportsDir: the script's largest temp file is the
+// nvidia-debugdump dump (~1MiB per GPU), and /tmp is tmpfs on COS, whose pages count against
+// this container as unreclaimable shmem. Running inside a dedicated staging directory lets us
+// move only the finished report into ReportsDir and remove the staging directory afterwards.
 const launcher = `for p in "$@"; do
   if [ -r "$p" ]; then
     d="${p%/*}"
     export PATH="$d:/usr/sbin:/usr/bin:/sbin:/bin" LD_LIBRARY_PATH="${d%/*}/lib64"
-    cd "$REPORTS" || exit 126
+    cd "$TMPDIR" || exit 126
     sh=/bin/bash
     [ -x "$sh" ] || sh=/bin/sh
     exec "$sh" "$p" --output-file "$OUT"
@@ -134,7 +135,17 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	}
 	_ = os.Chmod(dir, 0o700)
 
+	workHost := filepath.Join(c.cfg.ReportsDir, ".work")
+	workDir := c.containerPath(workHost)
+	_ = os.RemoveAll(workDir)
+	if err := os.MkdirAll(workDir, 0o700); err != nil {
+		res.Reason = fmt.Sprintf("%s: mkdir work: %v", ReasonInternal, err)
+		return res
+	}
+	defer os.RemoveAll(workDir)
+
 	base := fmt.Sprintf("%s%s-%s.log", reportPrefix, start.UTC().Format("20060102T150405Z"), trigger)
+	stageOutHost := filepath.Join(workHost, base)
 	outHost := filepath.Join(c.cfg.ReportsDir, base)
 
 	runCtx, cancel := context.WithTimeout(ctx, c.cfg.Timeout)
@@ -146,9 +157,8 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 		"PATH=/usr/sbin:/usr/bin:/sbin:/bin",
 		"HOME=/root",
 		"LC_ALL=C",
-		"OUT=" + outHost,
-		"REPORTS=" + c.cfg.ReportsDir,
-		"TMPDIR=" + c.cfg.ReportsDir,
+		"OUT=" + stageOutHost,
+		"TMPDIR=" + workHost,
 	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if c.cfg.HostRoot != "" {
@@ -184,7 +194,6 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	if groupAlive(pgid, 5*time.Second) {
 		c.busy = true
 	}
-	c.cleanTempFiles(dir)
 
 	exitCode := 0
 	var ee *exec.ExitError
@@ -196,8 +205,17 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 		return res
 	}
 
-	for _, name := range []string{outHost + ".gz", outHost} {
+	for _, ext := range []string{".gz", ""} {
+		src := c.containerPath(stageOutHost + ext)
+		if _, err := os.Stat(src); err != nil {
+			continue
+		}
+		name := outHost + ext
 		path := c.containerPath(name)
+		if err := os.Rename(src, path); err != nil {
+			fmt.Fprintf(c.cfg.Log, "move report %s -> %s: %v\n", src, path, err)
+			break
+		}
 		if st, err := os.Stat(path); err == nil {
 			res.FilePath = name
 			res.Size = st.Size()
@@ -207,9 +225,10 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 			if err := dropPageCache(path); err != nil {
 				fmt.Fprintf(c.cfg.Log, "drop page cache for %s: %v\n", name, err)
 			}
-			break
 		}
+		break
 	}
+	_ = os.RemoveAll(workDir)
 	c.rotate(dir)
 
 	switch {
@@ -325,20 +344,6 @@ func dropPageCache(path string) error {
 		return fmt.Errorf("fadvise: %w", err)
 	}
 	return nil
-}
-
-// cleanTempFiles removes temp files the script writes into its working directory.
-func (c *Collector) cleanTempFiles(dir string) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		n := e.Name()
-		if strings.Contains(n, "-temp") || strings.HasSuffix(n, ".old") {
-			_ = os.Remove(filepath.Join(dir, n))
-		}
-	}
 }
 
 // rotate keeps the newest MaxReports reports. Names embed a sortable UTC timestamp.

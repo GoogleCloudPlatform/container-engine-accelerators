@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/workqueue"
 )
 
 // Runner performs one collection (implemented by Collector).
@@ -39,9 +40,22 @@ type Runner interface {
 	Run(ctx context.Context, trigger Trigger) Result
 }
 
-// Controller watches its own Node and reconciles collection requests. It is level-triggered:
-// watch events only "kick" a single worker, which acts on the latest observed Node. That makes
-// coalescing free: requests that arrive during a run are handled once, after it.
+// pendingResult holds a completed collection whose post-run Node patch failed with a transient API
+// error, allowing the workqueue retry to publish the result without re-running the script.
+type pendingResult struct {
+	res               Result
+	trigger           Trigger
+	wantManual        bool
+	seenManual        string
+	hasExpectedStatus bool
+	expectedStatus    string
+	noAnnotationsMap  bool
+}
+
+// Controller watches its own Node and reconciles collection requests using a rate-limiting
+// workqueue. It is level-triggered: watch events enqueue the node name, and the single worker
+// acts on the latest observed Node. That makes coalescing free: requests that arrive during a run
+// are deduplicated by the workqueue and handled once after the current run finishes.
 type Controller struct {
 	client   kubernetes.Interface
 	recorder record.EventRecorder
@@ -49,10 +63,11 @@ type Controller struct {
 	node     string
 	logf     func(format string, args ...any)
 
-	kick           chan struct{}
+	queue          workqueue.RateLimitingInterface
 	mu             sync.Mutex
 	latest         *v1.Node
 	startupChecked bool
+	pending        *pendingResult
 }
 
 // NewController returns a Controller for the named Node.
@@ -63,7 +78,7 @@ func NewController(client kubernetes.Interface, recorder record.EventRecorder, r
 		runner:   runner,
 		node:     node,
 		logf:     log.Printf,
-		kick:     make(chan struct{}, 1),
+		queue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
 	}
 }
 
@@ -71,10 +86,7 @@ func (c *Controller) observe(n *v1.Node) {
 	c.mu.Lock()
 	c.latest = n
 	c.mu.Unlock()
-	select {
-	case c.kick <- struct{}{}:
-	default:
-	}
+	c.queue.Add(c.node)
 }
 
 func (c *Controller) snapshot() *v1.Node {
@@ -85,17 +97,36 @@ func (c *Controller) snapshot() *v1.Node {
 
 // Run blocks until ctx is done.
 func (c *Controller) Run(ctx context.Context) {
+	go func() {
+		<-ctx.Done()
+		c.queue.ShutDown()
+	}()
 	go c.watchLoop(ctx)
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-c.kick:
-			if n := c.snapshot(); n != nil {
-				c.reconcile(ctx, n)
-			}
-		}
+	for c.processNextWorkItem(ctx) {
 	}
+}
+
+func (c *Controller) processNextWorkItem(ctx context.Context) bool {
+	item, quit := c.queue.Get()
+	if quit {
+		return false
+	}
+	defer c.queue.Done(item)
+
+	n := c.snapshot()
+	if n == nil {
+		c.queue.Forget(item)
+		return true
+	}
+	if err := c.reconcile(ctx, n); err != nil {
+		if ctx.Err() == nil {
+			c.logf("reconcile %s: %v (re-queueing with backoff)", c.node, err)
+			c.queue.AddRateLimited(item)
+		}
+		return true
+	}
+	c.queue.Forget(item)
+	return true
 }
 
 // watchLoop gets then watches the Node, re-getting on 410 or errors and re-watching on close.
@@ -156,20 +187,27 @@ func (c *Controller) watchOnce(ctx context.Context, rv string) (string, error) {
 	return rv, ctx.Err()
 }
 
-// reconcile handles startup recovery (L2), the maintenance-handler handshake on StatusAnnotation,
-// and the manual TriggerLabel.
-func (c *Controller) reconcile(ctx context.Context, n *v1.Node) {
+// reconcile handles startup recovery (L2), pending post-collection patch retries, the
+// maintenance-handler handshake on StatusAnnotation, and the manual TriggerLabel.
+func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 	if !c.startupChecked {
-		if !c.recoverStartup(ctx, n) {
-			return
+		if err := c.recoverStartup(ctx, n); err != nil {
+			return err
 		}
 		c.startupChecked = true
+	}
+
+	if c.pending != nil {
+		if err := c.finishCollection(ctx, c.pending); err != nil {
+			return err
+		}
+		c.pending = nil
 	}
 
 	_, snapshotManual := labelActive(n.Labels, TriggerLabel)
 	snapshotAuto := n.Annotations[StatusAnnotation] == StatusCollect
 	if !snapshotManual && !snapshotAuto {
-		return
+		return nil
 	}
 
 	// The snapshot may predate our own last patch (events queued during a run), so confirm
@@ -177,12 +215,12 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) {
 	n, err := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
 	if err != nil {
 		c.logf("get node before collection: %v", err)
-		return
+		return err
 	}
 	seenManual, wantManual := labelActive(n.Labels, TriggerLabel)
 	wantAuto := n.Annotations[StatusAnnotation] == StatusCollect
 	if !wantManual && !wantAuto {
-		return
+		return nil
 	}
 
 	if wantAuto {
@@ -192,14 +230,17 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) {
 				{Op: "test", Path: annotationPath(StatusAnnotation), Value: StatusCollect},
 				{Op: "replace", Path: annotationPath(StatusAnnotation), Value: StatusFailed + ": " + ReasonDisabled},
 			}
-			if err := c.patch(ctx, ops); err != nil && !isCASConflict(err) {
-				c.logf("patch disabled status: %v", err)
-			} else if err == nil {
+			if err := c.patch(ctx, ops); err != nil {
+				if !isCASConflict(err) {
+					c.logf("patch disabled status: %v", err)
+					return err
+				}
+			} else {
 				c.event(Result{Status: StatusFailed, Reason: ReasonDisabled})
 			}
 			wantAuto = false
 			if !wantManual {
-				return
+				return nil
 			}
 		} else {
 			// Acknowledge the request by transitioning collect -> in-progress.
@@ -210,10 +251,11 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) {
 			if err := c.patch(ctx, ackOps); err != nil {
 				if !isCASConflict(err) {
 					c.logf("patch in-progress status: %v", err)
+					return err
 				}
 				wantAuto = false
 				if !wantManual {
-					return
+					return nil
 				}
 			}
 		}
@@ -227,52 +269,109 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) {
 		c.logf("manual trigger observed (label %s=%q), starting collection", TriggerLabel, seenManual)
 	}
 
+	expectedStatus, hasExpectedStatus := n.Annotations[StatusAnnotation]
+	if wantAuto {
+		expectedStatus = StatusInProgress
+		hasExpectedStatus = true
+	}
+
 	res := c.runner.Run(ctx, trigger)
 	c.logf("collection finished: trigger=%s status=%s reason=%q file=%s size=%d complete=%v duration=%v",
 		trigger, res.Status, res.Reason, res.FilePath, res.Size, res.Complete, res.Duration.Round(time.Millisecond))
 
-	outBytes, _ := json.Marshal(res.Output(trigger))
+	p := &pendingResult{
+		res:               res,
+		trigger:           trigger,
+		wantManual:        wantManual,
+		seenManual:        seenManual,
+		hasExpectedStatus: hasExpectedStatus,
+		expectedStatus:    expectedStatus,
+		noAnnotationsMap:  len(n.Annotations) == 0 && !wantAuto,
+	}
+	if err := c.finishCollection(ctx, p); err != nil {
+		c.pending = p
+		return err
+	}
+	// Collections are rare; hand the heap grown by gzip scanning and API I/O back to the
+	// kernel now rather than waiting for the background scavenger. Costs ~1ms.
+	debug.FreeOSMemory()
+	return nil
+}
+
+// finishCollection patches the Node after a collection finishes and emits the completion event.
+// In the common case, it performs a single atomic JSON-Patch. If a CAS precondition fails (e.g.
+// TriggerLabel or StatusAnnotation was modified mid-run), it applies the TriggerLabel removal,
+// StatusAnnotation update, and OutputAnnotation update independently so one conflict cannot block
+// the others.
+func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) error {
+	status := p.res.FormatStatus()
+	outBytes, _ := json.Marshal(p.res.Output(p.trigger))
 	out := string(outBytes)
 
 	var ops []patchOp
-	if wantManual {
+	if p.wantManual {
 		// Only remove the label if it still has the value we acted on. If the user re-set it
 		// mid-run, the test fails and the next reconcile collects again.
 		ops = append(ops,
-			patchOp{Op: "test", Path: labelPath(TriggerLabel), Value: seenManual},
+			patchOp{Op: "test", Path: labelPath(TriggerLabel), Value: p.seenManual},
 			patchOp{Op: "remove", Path: labelPath(TriggerLabel)},
 		)
 	}
-	ops = append(ops, finishAnnotationOps(n, wantAuto, res.FormatStatus(), out)...)
+	ops = append(ops, finishAnnotationOps(p.noAnnotationsMap, p.hasExpectedStatus, p.expectedStatus, status, out)...)
 
 	if err := c.patch(ctx, ops); err != nil {
 		if !isCASConflict(err) {
 			c.logf("patch node: %v", err)
+			return err
 		}
-		// Label changed or removed mid-run: still publish the status/output, leave the label alone.
-		if err := c.patch(ctx, finishAnnotationOps(n, wantAuto, res.FormatStatus(), out)); err != nil && !isCASConflict(err) {
-			c.logf("patch node output: %v", err)
+		// At least one CAS precondition failed. If both TriggerLabel and StatusAnnotation had
+		// preconditions, try removing TriggerLabel on its own so a StatusAnnotation conflict
+		// does not leave TriggerLabel behind.
+		if p.wantManual && p.hasExpectedStatus {
+			labelOps := []patchOp{
+				{Op: "test", Path: labelPath(TriggerLabel), Value: p.seenManual},
+				{Op: "remove", Path: labelPath(TriggerLabel)},
+			}
+			if err := c.patch(ctx, labelOps); err != nil && !isCASConflict(err) {
+				c.logf("patch node trigger label: %v", err)
+				return err
+			}
+		}
+		p.wantManual = false
+
+		// Now try updating StatusAnnotation (with CAS check if applicable) and OutputAnnotation.
+		if err := c.patch(ctx, finishAnnotationOps(p.noAnnotationsMap, p.hasExpectedStatus, p.expectedStatus, status, out)); err != nil {
+			if !isCASConflict(err) {
+				c.logf("patch node status and output: %v", err)
+				return err
+			}
+			// StatusAnnotation changed mid-run (e.g. a new "collect" request arrived): leave
+			// StatusAnnotation untouched and publish OutputAnnotation alone.
+			p.hasExpectedStatus = false
+			if err := c.patch(ctx, outputOnlyOps(p.noAnnotationsMap, out)); err != nil && !isCASConflict(err) {
+				c.logf("patch node output: %v", err)
+				return err
+			}
 		}
 	}
-	c.event(res)
-	// Collections are rare; hand the heap grown by gzip scanning and API I/O back to the
-	// kernel now rather than waiting for the background scavenger. Costs ~1ms.
-	debug.FreeOSMemory()
+
+	c.event(p.res)
+	return nil
 }
 
 // recoverStartup implements L2 deadlock recovery: if a previous container crashed or OOMed while
 // StatusAnnotation was "in-progress", transition it to "failed: interrupted" on startup.
-func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) bool {
+func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) error {
 	if n.Annotations[StatusAnnotation] != StatusInProgress {
-		return true
+		return nil
 	}
 	fresh, err := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
 	if err != nil {
 		c.logf("get node for startup recovery: %v", err)
-		return false
+		return err
 	}
 	if fresh.Annotations[StatusAnnotation] != StatusInProgress {
-		return true
+		return nil
 	}
 	c.logf("found stale %s=%q at startup; marking interrupted", StatusAnnotation, StatusInProgress)
 	ops := []patchOp{
@@ -281,14 +380,18 @@ func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) bool {
 	}
 	if err := c.patch(ctx, ops); err != nil && !isCASConflict(err) {
 		c.logf("patch interrupted status: %v", err)
-		return false
+		return err
 	}
 	c.event(Result{Status: StatusFailed, Reason: ReasonInterrupted})
-	return true
+	return nil
 }
 
 func isCASConflict(err error) bool {
-	return apierrors.IsInvalid(err) || apierrors.IsConflict(err)
+	if apierrors.IsInvalid(err) || apierrors.IsConflict(err) {
+		return true
+	}
+	// client-go's fake clientset returns raw jsonpatch test errors without wrapping in StatusError.
+	return err != nil && strings.Contains(err.Error(), "testing value ")
 }
 
 // patchOp is one RFC 6902 JSON-Patch operation.
@@ -328,17 +431,35 @@ func (c *Controller) patch(ctx context.Context, ops []patchOp) error {
 	return err
 }
 
-// finishAnnotationOps builds the JSON-Patch operations to publish OutputAnnotation and (for
-// automatic runs) transition StatusAnnotation from "in-progress" to its terminal value.
-func finishAnnotationOps(n *v1.Node, wantAuto bool, status, output string) []patchOp {
-	if wantAuto {
+// finishAnnotationOps builds the JSON-Patch operations to publish both StatusAnnotation and
+// OutputAnnotation after a collection finishes. Updating StatusAnnotation on both manual and
+// automatic runs prevents StatusAnnotation and OutputAnnotation from drifting apart.
+func finishAnnotationOps(noAnnotationsMap, hasExpectedStatus bool, expectedStatus, status, output string) []patchOp {
+	if hasExpectedStatus {
 		return []patchOp{
-			{Op: "test", Path: annotationPath(StatusAnnotation), Value: StatusInProgress},
+			{Op: "test", Path: annotationPath(StatusAnnotation), Value: expectedStatus},
 			{Op: "replace", Path: annotationPath(StatusAnnotation), Value: status},
 			{Op: "add", Path: annotationPath(OutputAnnotation), Value: output},
 		}
 	}
-	if len(n.Annotations) == 0 {
+	if noAnnotationsMap {
+		return []patchOp{{
+			Op:   "add",
+			Path: "/metadata/annotations",
+			Value: map[string]string{
+				StatusAnnotation: status,
+				OutputAnnotation: output,
+			},
+		}}
+	}
+	return []patchOp{
+		{Op: "add", Path: annotationPath(StatusAnnotation), Value: status},
+		{Op: "add", Path: annotationPath(OutputAnnotation), Value: output},
+	}
+}
+
+func outputOnlyOps(noAnnotationsMap bool, output string) []patchOp {
+	if noAnnotationsMap {
 		return []patchOp{{Op: "add", Path: "/metadata/annotations", Value: map[string]string{OutputAnnotation: output}}}
 	}
 	return []patchOp{{Op: "add", Path: annotationPath(OutputAnnotation), Value: output}}
