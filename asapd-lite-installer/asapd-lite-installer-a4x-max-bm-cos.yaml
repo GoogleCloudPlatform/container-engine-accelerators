@@ -29,6 +29,7 @@ spec:
                     operator: In
                     values:
                       - cos
+                      - ubuntu
       tolerations:
       - operator: Exists
 
