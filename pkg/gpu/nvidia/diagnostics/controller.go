@@ -47,6 +47,7 @@ type pendingResult struct {
 	trigger           Trigger
 	wantManual        bool
 	seenManual        string
+	wantStatus        bool
 	hasExpectedStatus bool
 	expectedStatus    string
 	noAnnotationsMap  bool
@@ -284,6 +285,7 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 		trigger:           trigger,
 		wantManual:        wantManual,
 		seenManual:        seenManual,
+		wantStatus:        true,
 		hasExpectedStatus: hasExpectedStatus,
 		expectedStatus:    expectedStatus,
 		noAnnotationsMap:  len(n.Annotations) == 0 && !wantAuto,
@@ -317,7 +319,7 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 			patchOp{Op: "remove", Path: labelPath(TriggerLabel)},
 		)
 	}
-	ops = append(ops, finishAnnotationOps(p.noAnnotationsMap, p.hasExpectedStatus, p.expectedStatus, status, out)...)
+	ops = append(ops, finishAnnotationOps(p.noAnnotationsMap, p.wantStatus, p.hasExpectedStatus, p.expectedStatus, status, out)...)
 
 	if err := c.patch(ctx, ops); err != nil {
 		if !isCASConflict(err) {
@@ -327,7 +329,7 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 		// At least one CAS precondition failed. If both TriggerLabel and StatusAnnotation had
 		// preconditions, try removing TriggerLabel on its own so a StatusAnnotation conflict
 		// does not leave TriggerLabel behind.
-		if p.wantManual && p.hasExpectedStatus {
+		if p.wantManual && p.wantStatus && p.hasExpectedStatus {
 			labelOps := []patchOp{
 				{Op: "test", Path: labelPath(TriggerLabel), Value: p.seenManual},
 				{Op: "remove", Path: labelPath(TriggerLabel)},
@@ -340,14 +342,15 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 		p.wantManual = false
 
 		// Now try updating StatusAnnotation (with CAS check if applicable) and OutputAnnotation.
-		if err := c.patch(ctx, finishAnnotationOps(p.noAnnotationsMap, p.hasExpectedStatus, p.expectedStatus, status, out)); err != nil {
+		if err := c.patch(ctx, finishAnnotationOps(p.noAnnotationsMap, p.wantStatus, p.hasExpectedStatus, p.expectedStatus, status, out)); err != nil {
 			if !isCASConflict(err) {
 				c.logf("patch node status and output: %v", err)
 				return err
 			}
 			// StatusAnnotation changed mid-run (e.g. a new "collect" request arrived): leave
-			// StatusAnnotation untouched and publish OutputAnnotation alone.
-			p.hasExpectedStatus = false
+			// StatusAnnotation untouched on this and any subsequent workqueue retries, and
+			// publish OutputAnnotation alone.
+			p.wantStatus = false
 			if err := c.patch(ctx, outputOnlyOps(p.noAnnotationsMap, out)); err != nil && !isCASConflict(err) {
 				c.logf("patch node output: %v", err)
 				return err
@@ -431,10 +434,14 @@ func (c *Controller) patch(ctx context.Context, ops []patchOp) error {
 	return err
 }
 
-// finishAnnotationOps builds the JSON-Patch operations to publish both StatusAnnotation and
-// OutputAnnotation after a collection finishes. Updating StatusAnnotation on both manual and
-// automatic runs prevents StatusAnnotation and OutputAnnotation from drifting apart.
-func finishAnnotationOps(noAnnotationsMap, hasExpectedStatus bool, expectedStatus, status, output string) []patchOp {
+// finishAnnotationOps builds the JSON-Patch operations to publish StatusAnnotation (when
+// wantStatus is true) and OutputAnnotation after a collection finishes. Updating StatusAnnotation
+// on both manual and automatic runs prevents StatusAnnotation and OutputAnnotation from drifting
+// apart.
+func finishAnnotationOps(noAnnotationsMap, wantStatus, hasExpectedStatus bool, expectedStatus, status, output string) []patchOp {
+	if !wantStatus {
+		return outputOnlyOps(noAnnotationsMap, output)
+	}
 	if hasExpectedStatus {
 		return []patchOp{
 			{Op: "test", Path: annotationPath(StatusAnnotation), Value: expectedStatus},

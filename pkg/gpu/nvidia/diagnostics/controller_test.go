@@ -347,6 +347,71 @@ func TestWorkqueueRetryOnTransientErrors(t *testing.T) {
 	}
 }
 
+// TestPendingRetryPreservesChangedStatusAnnotation verifies that if StatusAnnotation changes
+// mid-run (causing a CAS conflict) AND the fallback outputOnlyOps patch fails with a transient
+// error, the subsequent workqueue retry only patches OutputAnnotation and does not overwrite the
+// externally modified StatusAnnotation.
+func TestPendingRetryPreservesChangedStatusAnnotation(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "n1",
+			Annotations: map[string]string{StatusAnnotation: StatusCollect},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	var patchCalls int
+	cs.PrependReactor("patch", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		patchCalls++
+		// Patch 1: ack (collect -> in-progress)
+		// Patch 2: mid-run restatus hook (in-progress -> failed: abandoned)
+		// Patch 3: combined finishAnnotationOps (fails CAS on StatusAnnotation)
+		// Patch 4: retry finishAnnotationOps (fails CAS on StatusAnnotation)
+		// Patch 5: outputOnlyOps (inject transient error!)
+		if patchCalls == 5 {
+			return true, nil, errors.New("transient apiserver error on output-only patch")
+		}
+		return false, nil, nil
+	})
+
+	rec := record.NewFakeRecorder(10)
+	r := &fakeRunner{
+		during: func() {
+			p := `[{"op":"replace","path":"` + annotationPath(StatusAnnotation) + `","value":"failed: abandoned"}]`
+			if _, err := cs.CoreV1().Nodes().Patch(ctx, "n1", types.JSONPatchType, []byte(p), metav1.PatchOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	c := NewController(cs, rec, r, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+
+	// First reconcile fails on the outputOnlyOps transient error and caches c.pending.
+	if err := c.reconcile(ctx, n); err == nil {
+		t.Fatal("expected first reconcile to return transient error from outputOnlyOps")
+	}
+	// Second reconcile (simulating workqueue retry) must publish OutputAnnotation without
+	// overwriting StatusAnnotation="failed: abandoned".
+	n, _ = cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err := c.reconcile(ctx, n); err != nil {
+		t.Fatalf("second reconcile failed: %v", err)
+	}
+	if r.calls != 1 {
+		t.Errorf("runner calls = %d, want 1", r.calls)
+	}
+	got, err := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Annotations[StatusAnnotation] != "failed: abandoned" {
+		t.Errorf("status annotation = %q, want %q (must not be overwritten on retry)", got.Annotations[StatusAnnotation], "failed: abandoned")
+	}
+	if got.Annotations[OutputAnnotation] == "" {
+		t.Errorf("output annotation was not published on retry")
+	}
+}
+
 func hasWatch(cs *fake.Clientset) bool {
 	for _, a := range cs.Actions() {
 		if _, ok := a.(k8stesting.WatchAction); ok {
