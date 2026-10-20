@@ -44,6 +44,7 @@ var (
 	driverDir  = flag.String("driver-dir", "/home/kubernetes/bin/nvidia", "Host driver install directory containing bin/nvidia-bug-report.sh.")
 	timeout    = flag.Duration("timeout", 60*time.Second, "Maximum duration of one collection. Partial reports are kept.")
 	maxReports = flag.Int("max-reports", 5, "Number of reports to keep.")
+	maxLogAge  = flag.Duration("max-log-age", 7*24*time.Hour, "Maximum age of system journal logs to collect (0 disables the cap).")
 	script     = flag.String("script", "", "Override the script path on the host (testing only).")
 )
 
@@ -89,12 +90,13 @@ func main() {
 		ScriptCandidates: candidates,
 		Timeout:          *timeout,
 		MaxReports:       *maxReports,
+		MaxLogAge:        *maxLogAge,
 		Log:              os.Stderr,
 	})
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
-	log.Printf("gpu-bug-report starting: node=%s host-root=%s reports-dir=%s timeout=%v", *nodeName, *hostRoot, *reportsDir, *timeout)
+	log.Printf("gpu-bug-report starting: node=%s host-root=%s reports-dir=%s timeout=%v max-log-age=%v", *nodeName, *hostRoot, *reportsDir, *timeout, *maxLogAge)
 	diagnostics.NewController(client, recorder, collector, *nodeName).Run(ctx)
 	log.Print("gpu-bug-report stopped")
 }

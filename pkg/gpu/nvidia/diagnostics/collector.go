@@ -50,11 +50,21 @@ const (
 // nvidia-debugdump dump (~1MiB per GPU), and /tmp is tmpfs on COS, whose pages count against
 // this container as unreclaimable shmem. Running inside a dedicated staging directory lets us
 // move only the finished report into ReportsDir and remove the staging directory afterwards.
+// When $JOURNAL_SINCE is set, a small journalctl wrapper is placed in $TMPDIR at the front of
+// PATH so nvidia-bug-report.sh's unbounded `journalctl -b` scans are capped to recent logs.
 const launcher = `for p in "$@"; do
   if [ -r "$p" ]; then
     d="${p%/*}"
     export PATH="$d:/usr/sbin:/usr/bin:/sbin:/bin" LD_LIBRARY_PATH="${d%/*}/lib64"
     cd "$TMPDIR" || exit 126
+    if [ -n "$JOURNAL_SINCE" ]; then
+      j=$(command -v journalctl 2>/dev/null)
+      if [ -n "$j" ] && [ -x "$j" ]; then
+        printf '#!/bin/sh\nexec "%s" --since="%s" "$@"\n' "$j" "$JOURNAL_SINCE" > "$TMPDIR/journalctl"
+        chmod 755 "$TMPDIR/journalctl"
+        export PATH="$TMPDIR:$PATH"
+      fi
+    fi
     sh=/bin/bash
     [ -x "$sh" ] || sh=/bin/sh
     exec "$sh" "$p" --output-file "$OUT"
@@ -76,6 +86,8 @@ type CollectorConfig struct {
 	WaitDelay time.Duration
 	// MaxReports is how many reports to keep.
 	MaxReports int
+	// MaxLogAge bounds how far back journalctl scans (e.g. 7*24*time.Hour). Zero disables the cap.
+	MaxLogAge time.Duration
 	// Log receives the tail of the script's stderr when a collection does not complete.
 	Log io.Writer
 }
@@ -114,6 +126,7 @@ func (c *Collector) containerPath(hostPath string) string {
 //   - 1x RTX PRO 6000 (G4): ~6.7s
 //   - 8x RTX PRO 6000 (G4): ~6.4–8.0s
 //   - 8x B200 Blackwell (A4): ~13.3–13.6s
+//   - 4x GB300 Grace Blackwell Ultra (A4X Max baremetal, arm64): ~17.6–18.8s
 //
 // If nvidia-persistenced is disabled or crashed on multi-GPU NVLink nodes (A4/A3), collection can
 // take ~95–100s because each sequential nvidia-smi / nvidia-debugdump command (~10 separate queries)
@@ -153,13 +166,18 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	args := append([]string{"-c", launcher, "sh"}, c.cfg.ScriptCandidates...)
 	cmd := exec.CommandContext(runCtx, "/bin/sh", args...)
 	cmd.Dir = "/"
-	cmd.Env = []string{
+	env := []string{
 		"PATH=/usr/sbin:/usr/bin:/sbin:/bin",
 		"HOME=/root",
 		"LC_ALL=C",
 		"OUT=" + stageOutHost,
 		"TMPDIR=" + workHost,
 	}
+	if c.cfg.MaxLogAge > 0 {
+		since := start.Add(-c.cfg.MaxLogAge).UTC().Format("2006-01-02 15:04:05 UTC")
+		env = append(env, "JOURNAL_SINCE="+since)
+	}
+	cmd.Env = env
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if c.cfg.HostRoot != "" {
 		cmd.SysProcAttr.Chroot = c.cfg.HostRoot

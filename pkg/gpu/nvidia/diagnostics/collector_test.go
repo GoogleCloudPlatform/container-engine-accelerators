@@ -219,3 +219,33 @@ func TestDropPageCache(t *testing.T) {
 		t.Error("dropPageCache(missing) = nil, want error")
 	}
 }
+
+func TestCollectorMaxLogAgeJournalctlWrapper(t *testing.T) {
+	binDir := t.TempDir()
+	argsOut := filepath.Join(binDir, "journalctl.args")
+	fakeJournalctl := filepath.Join(binDir, "journalctl")
+	if err := os.WriteFile(fakeJournalctl, []byte(fmt.Sprintf("#!/bin/sh\nprintf '%%s\\n' \"$@\" > %s\n", argsOut)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	script := writeScript(t, binDir, `
+journalctl -b -0
+echo "End of NVIDIA bug report log file." | gzip -c > "$2.gz"
+`)
+	c, _ := newTestCollector(t, script, 10*time.Second)
+	c.cfg.MaxLogAge = 7 * 24 * time.Hour
+	fixedNow := time.Date(2026, 10, 20, 12, 0, 0, 0, time.UTC)
+	c.now = func() time.Time { return fixedNow }
+
+	res := c.Run(context.Background(), TriggerManual)
+	if res.Status != StatusCompleted {
+		t.Fatalf("got %+v, want completed", res)
+	}
+	got, err := os.ReadFile(argsOut)
+	if err != nil {
+		t.Fatalf("read journalctl args: %v", err)
+	}
+	want := "--since=2026-10-13 12:00:00 UTC\n-b\n-0\n"
+	if string(got) != want {
+		t.Errorf("journalctl args = %q, want %q", string(got), want)
+	}
+}
