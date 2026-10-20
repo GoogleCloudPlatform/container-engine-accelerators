@@ -188,7 +188,7 @@ func (c *Controller) watchOnce(ctx context.Context, rv string) (string, error) {
 	return rv, ctx.Err()
 }
 
-// reconcile handles startup recovery (L2), pending post-collection patch retries, the
+// reconcile handles startup deadlock recovery, pending post-collection patch retries, the
 // maintenance-handler handshake on StatusAnnotation, and the manual TriggerLabel.
 func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 	if !c.startupChecked {
@@ -227,16 +227,12 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 	if wantAuto {
 		if _, disabled := labelActive(n.Labels, DisableLabel); disabled {
 			c.logf("automatic trigger observed, but %s is active; reporting disabled", DisableLabel)
-			ops := []patchOp{
-				{Op: "test", Path: annotationPath(StatusAnnotation), Value: StatusCollect},
-				{Op: "replace", Path: annotationPath(StatusAnnotation), Value: StatusFailed + ": " + ReasonDisabled},
+			updated, err := c.casStatusAnnotation(ctx, StatusCollect, StatusFailed+": "+ReasonDisabled)
+			if err != nil {
+				c.logf("patch disabled status: %v", err)
+				return err
 			}
-			if err := c.patch(ctx, ops); err != nil {
-				if !isCASConflict(err) {
-					c.logf("patch disabled status: %v", err)
-					return err
-				}
-			} else {
+			if updated {
 				c.event(Result{Status: StatusFailed, Reason: ReasonDisabled})
 			}
 			wantAuto = false
@@ -245,15 +241,12 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 			}
 		} else {
 			// Acknowledge the request by transitioning collect -> in-progress.
-			ackOps := []patchOp{
-				{Op: "test", Path: annotationPath(StatusAnnotation), Value: StatusCollect},
-				{Op: "replace", Path: annotationPath(StatusAnnotation), Value: StatusInProgress},
+			acked, err := c.casStatusAnnotation(ctx, StatusCollect, StatusInProgress)
+			if err != nil {
+				c.logf("patch in-progress status: %v", err)
+				return err
 			}
-			if err := c.patch(ctx, ackOps); err != nil {
-				if !isCASConflict(err) {
-					c.logf("patch in-progress status: %v", err)
-					return err
-				}
+			if !acked {
 				wantAuto = false
 				if !wantManual {
 					return nil
@@ -301,60 +294,62 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 }
 
 // finishCollection patches the Node after a collection finishes and emits the completion event.
-// In the common case, it performs a single atomic JSON-Patch. If a CAS precondition fails (e.g.
-// TriggerLabel or StatusAnnotation was modified mid-run), it applies the TriggerLabel removal,
-// StatusAnnotation update, and OutputAnnotation update independently so one conflict cannot block
-// the others.
+// In the common case, it performs a single atomic JSON-Patch guarded by RFC 6902 "test" ops. If
+// the patch fails a precondition check, it fetches the current Node and compares the live
+// TriggerLabel and StatusAnnotation values against the expected test values so only the non-
+// conflicting fields are updated on the retry.
 func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) error {
 	status := p.res.FormatStatus()
 	outBytes, _ := json.Marshal(p.res.Output(p.trigger))
 	out := string(outBytes)
 
-	var ops []patchOp
-	if p.wantManual {
-		// Only remove the label if it still has the value we acted on. If the user re-set it
-		// mid-run, the test fails and the next reconcile collects again.
-		ops = append(ops,
-			patchOp{Op: "test", Path: labelPath(TriggerLabel), Value: p.seenManual},
-			patchOp{Op: "remove", Path: labelPath(TriggerLabel)},
-		)
-	}
-	ops = append(ops, finishAnnotationOps(p.noAnnotationsMap, p.wantStatus, p.hasExpectedStatus, p.expectedStatus, status, out)...)
+	for attempt := 0; attempt < 2; attempt++ {
+		var ops []patchOp
+		if p.wantManual {
+			// Only remove the label if it still has the value we acted on. If the user re-set it
+			// mid-run, the test fails and the next reconcile collects again.
+			ops = append(ops,
+				patchOp{Op: "test", Path: labelPath(TriggerLabel), Value: p.seenManual},
+				patchOp{Op: "remove", Path: labelPath(TriggerLabel)},
+			)
+		}
+		ops = append(ops, finishAnnotationOps(p.noAnnotationsMap, p.wantStatus, p.hasExpectedStatus, p.expectedStatus, status, out)...)
 
-	if err := c.patch(ctx, ops); err != nil {
-		if !isCASConflict(err) {
+		err := c.patch(ctx, ops)
+		if err == nil {
+			c.event(p.res)
+			return nil
+		}
+		if !isTestFailed(err) {
 			c.logf("patch node: %v", err)
 			return err
 		}
-		// At least one CAS precondition failed. If both TriggerLabel and StatusAnnotation had
-		// preconditions, try removing TriggerLabel on its own so a StatusAnnotation conflict
-		// does not leave TriggerLabel behind.
-		if p.wantManual && p.wantStatus && p.hasExpectedStatus {
-			labelOps := []patchOp{
-				{Op: "test", Path: labelPath(TriggerLabel), Value: p.seenManual},
-				{Op: "remove", Path: labelPath(TriggerLabel)},
-			}
-			if err := c.patch(ctx, labelOps); err != nil && !isCASConflict(err) {
-				c.logf("patch node trigger label: %v", err)
-				return err
+
+		// A JSON-Patch "test" op may have failed: fetch the latest Node and compare its current
+		// label and annotation values against our expected test values to identify which field
+		// changed mid-run.
+		fresh, getErr := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
+		if getErr != nil {
+			c.logf("get node after patch conflict: %v", getErr)
+			return getErr
+		}
+		conflict := false
+		if p.wantManual {
+			if cur, ok := fresh.Labels[TriggerLabel]; !ok || cur != p.seenManual {
+				p.wantManual = false
+				conflict = true
 			}
 		}
-		p.wantManual = false
-
-		// Now try updating StatusAnnotation (with CAS check if applicable) and OutputAnnotation.
-		if err := c.patch(ctx, finishAnnotationOps(p.noAnnotationsMap, p.wantStatus, p.hasExpectedStatus, p.expectedStatus, status, out)); err != nil {
-			if !isCASConflict(err) {
-				c.logf("patch node status and output: %v", err)
-				return err
+		if p.wantStatus {
+			if cur, ok := fresh.Annotations[StatusAnnotation]; ok != p.hasExpectedStatus || cur != p.expectedStatus {
+				p.wantStatus = false
+				conflict = true
 			}
-			// StatusAnnotation changed mid-run (e.g. a new "collect" request arrived): leave
-			// StatusAnnotation untouched on this and any subsequent workqueue retries, and
-			// publish OutputAnnotation alone.
-			p.wantStatus = false
-			if err := c.patch(ctx, outputOnlyOps(p.noAnnotationsMap, out)); err != nil && !isCASConflict(err) {
-				c.logf("patch node output: %v", err)
-				return err
-			}
+		}
+		p.noAnnotationsMap = len(fresh.Annotations) == 0
+		if !conflict {
+			c.logf("patch node: %v", err)
+			return err
 		}
 	}
 
@@ -362,8 +357,9 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 	return nil
 }
 
-// recoverStartup implements L2 deadlock recovery: if a previous container crashed or OOMed while
-// StatusAnnotation was "in-progress", transition it to "failed: interrupted" on startup.
+// recoverStartup handles startup deadlock recovery: if a previous container crashed or OOMed while
+// StatusAnnotation was "in-progress", transition it to "failed: interrupted" on startup so the
+// maintenance handler does not wait for a dead collection.
 func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) error {
 	if n.Annotations[StatusAnnotation] != StatusInProgress {
 		return nil
@@ -377,19 +373,47 @@ func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) error {
 		return nil
 	}
 	c.logf("found stale %s=%q at startup; marking interrupted", StatusAnnotation, StatusInProgress)
-	ops := []patchOp{
-		{Op: "test", Path: annotationPath(StatusAnnotation), Value: StatusInProgress},
-		{Op: "replace", Path: annotationPath(StatusAnnotation), Value: StatusFailed + ": " + ReasonInterrupted},
-	}
-	if err := c.patch(ctx, ops); err != nil && !isCASConflict(err) {
+	updated, err := c.casStatusAnnotation(ctx, StatusInProgress, StatusFailed+": "+ReasonInterrupted)
+	if err != nil {
 		c.logf("patch interrupted status: %v", err)
 		return err
 	}
-	c.event(Result{Status: StatusFailed, Reason: ReasonInterrupted})
+	if updated {
+		c.event(Result{Status: StatusFailed, Reason: ReasonInterrupted})
+	}
 	return nil
 }
 
-func isCASConflict(err error) bool {
+// casStatusAnnotation atomically transitions StatusAnnotation from expected to next using an
+// RFC 6902 JSON-Patch "test" operation. If the patch fails, it fetches the Node and compares the
+// live StatusAnnotation value against expected to distinguish a genuine CAS conflict from other
+// errors.
+func (c *Controller) casStatusAnnotation(ctx context.Context, expected, next string) (bool, error) {
+	ops := []patchOp{
+		{Op: "test", Path: annotationPath(StatusAnnotation), Value: expected},
+		{Op: "replace", Path: annotationPath(StatusAnnotation), Value: next},
+	}
+	err := c.patch(ctx, ops)
+	if err == nil {
+		return true, nil
+	}
+	if !isTestFailed(err) {
+		return false, err
+	}
+	fresh, getErr := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
+	if getErr != nil {
+		return false, getErr
+	}
+	if fresh.Annotations[StatusAnnotation] != expected {
+		return false, nil
+	}
+	return false, err
+}
+
+// isTestFailed reports whether err is a candidate RFC 6902 "test" precondition failure. Because
+// kube-apiserver maps jsonpatch.Apply errors to a generic 422 Invalid StatusError, callers follow
+// up with a Get and compare the live field value against the expected test value.
+func isTestFailed(err error) bool {
 	if apierrors.IsInvalid(err) || apierrors.IsConflict(err) {
 		return true
 	}
@@ -476,11 +500,11 @@ func (c *Controller) event(res Result) {
 	// kubelet uses the node name as the UID for Node events; `kubectl describe node` matches on it.
 	ref := &v1.ObjectReference{Kind: "Node", Name: c.node, UID: types.UID(c.node)}
 	if res.Status == StatusCompleted {
-		c.recorder.Eventf(ref, v1.EventTypeNormal, "GPUDiagnosticsCompleted",
+		c.recorder.Eventf(ref, v1.EventTypeNormal, "GPUReportCompleted",
 			"NVIDIA bug report written to %s (%d bytes) in %.1fs", res.FilePath, res.Size, res.Duration.Seconds())
 		return
 	}
-	c.recorder.Eventf(ref, v1.EventTypeWarning, "GPUDiagnosticsFailed",
+	c.recorder.Eventf(ref, v1.EventTypeWarning, "GPUReportFailed",
 		"NVIDIA bug report failed: %s (file %q, %.1fs)", res.Reason, res.FilePath, res.Duration.Seconds())
 }
 

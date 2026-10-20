@@ -24,8 +24,10 @@ import (
 	"time"
 
 	v1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/fake"
 	k8stesting "k8s.io/client-go/testing"
@@ -40,8 +42,8 @@ func TestPatchOpJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `[{"op":"test","path":"/metadata/labels/cloud.google.com~1trigger-gpu-diagnostics","value":""},` +
-		`{"op":"remove","path":"/metadata/labels/cloud.google.com~1trigger-gpu-diagnostics"}]`
+	want := `[{"op":"test","path":"/metadata/labels/cloud.google.com~1trigger-gpu-report","value":""},` +
+		`{"op":"remove","path":"/metadata/labels/cloud.google.com~1trigger-gpu-report"}]`
 	if string(b) != want {
 		t.Errorf("got %s\nwant %s", b, want)
 	}
@@ -100,9 +102,9 @@ func TestReconcile(t *testing.T) {
 	}{
 		{name: "no label", labels: map[string]string{}},
 		{name: "label false", labels: map[string]string{TriggerLabel: "false"}, wantLabel: true},
-		{name: "empty value", labels: map[string]string{TriggerLabel: ""}, annotations: map[string]string{}, wantRuns: 1, wantPatches: 1, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUDiagnosticsCompleted"},
-		{name: "no annotations map", labels: map[string]string{TriggerLabel: "x"}, wantRuns: 1, wantPatches: 1, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUDiagnosticsCompleted"},
-		{name: "existing annotations", labels: map[string]string{TriggerLabel: "x"}, annotations: map[string]string{"other": "v"}, wantRuns: 1, wantPatches: 1, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUDiagnosticsCompleted"},
+		{name: "empty value", labels: map[string]string{TriggerLabel: ""}, annotations: map[string]string{}, wantRuns: 1, wantPatches: 1, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUReportCompleted"},
+		{name: "no annotations map", labels: map[string]string{TriggerLabel: "x"}, wantRuns: 1, wantPatches: 1, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUReportCompleted"},
+		{name: "existing annotations", labels: map[string]string{TriggerLabel: "x"}, annotations: map[string]string{"other": "v"}, wantRuns: 1, wantPatches: 1, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUReportCompleted"},
 		{
 			name:        "manual after failed auto updates status annotation",
 			labels:      map[string]string{TriggerLabel: "true"},
@@ -111,9 +113,9 @@ func TestReconcile(t *testing.T) {
 			wantPatches: 1,
 			wantStatus:  StatusCompleted,
 			wantTrigger: TriggerManual,
-			wantEvent:   "Normal GPUDiagnosticsCompleted",
+			wantEvent:   "Normal GPUReportCompleted",
 		},
-		{name: "label changed mid-run", labels: map[string]string{TriggerLabel: "x"}, annotations: map[string]string{}, relabel: "y", wantRuns: 1, wantPatches: 3, wantLabel: true, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUDiagnosticsCompleted"},
+		{name: "label changed mid-run", labels: map[string]string{TriggerLabel: "x"}, annotations: map[string]string{}, relabel: "y", wantRuns: 1, wantPatches: 3, wantLabel: true, wantStatus: StatusCompleted, wantTrigger: TriggerManual, wantEvent: "Normal GPUReportCompleted"},
 		{
 			name:        "automatic collect",
 			annotations: map[string]string{StatusAnnotation: StatusCollect},
@@ -121,7 +123,7 @@ func TestReconcile(t *testing.T) {
 			wantPatches: 2, // ack (in-progress) + finish (completed + output)
 			wantStatus:  StatusCompleted,
 			wantTrigger: TriggerAutomatic,
-			wantEvent:   "Normal GPUDiagnosticsCompleted",
+			wantEvent:   "Normal GPUReportCompleted",
 		},
 		{
 			name:        "automatic collect failed timeout",
@@ -131,7 +133,7 @@ func TestReconcile(t *testing.T) {
 			wantPatches: 2,
 			wantStatus:  "failed: timeout",
 			wantTrigger: TriggerAutomatic,
-			wantEvent:   "Warning GPUDiagnosticsFailed",
+			wantEvent:   "Warning GPUReportFailed",
 		},
 		{
 			name:        "automatic disabled by label",
@@ -140,7 +142,7 @@ func TestReconcile(t *testing.T) {
 			wantRuns:    0,
 			wantPatches: 1,
 			wantStatus:  "failed: disabled",
-			wantEvent:   "Warning GPUDiagnosticsFailed",
+			wantEvent:   "Warning GPUReportFailed",
 		},
 		{
 			name:        "automatic disable label false",
@@ -150,7 +152,7 @@ func TestReconcile(t *testing.T) {
 			wantPatches: 2,
 			wantStatus:  StatusCompleted,
 			wantTrigger: TriggerAutomatic,
-			wantEvent:   "Normal GPUDiagnosticsCompleted",
+			wantEvent:   "Normal GPUReportCompleted",
 		},
 		{
 			name:        "coalesced automatic and manual",
@@ -161,7 +163,7 @@ func TestReconcile(t *testing.T) {
 			wantLabel:   false,
 			wantStatus:  StatusCompleted,
 			wantTrigger: TriggerAutomatic,
-			wantEvent:   "Normal GPUDiagnosticsCompleted",
+			wantEvent:   "Normal GPUReportCompleted",
 		},
 		{
 			name:        "coalesced automatic and manual with status changed mid-run removes label and writes output",
@@ -169,11 +171,11 @@ func TestReconcile(t *testing.T) {
 			annotations: map[string]string{StatusAnnotation: StatusCollect},
 			restatus:    StatusCollect,
 			wantRuns:    1,
-			wantPatches: 6, // ack + restatus + combined(fail) + label-remove(ok) + status+output(fail) + output-only(ok)
+			wantPatches: 4, // ack + restatus + combined(fail) + narrowed label-remove+output(ok)
 			wantLabel:   false,
 			wantStatus:  StatusCollect,
 			wantTrigger: TriggerAutomatic,
-			wantEvent:   "Normal GPUDiagnosticsCompleted",
+			wantEvent:   "Normal GPUReportCompleted",
 		},
 		{
 			name:        "coalesced automatic and manual with label changed mid-run updates status and output",
@@ -181,11 +183,11 @@ func TestReconcile(t *testing.T) {
 			annotations: map[string]string{StatusAnnotation: StatusCollect},
 			relabel:     "req2",
 			wantRuns:    1,
-			wantPatches: 5, // ack + relabel + combined(fail) + label-remove(fail) + status+output(ok)
+			wantPatches: 4, // ack + relabel + combined(fail) + narrowed status+output(ok)
 			wantLabel:   true,
 			wantStatus:  StatusCompleted,
 			wantTrigger: TriggerAutomatic,
-			wantEvent:   "Normal GPUDiagnosticsCompleted",
+			wantEvent:   "Normal GPUReportCompleted",
 		},
 		{
 			name:        "startup recovery marks in-progress interrupted",
@@ -193,7 +195,7 @@ func TestReconcile(t *testing.T) {
 			wantRuns:    0,
 			wantPatches: 1,
 			wantStatus:  "failed: interrupted",
-			wantEvent:   "Warning GPUDiagnosticsFailed",
+			wantEvent:   "Warning GPUReportFailed",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -325,7 +327,7 @@ func TestWorkqueueRetryOnTransientErrors(t *testing.T) {
 
 	select {
 	case ev := <-rec.Events:
-		if !strings.HasPrefix(ev, "Normal GPUDiagnosticsCompleted") {
+		if !strings.HasPrefix(ev, "Normal GPUReportCompleted") {
 			t.Fatalf("unexpected event: %s", ev)
 		}
 	case <-time.After(5 * time.Second):
@@ -348,7 +350,7 @@ func TestWorkqueueRetryOnTransientErrors(t *testing.T) {
 }
 
 // TestPendingRetryPreservesChangedStatusAnnotation verifies that if StatusAnnotation changes
-// mid-run (causing a CAS conflict) AND the fallback outputOnlyOps patch fails with a transient
+// mid-run (causing a CAS conflict) AND the narrowed outputOnlyOps patch fails with a transient
 // error, the subsequent workqueue retry only patches OutputAnnotation and does not overwrite the
 // externally modified StatusAnnotation.
 func TestPendingRetryPreservesChangedStatusAnnotation(t *testing.T) {
@@ -365,10 +367,9 @@ func TestPendingRetryPreservesChangedStatusAnnotation(t *testing.T) {
 		patchCalls++
 		// Patch 1: ack (collect -> in-progress)
 		// Patch 2: mid-run restatus hook (in-progress -> failed: abandoned)
-		// Patch 3: combined finishAnnotationOps (fails CAS on StatusAnnotation)
-		// Patch 4: retry finishAnnotationOps (fails CAS on StatusAnnotation)
-		// Patch 5: outputOnlyOps (inject transient error!)
-		if patchCalls == 5 {
+		// Patch 3: attempt 0 combined finishAnnotationOps (fails CAS on StatusAnnotation)
+		// Patch 4: attempt 1 narrowed outputOnlyOps (inject transient error!)
+		if patchCalls == 4 {
 			return true, nil, errors.New("transient apiserver error on output-only patch")
 		}
 		return false, nil, nil
@@ -409,6 +410,28 @@ func TestPendingRetryPreservesChangedStatusAnnotation(t *testing.T) {
 	}
 	if got.Annotations[OutputAnnotation] == "" {
 		t.Errorf("output annotation was not published on retry")
+	}
+}
+
+// TestNonConflictInvalidErrorNotSwallowed verifies that a 422 Invalid error when the guarded test
+// values on the Node have NOT changed is returned as an error rather than treated as a CAS conflict.
+func TestNonConflictInvalidErrorNotSwallowed(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "n1",
+			Annotations: map[string]string{StatusAnnotation: StatusCollect},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	cs.PrependReactor("patch", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, apierrors.NewInvalid(schema.GroupKind{Kind: "Node"}, "n1", nil)
+	})
+	c := NewController(cs, record.NewFakeRecorder(10), &fakeRunner{}, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err := c.reconcile(ctx, n); err == nil {
+		t.Fatal("expected non-conflict Invalid error to be returned, got nil")
 	}
 }
 

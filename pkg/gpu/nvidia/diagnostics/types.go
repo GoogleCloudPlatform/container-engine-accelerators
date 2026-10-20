@@ -26,13 +26,13 @@ import "time"
 const (
 	// TriggerLabel is a presence-based manual trigger. It is active unless its value is "false".
 	// The executor removes it after the collection finishes.
-	TriggerLabel = "cloud.google.com/trigger-gpu-diagnostics"
+	TriggerLabel = "cloud.google.com/trigger-gpu-report"
 	// DisableLabel disables automatic collections requested by the maintenance handler.
-	DisableLabel = "cloud.google.com/disable-gpu-diagnostics"
+	DisableLabel = "cloud.google.com/disable-gpu-report"
 	// StatusAnnotation carries the automatic handshake with the maintenance handler.
-	StatusAnnotation = "cloud.google.com/gpu-diagnostics-status"
+	StatusAnnotation = "cloud.google.com/gpu-report-status"
 	// OutputAnnotation holds the JSON-encoded Output of the most recent collection.
-	OutputAnnotation = "cloud.google.com/gpu-diagnostics-output"
+	OutputAnnotation = "cloud.google.com/gpu-report-output"
 )
 
 // Collection status values (used in StatusAnnotation and Output.Status).
