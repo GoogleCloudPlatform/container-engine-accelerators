@@ -27,10 +27,15 @@ RUN if [ "${TARGETARCH}" = "arm64" ] && [ "${BUILDARCH}" != "arm64" ]; then \
     fi && \
     GOTOOLCHAIN=local GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 CC=${CC} \
       go build cmd/nvidia_gpu/nvidia_gpu.go
-RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu
+# GPU bug-report executor: pure Go and statically linked, so it needs no cross-compiler.
+RUN GOTOOLCHAIN=local GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 \
+      go build -trimpath -ldflags="-s -w" -o gpu_bug_report ./cmd/gpu_bug_report
+RUN chmod a+x /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu \
+              /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_bug_report
 
 FROM gcr.io/distroless/base:latest
 COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/nvidia_gpu /usr/bin/nvidia-gpu-device-plugin
+COPY --from=builder /go/src/github.com/GoogleCloudPlatform/container-engine-accelerators/gpu_bug_report /usr/bin/gpu-bug-report
 CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr"]
 # Use the CMD below to make the device plugin expose prometheus endpoint with container level GPU metrics
 #CMD ["/usr/bin/nvidia-gpu-device-plugin", "-logtostderr", "-v=10", "--enable-container-gpu-metrics"]
