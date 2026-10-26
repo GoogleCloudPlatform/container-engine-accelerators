@@ -64,11 +64,10 @@ type Controller struct {
 	node     string
 	logf     func(format string, args ...any)
 
-	queue          workqueue.RateLimitingInterface
-	mu             sync.Mutex
-	latest         *v1.Node
-	startupChecked bool
-	pending        *pendingResult
+	queue   workqueue.RateLimitingInterface
+	mu      sync.Mutex
+	latest  *v1.Node
+	pending *pendingResult
 }
 
 // NewController returns a Controller for the named Node.
@@ -146,12 +145,16 @@ func (c *Controller) watchLoop(ctx context.Context) {
 		c.observe(n)
 		rv := n.ResourceVersion
 		for ctx.Err() == nil {
+			prevRV := rv
 			if rv, err = c.watchOnce(ctx, rv); err != nil {
 				if !apierrors.IsResourceExpired(err) && !apierrors.IsGone(err) && ctx.Err() == nil {
 					c.logf("watch node %s: %v", c.node, err)
 					sleepCtx(ctx, time.Second)
 				}
 				break // re-get
+			}
+			if rv == prevRV && ctx.Err() == nil {
+				sleepCtx(ctx, time.Second)
 			}
 		}
 	}
@@ -188,21 +191,21 @@ func (c *Controller) watchOnce(ctx context.Context, rv string) (string, error) {
 	return rv, ctx.Err()
 }
 
-// reconcile handles startup deadlock recovery, pending post-collection patch retries, the
+// reconcile handles pending post-collection patch retries, orphaned in-progress recovery, the
 // maintenance-handler handshake on StatusAnnotation, and the manual TriggerLabel.
 func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
-	if !c.startupChecked {
-		if err := c.recoverStartup(ctx, n); err != nil {
-			return err
-		}
-		c.startupChecked = true
-	}
-
 	if c.pending != nil {
 		if err := c.finishCollection(ctx, c.pending); err != nil {
 			return err
 		}
 		c.pending = nil
+	}
+
+	// Because reconcile runs on a single synchronous worker and c.pending is nil here, no
+	// collection is active in this process. Any "in-progress" status on the Node is orphaned
+	// (from a prior container crash or a lost ack response) and must be marked interrupted.
+	if err := c.recoverStartup(ctx, n); err != nil {
+		return err
 	}
 
 	_, snapshotManual := labelActive(n.Labels, TriggerLabel)
@@ -216,6 +219,9 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 	n, err := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
 	if err != nil {
 		c.logf("get node before collection: %v", err)
+		return err
+	}
+	if err := c.recoverStartup(ctx, n); err != nil {
 		return err
 	}
 	seenManual, wantManual := labelActive(n.Labels, TriggerLabel)
@@ -232,9 +238,17 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 				c.logf("patch disabled status: %v", err)
 				return err
 			}
-			if updated {
-				c.event(Result{Status: StatusFailed, Reason: ReasonDisabled})
+			if !updated {
+				if wantManual {
+					c.queue.Add(c.node)
+				}
+				return nil
 			}
+			c.event(Result{Status: StatusFailed, Reason: ReasonDisabled})
+			if n.Annotations == nil {
+				n.Annotations = map[string]string{}
+			}
+			n.Annotations[StatusAnnotation] = StatusFailed + ": " + ReasonDisabled
 			wantAuto = false
 			if !wantManual {
 				return nil
@@ -247,10 +261,10 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 				return err
 			}
 			if !acked {
-				wantAuto = false
-				if !wantManual {
-					return nil
+				if wantManual {
+					c.queue.Add(c.node)
 				}
+				return nil
 			}
 		}
 	}
@@ -283,7 +297,11 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 		expectedStatus:    expectedStatus,
 		noAnnotationsMap:  len(n.Annotations) == 0 && !wantAuto,
 	}
-	if err := c.finishCollection(ctx, p); err != nil {
+	// Use a bounded cleanup context so that if ctx was canceled by SIGTERM during collection,
+	// we still publish the terminal status ("failed: interrupted") before exiting.
+	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := c.finishCollection(finishCtx, p); err != nil {
 		c.pending = p
 		return err
 	}
@@ -303,7 +321,8 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 	outBytes, _ := json.Marshal(p.res.Output(p.trigger))
 	out := string(outBytes)
 
-	for attempt := 0; attempt < 2; attempt++ {
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
 		var ops []patchOp
 		if p.wantManual {
 			// Only remove the label if it still has the value we acted on. If the user re-set it
@@ -324,6 +343,7 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 			c.logf("patch node: %v", err)
 			return err
 		}
+		lastErr = err
 
 		// A JSON-Patch "test" op may have failed: fetch the latest Node and compare its current
 		// label and annotation values against our expected test values to identify which field
@@ -346,20 +366,23 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 				conflict = true
 			}
 		}
-		p.noAnnotationsMap = len(fresh.Annotations) == 0
+		if noMap := len(fresh.Annotations) == 0; noMap != p.noAnnotationsMap {
+			p.noAnnotationsMap = noMap
+			conflict = true
+		}
 		if !conflict {
 			c.logf("patch node: %v", err)
 			return err
 		}
 	}
 
-	c.event(p.res)
-	return nil
+	c.logf("patch node exhausted conflict retries: %v", lastErr)
+	return lastErr
 }
 
-// recoverStartup handles startup deadlock recovery: if a previous container crashed or OOMed while
-// StatusAnnotation was "in-progress", transition it to "failed: interrupted" on startup so the
-// maintenance handler does not wait for a dead collection.
+// recoverStartup handles deadlock recovery: if a previous container crashed/OOMed or a network blip
+// dropped an ack response while StatusAnnotation was "in-progress", transition it to
+// "failed: interrupted" so the maintenance handler does not wait for a dead collection.
 func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) error {
 	if n.Annotations[StatusAnnotation] != StatusInProgress {
 		return nil
@@ -372,7 +395,7 @@ func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) error {
 	if fresh.Annotations[StatusAnnotation] != StatusInProgress {
 		return nil
 	}
-	c.logf("found stale %s=%q at startup; marking interrupted", StatusAnnotation, StatusInProgress)
+	c.logf("found stale %s=%q; marking interrupted", StatusAnnotation, StatusInProgress)
 	updated, err := c.casStatusAnnotation(ctx, StatusInProgress, StatusFailed+": "+ReasonInterrupted)
 	if err != nil {
 		c.logf("patch interrupted status: %v", err)
@@ -417,8 +440,12 @@ func isTestFailed(err error) bool {
 	if apierrors.IsInvalid(err) || apierrors.IsConflict(err) {
 		return true
 	}
-	// client-go's fake clientset returns raw jsonpatch test errors without wrapping in StatusError.
-	return err != nil && strings.Contains(err.Error(), "testing value ")
+	if err == nil {
+		return false
+	}
+	// client-go's fake clientset returns raw jsonpatch errors without wrapping in StatusError.
+	msg := err.Error()
+	return strings.Contains(msg, "testing value ") || strings.Contains(msg, "operation does not apply")
 }
 
 // patchOp is one RFC 6902 JSON-Patch operation.
@@ -474,16 +501,20 @@ func finishAnnotationOps(noAnnotationsMap, wantStatus, hasExpectedStatus bool, e
 		}
 	}
 	if noAnnotationsMap {
-		return []patchOp{{
-			Op:   "add",
-			Path: "/metadata/annotations",
-			Value: map[string]string{
-				StatusAnnotation: status,
-				OutputAnnotation: output,
+		return []patchOp{
+			{Op: "test", Path: "/metadata/annotations", Value: nil},
+			{
+				Op:   "add",
+				Path: "/metadata/annotations",
+				Value: map[string]string{
+					StatusAnnotation: status,
+					OutputAnnotation: output,
+				},
 			},
-		}}
+		}
 	}
 	return []patchOp{
+		{Op: "test", Path: annotationPath(StatusAnnotation), Value: nil},
 		{Op: "add", Path: annotationPath(StatusAnnotation), Value: status},
 		{Op: "add", Path: annotationPath(OutputAnnotation), Value: output},
 	}
@@ -491,7 +522,10 @@ func finishAnnotationOps(noAnnotationsMap, wantStatus, hasExpectedStatus bool, e
 
 func outputOnlyOps(noAnnotationsMap bool, output string) []patchOp {
 	if noAnnotationsMap {
-		return []patchOp{{Op: "add", Path: "/metadata/annotations", Value: map[string]string{OutputAnnotation: output}}}
+		return []patchOp{
+			{Op: "test", Path: "/metadata/annotations", Value: nil},
+			{Op: "add", Path: "/metadata/annotations", Value: map[string]string{OutputAnnotation: output}},
+		}
 	}
 	return []patchOp{{Op: "add", Path: annotationPath(OutputAnnotation), Value: output}}
 }

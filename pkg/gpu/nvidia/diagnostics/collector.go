@@ -53,16 +53,18 @@ const (
 // When $JOURNAL_SINCE is set, a small journalctl wrapper is placed in $TMPDIR at the front of
 // PATH so nvidia-bug-report.sh's unbounded `journalctl -b` scans are capped to recent logs.
 const launcher = `for p in "$@"; do
-  if [ -r "$p" ]; then
+  if [ -f "$p" ] && [ -r "$p" ]; then
     d="${p%/*}"
     export PATH="$d:/usr/sbin:/usr/bin:/sbin:/bin" LD_LIBRARY_PATH="${d%/*}/lib64"
     cd "$TMPDIR" || exit 126
     if [ -n "$JOURNAL_SINCE" ]; then
       j=$(command -v journalctl 2>/dev/null)
-      if [ -n "$j" ] && [ -x "$j" ]; then
-        printf '#!/bin/sh\nexec "%s" --since="%s" "$@"\n' "$j" "$JOURNAL_SINCE" > "$TMPDIR/journalctl"
-        chmod 755 "$TMPDIR/journalctl"
-        export PATH="$TMPDIR:$PATH"
+      if [ -n "$j" ] && [ -f "$j" ] && [ -x "$j" ]; then
+        if printf '#!/bin/sh\nexec "%s" --since="%s" "$@"\n' "$j" "$JOURNAL_SINCE" > "$TMPDIR/journalctl" && chmod 755 "$TMPDIR/journalctl"; then
+          export PATH="$TMPDIR:$PATH"
+        else
+          rm -f "$TMPDIR/journalctl"
+        fi
       fi
     fi
     sh=/bin/bash
@@ -150,7 +152,10 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 
 	workHost := filepath.Join(c.cfg.ReportsDir, ".work")
 	workDir := c.containerPath(workHost)
-	_ = os.RemoveAll(workDir)
+	if err := os.RemoveAll(workDir); err != nil {
+		res.Reason = fmt.Sprintf("%s: clean work: %v", ReasonInternal, err)
+		return res
+	}
 	if err := os.MkdirAll(workDir, 0o700); err != nil {
 		res.Reason = fmt.Sprintf("%s: mkdir work: %v", ReasonInternal, err)
 		return res
@@ -205,7 +210,8 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	pgid := cmd.Process.Pid
 	runErr := cmd.Wait()
 	res.Duration = c.now().Sub(start)
-	timedOut := errors.Is(runCtx.Err(), context.DeadlineExceeded)
+	parentCanceled := errors.Is(ctx.Err(), context.Canceled)
+	timedOut := !parentCanceled && errors.Is(runCtx.Err(), context.DeadlineExceeded)
 
 	// The script may have left children behind (e.g. a hung nvidia-smi); kill the whole group.
 	_ = syscall.Kill(-pgid, syscall.SIGKILL)
@@ -218,11 +224,8 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	if errors.As(runErr, &ee) {
 		exitCode = ee.ExitCode()
 	}
-	if exitCode == exitScriptNotFound && !timedOut {
-		res.Reason = ReasonScriptNotFound
-		return res
-	}
 
+	var renameErr error
 	for _, ext := range []string{".gz", ""} {
 		src := c.containerPath(stageOutHost + ext)
 		if _, err := os.Stat(src); err != nil {
@@ -231,6 +234,7 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 		name := outHost + ext
 		path := c.containerPath(name)
 		if err := os.Rename(src, path); err != nil {
+			renameErr = err
 			fmt.Fprintf(c.cfg.Log, "move report %s -> %s: %v\n", src, path, err)
 			break
 		}
@@ -250,11 +254,17 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	c.rotate(dir)
 
 	switch {
-	case timedOut:
-		res.Reason = ReasonTimeout
 	case res.Complete:
 		// The script's exit code is unreliable (sections fail on missing tools); trust the marker.
 		res.Status = StatusCompleted
+	case parentCanceled:
+		res.Reason = ReasonInterrupted
+	case timedOut:
+		res.Reason = ReasonTimeout
+	case renameErr != nil:
+		res.Reason = fmt.Sprintf("%s: rename: %v", ReasonInternal, renameErr)
+	case res.FilePath == "" && exitCode == exitScriptNotFound:
+		res.Reason = ReasonScriptNotFound
 	case res.FilePath == "":
 		res.Reason = fmt.Sprintf("exit-%d", exitCode)
 		if runErr != nil && ee == nil {
@@ -262,9 +272,6 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 		}
 	default:
 		res.Reason = fmt.Sprintf("exit-%d", exitCode)
-	}
-	if c.busy && res.Status != StatusCompleted {
-		res.Reason = ReasonBusy
 	}
 	return res
 }

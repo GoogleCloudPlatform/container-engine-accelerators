@@ -249,3 +249,33 @@ echo "End of NVIDIA bug report log file." | gzip -c > "$2.gz"
 		t.Errorf("journalctl args = %q, want %q", string(got), want)
 	}
 }
+
+func TestCollectorParentContextCanceled(t *testing.T) {
+	binDir := t.TempDir()
+	script := writeScript(t, binDir, `
+sleep 60
+`)
+	c, _ := newTestCollector(t, script, 60*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		cancel()
+	}()
+	res := c.Run(ctx, TriggerAutomatic)
+	if res.Status != StatusFailed || res.Reason != ReasonInterrupted {
+		t.Fatalf("got status=%q reason=%q, want failed/%s", res.Status, res.Reason, ReasonInterrupted)
+	}
+}
+
+func TestCollectorExit127WithCompleteReport(t *testing.T) {
+	binDir := t.TempDir()
+	script := writeScript(t, binDir, `
+echo "End of NVIDIA bug report log file." | gzip -c > "$2.gz"
+exit 127
+`)
+	c, _ := newTestCollector(t, script, 10*time.Second)
+	res := c.Run(context.Background(), TriggerManual)
+	if res.Status != StatusCompleted || !res.Complete {
+		t.Fatalf("got %+v, want completed despite exit 127", res)
+	}
+}

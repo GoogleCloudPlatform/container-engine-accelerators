@@ -435,6 +435,159 @@ func TestNonConflictInvalidErrorNotSwallowed(t *testing.T) {
 	}
 }
 
+// TestSequentialFinishConflictsStillPublishOutput verifies that if TriggerLabel conflicts on
+// attempt 0 and StatusAnnotation subsequently conflicts on attempt 1, finishCollection continues
+// to attempt 2 and publishes OutputAnnotation via outputOnlyOps rather than returning nil without
+// patching the Node.
+func TestSequentialFinishConflictsStillPublishOutput(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "n1",
+			Labels:      map[string]string{TriggerLabel: "v1"},
+			Annotations: map[string]string{StatusAnnotation: StatusCollect},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	var getCalls int
+	cs.PrependReactor("get", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		getCalls++
+		// Get 1: reconcile pre-collection Get
+		// Get 2: finishCollection attempt 0 conflict check (after TriggerLabel changed to "v2").
+		// Right after Get 2 returns (so attempt 0 only saw TriggerLabel conflict), mutate
+		// StatusAnnotation before attempt 1's Patch executes!
+		return false, nil, nil
+	})
+	var patchCalls int
+	cs.PrependReactor("patch", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		patchCalls++
+		// Patch 1: ack (collect -> in-progress)
+		// Patch 2: mid-run relabel hook (TriggerLabel: v1 -> v2)
+		// Patch 3: finishCollection attempt 0 (fails test on TriggerLabel)
+		// Patch 4: finishCollection attempt 1 -> mutate StatusAnnotation right before it runs so
+		//          attempt 1 fails test on StatusAnnotation!
+		if patchCalls == 4 {
+			n, err := cs.Tracker().Get(v1.SchemeGroupVersion.WithResource("nodes"), "", "n1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			nodeObj := n.(*v1.Node).DeepCopy()
+			nodeObj.Annotations[StatusAnnotation] = "failed: abandoned"
+			if err := cs.Tracker().Update(v1.SchemeGroupVersion.WithResource("nodes"), nodeObj, ""); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return false, nil, nil
+	})
+
+	rec := record.NewFakeRecorder(10)
+	r := &fakeRunner{
+		during: func() {
+			p := `[{"op":"replace","path":"` + labelPath(TriggerLabel) + `","value":"v2"}]`
+			if _, err := cs.CoreV1().Nodes().Patch(ctx, "n1", types.JSONPatchType, []byte(p), metav1.PatchOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	c := NewController(cs, rec, r, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err := c.reconcile(ctx, n); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	got, err := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Labels[TriggerLabel] != "v2" {
+		t.Errorf("trigger label = %q, want %q", got.Labels[TriggerLabel], "v2")
+	}
+	if got.Annotations[StatusAnnotation] != "failed: abandoned" {
+		t.Errorf("status annotation = %q, want %q", got.Annotations[StatusAnnotation], "failed: abandoned")
+	}
+	if got.Annotations[OutputAnnotation] == "" {
+		t.Errorf("output annotation was not published after sequential conflicts")
+	}
+}
+
+// TestMidRunAnnotationAddedWhenInitiallyEmpty verifies that if a manual run starts on a Node with
+// no annotations (noAnnotationsMap=true) and annotations are added mid-run, finishCollection does
+// not overwrite the newly created /metadata/annotations map or clobber StatusAnnotation.
+func TestMidRunAnnotationAddedWhenInitiallyEmpty(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "n1",
+			Labels: map[string]string{TriggerLabel: "true"},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	rec := record.NewFakeRecorder(10)
+	r := &fakeRunner{
+		during: func() {
+			p := `[{"op":"add","path":"/metadata/annotations","value":{"unrelated":"keep-me","` + StatusAnnotation + `":"` + StatusCollect + `"}}]`
+			if _, err := cs.CoreV1().Nodes().Patch(ctx, "n1", types.JSONPatchType, []byte(p), metav1.PatchOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		},
+	}
+	c := NewController(cs, rec, r, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err := c.reconcile(ctx, n); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	got, err := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Annotations["unrelated"] != "keep-me" {
+		t.Errorf("unrelated annotation = %q, want %q", got.Annotations["unrelated"], "keep-me")
+	}
+	if got.Annotations[StatusAnnotation] != StatusCollect {
+		t.Errorf("status annotation = %q, want %q (must not clobber mid-run collect)", got.Annotations[StatusAnnotation], StatusCollect)
+	}
+	if got.Annotations[OutputAnnotation] == "" {
+		t.Errorf("output annotation was not published")
+	}
+}
+
+// TestCoalescedDisabledAutoAndManualUpdatesStatus verifies that when DisableLabel is active while
+// both StatusAnnotation=collect and TriggerLabel are present, the auto request is rejected as
+// "failed: disabled" and the manual run subsequently updates StatusAnnotation to "completed".
+func TestCoalescedDisabledAutoAndManualUpdatesStatus(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "n1",
+			Labels:      map[string]string{TriggerLabel: "true", DisableLabel: "true"},
+			Annotations: map[string]string{StatusAnnotation: StatusCollect},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	rec := record.NewFakeRecorder(10)
+	r := &fakeRunner{}
+	c := NewController(cs, rec, r, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err := c.reconcile(ctx, n); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	got, err := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Annotations[StatusAnnotation] != StatusCompleted {
+		t.Errorf("status annotation = %q, want %q", got.Annotations[StatusAnnotation], StatusCompleted)
+	}
+	if _, ok := got.Labels[TriggerLabel]; ok {
+		t.Errorf("trigger label still present after manual completion")
+	}
+	if got.Annotations[OutputAnnotation] == "" {
+		t.Errorf("output annotation was not published")
+	}
+}
+
 func hasWatch(cs *fake.Clientset) bool {
 	for _, a := range cs.Actions() {
 		if _, ok := a.(k8stesting.WatchAction); ok {
