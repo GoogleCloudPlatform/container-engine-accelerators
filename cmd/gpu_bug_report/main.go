@@ -80,8 +80,10 @@ func main() {
 		log.Fatalf("kube client: %v", err)
 	}
 	broadcaster := record.NewBroadcaster()
-	defer broadcaster.Shutdown()
-	broadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: client.CoreV1().Events("")})
+	sink := &trackingSink{EventSink: &typedcorev1.EventSinkImpl{Interface: client.CoreV1().Events("")}}
+	// Flush pending events on exit, so a run interrupted by SIGTERM still reports GPUReportFailed.
+	defer shutdownEvents(broadcaster, sink, 500*time.Millisecond, 5*time.Second)
+	broadcaster.StartRecordingToSink(sink)
 	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "gpu-bug-report", Host: *nodeName})
 
 	collector := diagnostics.NewCollector(diagnostics.CollectorConfig{
