@@ -588,6 +588,101 @@ func TestCoalescedDisabledAutoAndManualUpdatesStatus(t *testing.T) {
 	}
 }
 
+// TestStartupRecoveryWithManualTriggerUpdatesStatusToCompleted verifies that when a Node starts
+// with both a stale StatusAnnotation="in-progress" and TriggerLabel active, recoverStartup marks
+// StatusAnnotation="failed: interrupted" and updates n in-memory so the manual collection in the
+// same reconcile transitions StatusAnnotation to "completed" without a false CAS conflict or a
+// duplicate Get.
+func TestStartupRecoveryWithManualTriggerUpdatesStatusToCompleted(t *testing.T) {
+	ctx := context.Background()
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "n1",
+			Labels:      map[string]string{TriggerLabel: "true"},
+			Annotations: map[string]string{StatusAnnotation: StatusInProgress},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	rec := record.NewFakeRecorder(10)
+	r := &fakeRunner{}
+	c := NewController(cs, rec, r, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	cs.ClearActions()
+
+	if err := c.reconcile(ctx, n); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	var gets int
+	for _, a := range cs.Actions() {
+		if a.GetVerb() == "get" && a.GetResource().Resource == "nodes" {
+			gets++
+		}
+	}
+	if gets != 1 {
+		t.Errorf("node GET count during reconcile = %d, want 1", gets)
+	}
+	got, err := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Annotations[StatusAnnotation] != StatusCompleted {
+		t.Errorf("status annotation = %q, want %q", got.Annotations[StatusAnnotation], StatusCompleted)
+	}
+	if _, ok := got.Labels[TriggerLabel]; ok {
+		t.Errorf("trigger label still present after manual completion")
+	}
+	if got.Annotations[OutputAnnotation] == "" {
+		t.Errorf("output annotation was not published")
+	}
+}
+
+// TestSIGTERMInterruptedRunPreservesManualTriggerLabel verifies that if ctx is canceled by SIGTERM
+// during a coalesced or manual run (producing ReasonInterrupted), finishCollection still transitions
+// StatusAnnotation to "failed: interrupted" via the cleanup context while leaving TriggerLabel on
+// the Node so the replacement pod fulfills the manual request.
+func TestSIGTERMInterruptedRunPreservesManualTriggerLabel(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        "n1",
+			Labels:      map[string]string{TriggerLabel: "true"},
+			Annotations: map[string]string{StatusAnnotation: StatusCollect},
+		},
+	}
+	cs := fake.NewSimpleClientset(node)
+	rec := record.NewFakeRecorder(10)
+	res := Result{
+		Status:   StatusFailed,
+		Reason:   ReasonInterrupted,
+		Duration: time.Second,
+		Start:    time.Date(2026, 9, 30, 12, 0, 0, 0, time.UTC),
+	}
+	r := &fakeRunner{
+		result: &res,
+		during: func() {
+			cancel()
+		},
+	}
+	c := NewController(cs, rec, r, "n1")
+	c.logf = t.Logf
+	n, _ := cs.CoreV1().Nodes().Get(ctx, "n1", metav1.GetOptions{})
+	if err := c.reconcile(ctx, n); err != nil {
+		t.Fatalf("reconcile failed: %v", err)
+	}
+	got, err := cs.CoreV1().Nodes().Get(context.Background(), "n1", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantStatus := StatusFailed + ": " + ReasonInterrupted
+	if got.Annotations[StatusAnnotation] != wantStatus {
+		t.Errorf("status annotation = %q, want %q", got.Annotations[StatusAnnotation], wantStatus)
+	}
+	if got.Labels[TriggerLabel] != "true" {
+		t.Errorf("trigger label = %q, want %q (must be preserved on SIGTERM)", got.Labels[TriggerLabel], "true")
+	}
+}
+
 func hasWatch(cs *fake.Clientset) bool {
 	for _, a := range cs.Actions() {
 		if _, ok := a.(k8stesting.WatchAction); ok {

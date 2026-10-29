@@ -204,7 +204,8 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 	// Because reconcile runs on a single synchronous worker and c.pending is nil here, no
 	// collection is active in this process. Any "in-progress" status on the Node is orphaned
 	// (from a prior container crash or a lost ack response) and must be marked interrupted.
-	if err := c.recoverStartup(ctx, n); err != nil {
+	n, fresh, err := c.recoverStartup(ctx, n, false)
+	if err != nil {
 		return err
 	}
 
@@ -216,13 +217,20 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 
 	// The snapshot may predate our own last patch (events queued during a run), so confirm
 	// against a fresh read before starting a multi-second collection.
-	n, err := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
-	if err != nil {
-		c.logf("get node before collection: %v", err)
-		return err
-	}
-	if err := c.recoverStartup(ctx, n); err != nil {
-		return err
+	if !fresh {
+		n, err = c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
+		if err != nil {
+			c.logf("get node before collection: %v", err)
+			return err
+		}
+		n, fresh, err = c.recoverStartup(ctx, n, true)
+		if err != nil {
+			return err
+		}
+		if !fresh {
+			c.queue.Add(c.node)
+			return nil
+		}
 	}
 	seenManual, wantManual := labelActive(n.Labels, TriggerLabel)
 	wantAuto := n.Annotations[StatusAnnotation] == StatusCollect
@@ -288,19 +296,25 @@ func (c *Controller) reconcile(ctx context.Context, n *v1.Node) error {
 		trigger, res.Status, res.Reason, res.FilePath, res.Size, res.Complete, res.Duration.Round(time.Millisecond))
 
 	p := &pendingResult{
-		res:               res,
-		trigger:           trigger,
-		wantManual:        wantManual,
+		res:     res,
+		trigger: trigger,
+		// Keep TriggerLabel on the Node if the run was aborted by SIGTERM so the replacement pod
+		// fulfills the manual request.
+		wantManual:        wantManual && res.Reason != ReasonInterrupted,
 		seenManual:        seenManual,
 		wantStatus:        true,
 		hasExpectedStatus: hasExpectedStatus,
 		expectedStatus:    expectedStatus,
 		noAnnotationsMap:  len(n.Annotations) == 0 && !wantAuto,
 	}
-	// Use a bounded cleanup context so that if ctx was canceled by SIGTERM during collection,
-	// we still publish the terminal status ("failed: interrupted") before exiting.
-	finishCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
-	defer cancel()
+	// If ctx was canceled by SIGTERM during collection, use a short cleanup context so we still
+	// publish the terminal status ("failed: interrupted") before exiting.
+	finishCtx := ctx
+	if finishCtx.Err() != nil {
+		var cancel context.CancelFunc
+		finishCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+	}
 	if err := c.finishCollection(finishCtx, p); err != nil {
 		c.pending = p
 		return err
@@ -383,28 +397,40 @@ func (c *Controller) finishCollection(ctx context.Context, p *pendingResult) err
 // recoverStartup handles deadlock recovery: if a previous container crashed/OOMed or a network blip
 // dropped an ack response while StatusAnnotation was "in-progress", transition it to
 // "failed: interrupted" so the maintenance handler does not wait for a dead collection.
-func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node) error {
+// When isFresh is false, n is a cached watch snapshot and recoverStartup fetches the latest Node
+// before patching; when isFresh is true, n was just fetched by the caller. Returns the latest Node
+// (with StatusAnnotation updated in-memory if transitioned) and whether n reflects a fresh read.
+func (c *Controller) recoverStartup(ctx context.Context, n *v1.Node, isFresh bool) (*v1.Node, bool, error) {
 	if n.Annotations[StatusAnnotation] != StatusInProgress {
-		return nil
+		return n, isFresh, nil
 	}
-	fresh, err := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
-	if err != nil {
-		c.logf("get node for startup recovery: %v", err)
-		return err
-	}
-	if fresh.Annotations[StatusAnnotation] != StatusInProgress {
-		return nil
+	if !isFresh {
+		fresh, err := c.client.CoreV1().Nodes().Get(ctx, c.node, metav1.GetOptions{})
+		if err != nil {
+			c.logf("get node for startup recovery: %v", err)
+			return nil, false, err
+		}
+		n = fresh
+		isFresh = true
+		if n.Annotations[StatusAnnotation] != StatusInProgress {
+			return n, true, nil
+		}
 	}
 	c.logf("found stale %s=%q; marking interrupted", StatusAnnotation, StatusInProgress)
 	updated, err := c.casStatusAnnotation(ctx, StatusInProgress, StatusFailed+": "+ReasonInterrupted)
 	if err != nil {
 		c.logf("patch interrupted status: %v", err)
-		return err
+		return nil, false, err
 	}
 	if updated {
 		c.event(Result{Status: StatusFailed, Reason: ReasonInterrupted})
+		if n.Annotations == nil {
+			n.Annotations = map[string]string{}
+		}
+		n.Annotations[StatusAnnotation] = StatusFailed + ": " + ReasonInterrupted
+		return n, isFresh, nil
 	}
-	return nil
+	return n, false, nil
 }
 
 // casStatusAnnotation atomically transitions StatusAnnotation from expected to next using an
