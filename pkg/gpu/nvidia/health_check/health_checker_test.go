@@ -935,6 +935,13 @@ func TestMIGSupportModernAndLegacyUUIDs(t *testing.T) {
 	}
 	defer hc.Stop()
 
+	if got := atomic.LoadInt32(&physGPU0.registerCount); got != 1 {
+		t.Fatalf("expected physical GPU 0 to be registered once for 2 MIG slices, got %d registrations", got)
+	}
+	if got := atomic.LoadInt32(&physGPU1.registerCount); got != 1 {
+		t.Fatalf("expected physical GPU 1 to be registered once, got %d registrations", got)
+	}
+
 	// Emit an XID 79 event on physical GPU 0 targeting GI=2, CI=0 (modern MIG UUID).
 	fakeNVML.eventSets[0].events <- nvmlEvent{
 		EventType:         nvml.EventTypeXidCriticalError,
@@ -989,5 +996,69 @@ func TestMIGSupportModernAndLegacyUUIDs(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatalf("timed out waiting for legacy MIG K8s event")
+	}
+}
+
+func TestStopUnderHealthChannelBackpressure(t *testing.T) {
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
+	devices := map[string]pluginapi.Device{
+		"nvidia0": {ID: "nvidia0", Health: pluginapi.Healthy},
+	}
+	// Unbuffered channel with no consumer reading from it, so catchError blocks on hc.health <- d.
+	unbufferedHealthCh := make(chan pluginapi.Device)
+
+	hc := NewGPUHealthChecker(devices, unbufferedHealthCh, []int{79}, fakeClient)
+	defer hc.Stop()
+	hc.nodeName = "test-node"
+	hc.eventWaitTimeoutMs = 5
+	fakeRecorder := record.NewFakeRecorder(10)
+	hc.recorder = fakeRecorder
+
+	gpu0 := &mockDevice{
+		uuid:       "GPU-0000",
+		minor:      0,
+		migModeRet: nvml.ERROR_NOT_SUPPORTED,
+	}
+	fakeNVML := &mockNVML{
+		devices: []nvmlDevice{gpu0},
+	}
+	hc.nvml = fakeNVML
+
+	if err := hc.Start(); err != nil {
+		t.Fatalf("Start() failed: %v", err)
+	}
+
+	// Emit a critical XID event. Wait until recordXIDEvent has fired so we know
+	// listenToEvents is inside catchError and blocked on unbufferedHealthCh.
+	fakeNVML.eventSets[0].events <- nvmlEvent{
+		EventType:         nvml.EventTypeXidCriticalError,
+		EventData:         79,
+		DeviceUUID:        "GPU-0000",
+		GpuInstanceID:     noInstanceID,
+		ComputeInstanceID: noInstanceID,
+	}
+
+	select {
+	case <-fakeRecorder.Events:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for catchError to record XID event")
+	}
+
+	stopDone := make(chan struct{})
+	go func() {
+		hc.Stop()
+		close(stopDone)
+	}()
+
+	select {
+	case <-stopDone:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("Stop() deadlocked while catchError was blocked on full hc.health channel")
+	}
+
+	if got := atomic.LoadInt32(&fakeNVML.eventSets[0].freeCount); got != 1 {
+		t.Fatalf("expected eventSet.Free() called once, got %d", got)
 	}
 }

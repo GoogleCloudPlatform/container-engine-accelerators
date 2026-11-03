@@ -442,6 +442,7 @@ func (hc *GPUHealthChecker) Start() error {
 	}
 
 	gd := GPUDevice{nvml: provider}
+	registeredPhys := make(map[string]bool)
 	for name, d := range hc.nvmlDevices {
 		uuid, ret := d.GetUUID()
 		if ret != nvml.SUCCESS {
@@ -466,6 +467,11 @@ func (hc *GPUHealthChecker) Start() error {
 			return fmt.Errorf("physical GPU %s not found for device %s", gpu, name)
 		}
 
+		if registeredPhys[gpu] {
+			glog.Infof("Physical GPU %s already registered for eventSet (device %s, UUID: %s)", gpu, name, uuid)
+			continue
+		}
+
 		glog.Infof("Registering device %s (physical GPU %s). UUID: %s", name, gpu, uuid)
 		ret = physDevice.RegisterEvents(nvml.EventTypeXidCriticalError, eventSet)
 		if ret != nvml.SUCCESS {
@@ -479,6 +485,7 @@ func (hc *GPUHealthChecker) Start() error {
 			hc.nvmlDevices = make(map[string]nvmlDevice)
 			return fmt.Errorf("failed to register device %s for NVML eventSet: %v", name, nvmlErrorString(ret))
 		}
+		registeredPhys[gpu] = true
 	}
 
 	stopCh := make(chan struct{})
@@ -604,7 +611,7 @@ func getMIGDeviceInfo(migDevice nvmlDevice) (string, uint32, uint32, error) {
 }
 
 func resolveMigDeviceInfo(d nvmlDevice, uuid string, cd callDevice) (string, uint32, uint32, error) {
-	if d != nil {
+	if d != nil && strings.HasPrefix(uuid, "MIG-") {
 		if gpu, gi, ci, err := getMIGDeviceInfo(d); err == nil {
 			return gpu, gi, ci, nil
 		}
@@ -633,6 +640,9 @@ func parseMigDeviceUUIDHelper(UUID string) (string, uint32, uint32, error) {
 }
 
 func (gd *GPUDevice) parseMigDeviceUUID(UUID string) (string, uint32, uint32, error) {
+	if !strings.HasPrefix(UUID, "MIG-") {
+		return parseMigDeviceUUIDHelper(UUID)
+	}
 	provider := gd.nvml
 	if provider == nil {
 		provider = realNVML{}
@@ -831,7 +841,11 @@ func (hc *GPUHealthChecker) catchError(e nvmlEvent, cd callDevice) {
 		for id, d := range hc.devices {
 			d.Health = pluginapi.Unhealthy
 			hc.devices[id] = d
-			hc.health <- d
+			select {
+			case hc.health <- d:
+			case <-hc.stop:
+				return
+			}
 		}
 		return
 	}
@@ -860,7 +874,11 @@ func (hc *GPUHealthChecker) catchError(e nvmlEvent, cd callDevice) {
 			glog.Errorf("XidCriticalError: Xid=%d on Device=%s, uuid=%s, the device will go unhealthy.", e.EventData, d.ID, uuid)
 			d.Health = pluginapi.Unhealthy
 			hc.devices[d.ID] = d
-			hc.health <- d
+			select {
+			case hc.health <- d:
+			case <-hc.stop:
+				return
+			}
 			founderrordevice = true
 		}
 	}
