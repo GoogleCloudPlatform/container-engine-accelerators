@@ -18,6 +18,9 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,22 +35,169 @@ import (
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
+type mockEventSet struct {
+	events    chan nvmlEvent
+	freeCount int32
+	freeRet   nvml.Return
+}
+
+func newMockEventSet(buf int) *mockEventSet {
+	return &mockEventSet{
+		events:  make(chan nvmlEvent, buf),
+		freeRet: nvml.SUCCESS,
+	}
+}
+
+func (m *mockEventSet) Wait(timeoutMs uint32) (nvmlEvent, nvml.Return) {
+	select {
+	case e, ok := <-m.events:
+		if !ok {
+			return nvmlEvent{}, nvml.ERROR_TIMEOUT
+		}
+		return e, nvml.SUCCESS
+	case <-time.After(time.Duration(timeoutMs) * time.Millisecond):
+		return nvmlEvent{}, nvml.ERROR_TIMEOUT
+	}
+}
+
+func (m *mockEventSet) Free() nvml.Return {
+	atomic.AddInt32(&m.freeCount, 1)
+	return m.freeRet
+}
+
 type mockDevice struct {
-	nvmlDevice // Embed our local interface!
-	uuid       string
+	uuid           string
+	uuidRet        nvml.Return
+	minor          int
+	minorRet       nvml.Return
+	migCurrentMode int
+	migPendingMode int
+	migModeRet     nvml.Return
+	maxMigs        int
+	maxMigsRet     nvml.Return
+	migByIndex     map[int]nvmlDevice
+	migByIndexRet  map[int]nvml.Return
+	parent         nvmlDevice
+	parentRet      nvml.Return
+	gi             int
+	giRet          nvml.Return
+	ci             int
+	ciRet          nvml.Return
+	registerRet    nvml.Return
+	registerCount  int32
 }
 
 func (m *mockDevice) GetUUID() (string, nvml.Return) {
-	return m.uuid, nvml.SUCCESS
+	return m.uuid, m.uuidRet
 }
 
-func pointer[T any](s T) *T {
-	return &s
+func (m *mockDevice) GetMinorNumber() (int, nvml.Return) {
+	return m.minor, m.minorRet
+}
+
+func (m *mockDevice) GetMigMode() (int, int, nvml.Return) {
+	return m.migCurrentMode, m.migPendingMode, m.migModeRet
+}
+
+func (m *mockDevice) GetMaxMigDeviceCount() (int, nvml.Return) {
+	return m.maxMigs, m.maxMigsRet
+}
+
+func (m *mockDevice) GetMigDeviceHandleByIndex(index int) (nvmlDevice, nvml.Return) {
+	if m.migByIndexRet != nil {
+		if ret, ok := m.migByIndexRet[index]; ok && ret != nvml.SUCCESS {
+			return nil, ret
+		}
+	}
+	if m.migByIndex != nil {
+		if dev, ok := m.migByIndex[index]; ok {
+			return dev, nvml.SUCCESS
+		}
+	}
+	return nil, nvml.ERROR_NOT_FOUND
+}
+
+func (m *mockDevice) GetDeviceHandleFromMigDeviceHandle() (nvmlDevice, nvml.Return) {
+	if m.parent == nil {
+		if m.parentRet != nvml.SUCCESS {
+			return nil, m.parentRet
+		}
+		return nil, nvml.ERROR_INVALID_ARGUMENT
+	}
+	return m.parent, m.parentRet
+}
+
+func (m *mockDevice) GetGpuInstanceId() (int, nvml.Return) {
+	return m.gi, m.giRet
+}
+
+func (m *mockDevice) GetComputeInstanceId() (int, nvml.Return) {
+	return m.ci, m.ciRet
+}
+
+func (m *mockDevice) RegisterEvents(eventTypes uint64, set nvmlEventSet) nvml.Return {
+	atomic.AddInt32(&m.registerCount, 1)
+	return m.registerRet
+}
+
+type mockNVML struct {
+	mu             sync.Mutex
+	devices        []nvmlDevice
+	byUUID         map[string]nvmlDevice
+	countRet       nvml.Return
+	handleRet      map[int]nvml.Return
+	eventSets      []*mockEventSet
+	eventSetCreate func() (nvmlEventSet, nvml.Return)
+}
+
+func (m *mockNVML) DeviceGetCount() (int, nvml.Return) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.countRet != nvml.SUCCESS {
+		return 0, m.countRet
+	}
+	return len(m.devices), nvml.SUCCESS
+}
+
+func (m *mockNVML) DeviceGetHandleByIndex(index int) (nvmlDevice, nvml.Return) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.handleRet != nil {
+		if ret, ok := m.handleRet[index]; ok && ret != nvml.SUCCESS {
+			return nil, ret
+		}
+	}
+	if index < 0 || index >= len(m.devices) {
+		return nil, nvml.ERROR_INVALID_ARGUMENT
+	}
+	return m.devices[index], nvml.SUCCESS
+}
+
+func (m *mockNVML) DeviceGetHandleByUUID(uuid string) (nvmlDevice, nvml.Return) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.byUUID != nil {
+		if dev, ok := m.byUUID[uuid]; ok {
+			return dev, nvml.SUCCESS
+		}
+	}
+	return nil, nvml.ERROR_NOT_FOUND
+}
+
+func (m *mockNVML) EventSetCreate() (nvmlEventSet, nvml.Return) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.eventSetCreate != nil {
+		return m.eventSetCreate()
+	}
+	es := newMockEventSet(16)
+	m.eventSets = append(m.eventSets, es)
+	return es, nvml.SUCCESS
 }
 
 type mockGPUDevice struct{}
 
-func (gp *mockGPUDevice) parseMigDeviceUUID(UUID string) (string, uint, uint, error) {
+func (gp *mockGPUDevice) parseMigDeviceUUID(UUID string) (string, uint32, uint32, error) {
 	return UUID, 1, 2, nil
 }
 
@@ -68,22 +218,20 @@ func TestCatchError(t *testing.T) {
 		Health: pluginapi.Unhealthy,
 	}
 	tests := []struct {
-		name              string
-		eventType         uint64
-		eventData         uint64
-		deviceUUID        string
-		gpuInstanceID     uint32
-		computeInstanceID uint32
-		hc                GPUHealthChecker
-		wantErrorDevices  []pluginapi.Device
+		name             string
+		event            nvmlEvent
+		hc               GPUHealthChecker
+		wantErrorDevices []pluginapi.Device
 	}{
 		{
-			name:              "non-critical error",
-			eventType:         0,
-			eventData:         72,
-			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "non-critical error",
+			event: nvmlEvent{
+				EventType:         0,
+				EventData:         72,
+				DeviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
@@ -101,12 +249,14 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name:              "xid error not included ",
-			eventType:         nvml.EventTypeXidCriticalError,
-			eventData:         88,
-			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "xid error not included ",
+			event: nvmlEvent{
+				EventType:         nvml.EventTypeXidCriticalError,
+				EventData:         88,
+				DeviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
@@ -124,12 +274,14 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name:              "catching xid 72",
-			eventType:         nvml.EventTypeXidCriticalError,
-			eventData:         72,
-			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "catching xid 72",
+			event: nvmlEvent{
+				EventType:         nvml.EventTypeXidCriticalError,
+				EventData:         72,
+				DeviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
@@ -147,12 +299,14 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{udevice1},
 		},
 		{
-			name:              "unknown device",
-			eventType:         nvml.EventTypeXidCriticalError,
-			eventData:         72,
-			deviceUUID:        "GPU-f053fce6-90ae-037069703604",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "unknown device",
+			event: nvmlEvent{
+				EventType:         nvml.EventTypeXidCriticalError,
+				EventData:         72,
+				DeviceUUID:        "GPU-f053fce6-90ae-037069703604",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
@@ -170,12 +324,14 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name:              "not catching xid 72",
-			eventType:         nvml.EventTypeXidCriticalError,
-			eventData:         72,
-			deviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "not catching xid 72",
+			event: nvmlEvent{
+				EventType:         nvml.EventTypeXidCriticalError,
+				EventData:         72,
+				DeviceUUID:        "GPU-f053fce6-851c-1235-90ae-037069703604",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
@@ -188,12 +344,14 @@ func TestCatchError(t *testing.T) {
 			wantErrorDevices: []pluginapi.Device{},
 		},
 		{
-			name:              "catching all devices error",
-			eventType:         nvml.EventTypeXidCriticalError,
-			eventData:         48,
-			deviceUUID:        "",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "catching all devices error",
+			event: nvmlEvent{
+				EventType:         nvml.EventTypeXidCriticalError,
+				EventData:         48,
+				DeviceUUID:        "",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			hc: GPUHealthChecker{
 				devices: map[string]pluginapi.Device{
 					"device1": device1,
@@ -214,11 +372,12 @@ func TestCatchError(t *testing.T) {
 	node := makeNode(nil, nil, nil)
 	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
 
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.name, func(t *testing.T) {
 			tt.hc.kubeClient = fakeClient
 			tt.hc.health = make(chan pluginapi.Device, len(tt.hc.devices))
-			tt.hc.catchError(tt.eventType, tt.eventData, tt.deviceUUID, tt.gpuInstanceID, tt.computeInstanceID, &gp)
+			tt.hc.catchError(tt.event, &gp)
 			gotErrorDevices := make(map[string]pluginapi.Device)
 			for range tt.wantErrorDevices {
 				if len(tt.hc.health) == 0 {
@@ -245,7 +404,7 @@ func TestCatchError(t *testing.T) {
 
 func TestUpdateLastHeartbeatTime(t *testing.T) {
 	node := makeNode(nil, nil, nil)
-	initialTime := metav1.Now()
+	initialTime := metav1.NewTime(time.Now().Add(-1 * time.Minute))
 	node.Status.Conditions = append(node.Status.Conditions, v1.NodeCondition{
 		Type:               XIDConditionType,
 		Status:             "True",
@@ -263,11 +422,13 @@ func TestUpdateLastHeartbeatTime(t *testing.T) {
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 	hc.nodeName = "test-node"
 
-	time.Sleep(2 * time.Second)
 	hc.updateLastHeartbeatTime()
-	updatedNode, _ := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
-	if updatedNode.Status.Conditions[0].LastHeartbeatTime == initialTime {
-		t.Errorf("The XID condition HeartbeatTime was not updated")
+	updatedNode, err := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("Failed to get updated node: %v", err)
+	}
+	if !updatedNode.Status.Conditions[0].LastHeartbeatTime.After(initialTime.Time) {
+		t.Errorf("The XID condition HeartbeatTime was not updated: got %v, initial %v", updatedNode.Status.Conditions[0].LastHeartbeatTime, initialTime)
 	}
 	if updatedNode.Status.Conditions[1] != node.Status.Conditions[1] {
 		t.Errorf("The Ready condition was wrongly updated")
@@ -304,8 +465,11 @@ func TestResetXIDConditionWithBackoff(t *testing.T) {
 	hc := NewGPUHealthChecker(nil, nil, nil, fakeClient)
 	hc.nodeName = "test-node"
 
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+
 	startTime := time.Now()
-	hc.resetXIDConditionWithBackoff()
+	hc.resetXIDConditionWithBackoff(stopCh)
 	duration := time.Since(startTime)
 
 	if callCount != 3 {
@@ -390,7 +554,10 @@ func TestMonitorXidevent(t *testing.T) {
 		for _, event := range test.events {
 			hc.monitorXidevent(event)
 		}
-		updatedNode, _ := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
+		updatedNode, err := fakeClient.CoreV1().Nodes().Get(context.Background(), "test-node", metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("Failed to get updated node for %q: %v", test.desc, err)
+		}
 		if len(updatedNode.Status.Conditions) != test.expectedLength || len(updatedNode.Status.Conditions) > 1 {
 			t.Errorf("Expect condition length to have value %v, got %v", test.expectedLength, len(updatedNode.Status.Conditions))
 		}
@@ -410,7 +577,6 @@ func TestMonitorXidevent(t *testing.T) {
 			}
 		}
 	}
-
 }
 
 func makeNode(labels map[string]string, annotations map[string]string, conditions []v1.NodeCondition) v1.Node {
@@ -442,27 +608,28 @@ func TestRecordXIDEvent(t *testing.T) {
 	device2 := pluginapi.Device{ID: "nvidia1"}
 
 	tests := []struct {
-		name              string
-		eventData         uint64
-		deviceUUID        string
-		gpuInstanceID     uint32
-		computeInstanceID uint32
-		devices           map[string]pluginapi.Device
-		nvmlDevices       map[string]nvmlDevice
-		expectedEvent     string
+		name          string
+		event         nvmlEvent
+		devices       map[string]pluginapi.Device
+		nvmlDevices   map[string]nvmlDevice
+		expectedEvent string
 	}{
 		{
-			name:          "event with no UUID",
-			eventData:     72,
-			deviceUUID:    "",
+			name: "event with no UUID",
+			event: nvmlEvent{
+				EventData:  72,
+				DeviceUUID: "",
+			},
 			expectedEvent: "Warning XIDError Caught XID error, XID=72",
 		},
 		{
-			name:              "event with UUID matching a device",
-			eventData:         72,
-			deviceUUID:        "GPU-1",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "event with UUID matching a device",
+			event: nvmlEvent{
+				EventData:         72,
+				DeviceUUID:        "GPU-1",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			devices: map[string]pluginapi.Device{
 				"nvidia0": device1,
 				"nvidia1": device2,
@@ -474,11 +641,13 @@ func TestRecordXIDEvent(t *testing.T) {
 			expectedEvent: "Warning XIDError Caught XID error, XID=72, GPU UUID=GPU-1, Device ID=nvidia0",
 		},
 		{
-			name:              "event with UUID matching no devices",
-			eventData:         72,
-			deviceUUID:        "GPU-3",
-			gpuInstanceID:     1,
-			computeInstanceID: 2,
+			name: "event with UUID matching no devices",
+			event: nvmlEvent{
+				EventData:         72,
+				DeviceUUID:        "GPU-3",
+				GpuInstanceID:     1,
+				ComputeInstanceID: 2,
+			},
 			devices: map[string]pluginapi.Device{
 				"nvidia0": device1,
 			},
@@ -498,7 +667,7 @@ func TestRecordXIDEvent(t *testing.T) {
 				nodeName:    "test-node",
 				recorder:    fakeRecorder,
 			}
-			err := hc.recordXIDEvent(tt.eventData, tt.deviceUUID, tt.gpuInstanceID, tt.computeInstanceID, &gp)
+			err := hc.recordXIDEvent(tt.event, &gp)
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -511,5 +680,314 @@ func TestRecordXIDEvent(t *testing.T) {
 				t.Errorf("expected event %q but none was recorded", tt.expectedEvent)
 			}
 		})
+	}
+}
+
+func TestStopIdempotentAndStartStopRestart(t *testing.T) {
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
+	eventCreatedCh := make(chan *v1.Event, 10)
+	fakeClient.Fake.PrependReactor("create", "events", func(action k8sclienttesting.Action) (bool, runtime.Object, error) {
+		createAction, ok := action.(k8sclienttesting.CreateAction)
+		if ok {
+			if ev, ok := createAction.GetObject().(*v1.Event); ok {
+				eventCreatedCh <- ev
+				return true, ev, nil
+			}
+		}
+		return false, nil, nil
+	})
+
+	devices := map[string]pluginapi.Device{
+		"nvidia0": {ID: "nvidia0", Health: pluginapi.Healthy},
+	}
+	healthCh := make(chan pluginapi.Device, 4)
+
+	hc := NewGPUHealthChecker(devices, healthCh, []int{79}, fakeClient)
+	defer hc.Stop()
+	hc.nodeName = "test-node"
+	hc.eventWaitTimeoutMs = 5
+
+	// Calling Stop before Start must be a safe no-op.
+	hc.Stop()
+	hc.Stop()
+
+	gpu0Run1 := &mockDevice{
+		uuid:       "GPU-0000",
+		minor:      0,
+		migModeRet: nvml.ERROR_NOT_SUPPORTED,
+	}
+	fakeNVML := &mockNVML{
+		devices: []nvmlDevice{gpu0Run1},
+	}
+	hc.nvml = fakeNVML
+
+	// 1. First Start.
+	if err := hc.Start(); err != nil {
+		t.Fatalf("first Start() failed: %v", err)
+	}
+	// Starting again while already running must return an error and not leak an eventSet.
+	if err := hc.Start(); err == nil {
+		t.Fatalf("expected error on duplicate Start(), got nil")
+	}
+	if len(fakeNVML.eventSets) != 1 {
+		t.Fatalf("expected 1 event set created, got %d", len(fakeNVML.eventSets))
+	}
+
+	// Send an XID event during run 1.
+	fakeNVML.eventSets[0].events <- nvmlEvent{
+		EventType:         nvml.EventTypeXidCriticalError,
+		EventData:         79,
+		DeviceUUID:        "GPU-0000",
+		GpuInstanceID:     noInstanceID,
+		ComputeInstanceID: noInstanceID,
+	}
+
+	select {
+	case unhealthy := <-healthCh:
+		if unhealthy.ID != "nvidia0" || unhealthy.Health != pluginapi.Unhealthy {
+			t.Fatalf("unexpected health update on run 1: %+v", unhealthy)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for health update on run 1")
+	}
+
+	select {
+	case ev := <-eventCreatedCh:
+		if !strings.Contains(ev.Message, "XID=79") || !strings.Contains(ev.Message, "Device ID=nvidia0") {
+			t.Fatalf("unexpected k8s event message on run 1: %q", ev.Message)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for k8s event from broadcaster on run 1")
+	}
+
+	// 2. Concurrent and repeated Stop calls must be idempotent and free the event set once.
+	var stopWG sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		stopWG.Add(1)
+		go func() {
+			defer stopWG.Done()
+			hc.Stop()
+		}()
+	}
+	stopWG.Wait()
+
+	if got := atomic.LoadInt32(&fakeNVML.eventSets[0].freeCount); got != 1 {
+		t.Fatalf("expected run 1 eventSet.Free() called once, got %d", got)
+	}
+	if len(hc.nvmlDevices) != 0 {
+		t.Fatalf("expected nvmlDevices cleared after Stop(), got %d entries", len(hc.nvmlDevices))
+	}
+
+	// 3. Simulate GPU reset recovery: replace NVML device handle and Start() again on same hc.
+	gpu0Run2 := &mockDevice{
+		uuid:       "GPU-0000",
+		minor:      0,
+		migModeRet: nvml.ERROR_NOT_SUPPORTED,
+	}
+	fakeNVML.devices = []nvmlDevice{gpu0Run2}
+
+	if err := hc.Start(); err != nil {
+		t.Fatalf("second Start() after Stop() failed: %v", err)
+	}
+	if len(fakeNVML.eventSets) != 2 {
+		t.Fatalf("expected 2nd event set created on restart, got %d", len(fakeNVML.eventSets))
+	}
+
+	fakeNVML.eventSets[1].events <- nvmlEvent{
+		EventType:         nvml.EventTypeXidCriticalError,
+		EventData:         48,
+		DeviceUUID:        "GPU-0000",
+		GpuInstanceID:     noInstanceID,
+		ComputeInstanceID: noInstanceID,
+	}
+
+	select {
+	case unhealthy := <-healthCh:
+		if unhealthy.ID != "nvidia0" || unhealthy.Health != pluginapi.Unhealthy {
+			t.Fatalf("unexpected health update on run 2: %+v", unhealthy)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for health update on run 2")
+	}
+
+	// Verify the long-lived broadcaster still records events after Stop/Start cycle.
+	select {
+	case ev := <-eventCreatedCh:
+		if !strings.Contains(ev.Message, "XID=48") || !strings.Contains(ev.Message, "Device ID=nvidia0") {
+			t.Fatalf("unexpected k8s event message on run 2: %q", ev.Message)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for k8s event from broadcaster on run 2")
+	}
+
+	hc.Stop()
+	if got := atomic.LoadInt32(&fakeNVML.eventSets[1].freeCount); got != 1 {
+		t.Fatalf("expected run 2 eventSet.Free() called once, got %d", got)
+	}
+}
+
+func TestStartErrorFreesEventSet(t *testing.T) {
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
+	devices := map[string]pluginapi.Device{
+		"nvidia0": {ID: "nvidia0", Health: pluginapi.Healthy},
+	}
+	hc := NewGPUHealthChecker(devices, make(chan pluginapi.Device, 1), nil, fakeClient)
+	hc.nodeName = "test-node"
+
+	failingGPU := &mockDevice{
+		uuid:        "GPU-fail",
+		minor:       0,
+		migModeRet:  nvml.ERROR_NOT_SUPPORTED,
+		registerRet: nvml.ERROR_UNKNOWN,
+	}
+	fakeNVML := &mockNVML{
+		devices: []nvmlDevice{failingGPU},
+	}
+	hc.nvml = fakeNVML
+
+	if err := hc.Start(); err == nil {
+		t.Fatalf("expected Start() to fail when RegisterEvents returns ERROR_UNKNOWN")
+	}
+	if len(fakeNVML.eventSets) != 1 {
+		t.Fatalf("expected 1 eventSet created, got %d", len(fakeNVML.eventSets))
+	}
+	if got := atomic.LoadInt32(&fakeNVML.eventSets[0].freeCount); got != 1 {
+		t.Fatalf("expected eventSet to be freed when Start() fails, got freeCount=%d", got)
+	}
+	if hc.running {
+		t.Fatalf("expected hc.running to be false after failed Start()")
+	}
+}
+
+func TestMIGSupportModernAndLegacyUUIDs(t *testing.T) {
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
+	devices := map[string]pluginapi.Device{
+		"nvidia0/gi1": {ID: "nvidia0/gi1", Health: pluginapi.Healthy},
+		"nvidia0/gi2": {ID: "nvidia0/gi2", Health: pluginapi.Healthy},
+		"nvidia1/gi3": {ID: "nvidia1/gi3", Health: pluginapi.Healthy},
+	}
+	healthCh := make(chan pluginapi.Device, 4)
+
+	hc := NewGPUHealthChecker(devices, healthCh, []int{79}, fakeClient)
+	defer hc.Stop()
+	hc.nodeName = "test-node"
+	hc.eventWaitTimeoutMs = 5
+	fakeRecorder := record.NewFakeRecorder(10)
+	hc.recorder = fakeRecorder
+
+	// Physical GPU 0 with modern R470+ MIG UUIDs (MIG-<uuid>, no parent GPU or GI/CI in UUID string).
+	physGPU0 := &mockDevice{
+		uuid:           "GPU-parent-0",
+		minor:          0,
+		migCurrentMode: nvml.DEVICE_MIG_ENABLE,
+		migPendingMode: nvml.DEVICE_MIG_ENABLE,
+		maxMigs:        4,
+	}
+	mig0GI1 := &mockDevice{
+		uuid:   "MIG-11111111-2222-3333-4444-555555555551",
+		parent: physGPU0,
+		gi:     1,
+		ci:     0,
+	}
+	mig0GI2 := &mockDevice{
+		uuid:   "MIG-11111111-2222-3333-4444-555555555552",
+		parent: physGPU0,
+		gi:     2,
+		ci:     0,
+	}
+	physGPU0.migByIndex = map[int]nvmlDevice{
+		0: mig0GI1,
+		2: mig0GI2, // sparse index (index 1 returns ERROR_NOT_FOUND)
+	}
+
+	// Physical GPU 1 with legacy R450 MIG UUID format (MIG-GPU-<uuid>/<gi>/<ci>).
+	physGPU1 := &mockDevice{
+		uuid:           "GPU-parent-1",
+		minor:          1,
+		migCurrentMode: nvml.DEVICE_MIG_ENABLE,
+		migPendingMode: nvml.DEVICE_MIG_ENABLE,
+		maxMigs:        2,
+	}
+	mig1GI3 := &mockDevice{
+		uuid: "MIG-GPU-parent-1/3/0",
+	}
+	physGPU1.migByIndex = map[int]nvmlDevice{
+		0: mig1GI3,
+	}
+
+	fakeNVML := &mockNVML{
+		devices: []nvmlDevice{physGPU0, physGPU1},
+		byUUID: map[string]nvmlDevice{
+			mig0GI1.uuid: mig0GI1,
+			mig0GI2.uuid: mig0GI2,
+		},
+	}
+	hc.nvml = fakeNVML
+
+	if err := hc.Start(); err != nil {
+		t.Fatalf("Start() with MIG devices failed: %v", err)
+	}
+	defer hc.Stop()
+
+	// Emit an XID 79 event on physical GPU 0 targeting GI=2, CI=0 (modern MIG UUID).
+	fakeNVML.eventSets[0].events <- nvmlEvent{
+		EventType:         nvml.EventTypeXidCriticalError,
+		EventData:         79,
+		DeviceUUID:        "GPU-parent-0",
+		GpuInstanceID:     2,
+		ComputeInstanceID: 0,
+	}
+
+	select {
+	case unhealthy := <-healthCh:
+		if unhealthy.ID != "nvidia0/gi2" || unhealthy.Health != pluginapi.Unhealthy {
+			t.Fatalf("expected nvidia0/gi2 unhealthy, got %+v", unhealthy)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for MIG nvidia0/gi2 health update")
+	}
+
+	select {
+	case ev := <-fakeRecorder.Events:
+		want := "Warning XIDError Caught XID error, XID=79, GPU UUID=" + mig0GI2.uuid + ", Device ID=nvidia0/gi2"
+		if ev != want {
+			t.Fatalf("unexpected event for modern MIG device: got %q, want %q", ev, want)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for modern MIG K8s event")
+	}
+
+	// Emit an XID 79 event on physical GPU 1 targeting GI=3, CI=0 (legacy MIG UUID).
+	fakeNVML.eventSets[0].events <- nvmlEvent{
+		EventType:         nvml.EventTypeXidCriticalError,
+		EventData:         79,
+		DeviceUUID:        "GPU-parent-1",
+		GpuInstanceID:     3,
+		ComputeInstanceID: 0,
+	}
+
+	select {
+	case unhealthy := <-healthCh:
+		if unhealthy.ID != "nvidia1/gi3" || unhealthy.Health != pluginapi.Unhealthy {
+			t.Fatalf("expected nvidia1/gi3 unhealthy, got %+v", unhealthy)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for legacy MIG nvidia1/gi3 health update")
+	}
+
+	select {
+	case ev := <-fakeRecorder.Events:
+		want := "Warning XIDError Caught XID error, XID=79, GPU UUID=" + mig1GI3.uuid + ", Device ID=nvidia1/gi3"
+		if ev != want {
+			t.Fatalf("unexpected event for legacy MIG device: got %q, want %q", ev, want)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("timed out waiting for legacy MIG K8s event")
 	}
 }
