@@ -49,6 +49,7 @@ const (
 	defaultHeartbeatInterval  = 1 * time.Minute
 	defaultEventWaitTimeoutMs = uint32(5000)
 	defaultEventRetryDelay    = 1 * time.Second
+	metadataLookupTimeout     = 5 * time.Second
 
 	noInstanceID = uint32(0xFFFFFFFF)
 )
@@ -214,6 +215,8 @@ func (realNVML) EventSetCreate() (nvmlEventSet, nvml.Return) {
 // GPUHealthChecker checks the health of nvidia GPUs.
 type GPUHealthChecker struct {
 	mu                sync.Mutex
+	devMu             sync.Mutex
+	nodeNameMu        sync.Mutex
 	wg                sync.WaitGroup
 	running           bool
 	devices           map[string]pluginapi.Device
@@ -284,6 +287,44 @@ func (hc *GPUHealthChecker) nvmlProvider() nvmlProvider {
 	return realNVML{}
 }
 
+func (hc *GPUHealthChecker) resolveNodeName() string {
+	hc.nodeNameMu.Lock()
+	defer hc.nodeNameMu.Unlock()
+	if hc.nodeName != "" {
+		return hc.nodeName
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), metadataLookupTimeout)
+	defer cancel()
+	nodeName, err := metadata.InstanceNameWithContext(ctx)
+	if err != nil {
+		glog.Errorf("failed to get nodeName, err: %v", err)
+		return ""
+	}
+	hc.nodeName = nodeName
+	return hc.nodeName
+}
+
+// RefreshDevices replaces the tracked device map with a clone of devices. If
+// the health checker is currently running, it also re-discovers NVML handles
+// so newly created MIG GPU instances (e.g. with renumbered GI IDs after a GPU
+// reset) are monitored.
+func (hc *GPUHealthChecker) RefreshDevices(devices map[string]pluginapi.Device) {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+	hc.devMu.Lock()
+	defer hc.devMu.Unlock()
+
+	hc.devices = make(map[string]pluginapi.Device, len(devices))
+	for id, d := range devices {
+		hc.devices[id] = d
+	}
+	if hc.running {
+		if _, err := hc.populateNVMLDevicesLocked(); err != nil {
+			glog.Errorf("Failed to refresh NVML devices in GPUHealthChecker: %v", err)
+		}
+	}
+}
+
 // resetXIDConditionWithBackoff tries to reset XID condition with exponential backoff.
 // It retries with a 1s sleep and backs off to 30s. It times out after 2 minutes.
 func (hc *GPUHealthChecker) resetXIDConditionWithBackoff(stopCh <-chan struct{}) {
@@ -318,7 +359,8 @@ func (hc *GPUHealthChecker) resetXIDConditionWithBackoff(stopCh <-chan struct{})
 // 1. If the bootId changes, consider the node fixed through auto-repair
 // 2. If the bootId stay unchanged, consider a pure gpu-device-plugin restart
 func (hc *GPUHealthChecker) resetXIDCondition() error {
-	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	nodeName := hc.resolveNodeName()
+	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -340,12 +382,12 @@ func (hc *GPUHealthChecker) resetXIDCondition() error {
 		// TODO: Use patch to avoid possible conflicts?
 		_, err := hc.kubeClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 		if err != nil {
-			glog.Errorf("Failed to update node %s status after removing XID condition: %v", hc.nodeName, err)
+			glog.Errorf("Failed to update node %s status after removing XID condition: %v", nodeName, err)
 			return err
 		}
-		glog.Infof("Successfully removed XIDCriticalError condition from node %s.", hc.nodeName)
+		glog.Infof("Successfully removed XIDCriticalError condition from node %s.", nodeName)
 	} else {
-		glog.Infof("XIDCriticalError condition doesn't exist for node %s.", hc.nodeName)
+		glog.Infof("XIDCriticalError condition doesn't exist for node %s.", nodeName)
 	}
 	return nil
 }
@@ -361,25 +403,7 @@ func isMigEnabled(device nvmlDevice) (bool, error) {
 	return currentMode == nvml.DEVICE_MIG_ENABLE && currentMode == pendingMode, nil
 }
 
-// Start registers NVML events and starts listening to them.
-func (hc *GPUHealthChecker) Start() error {
-	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
-	if hc.running {
-		return fmt.Errorf("GPUHealthChecker is already running")
-	}
-
-	if hc.nodeName == "" {
-		nodeName, err := metadata.InstanceNameWithContext(context.Background())
-		if err != nil {
-			glog.Errorf("failed to get nodeName, err: %v", err)
-		}
-		hc.nodeName = nodeName
-	}
-
-	glog.Info("Starting GPU Health Checker")
-
+func (hc *GPUHealthChecker) populateNVMLDevicesLocked() (map[string]nvmlDevice, error) {
 	for name, device := range hc.devices {
 		device.Health = pluginapi.Healthy
 		hc.devices[name] = device
@@ -392,7 +416,7 @@ func (hc *GPUHealthChecker) Start() error {
 	// Building mapping between device ID and their nvml representation
 	count, ret := provider.DeviceGetCount()
 	if ret != nvml.SUCCESS {
-		return fmt.Errorf("failed to get device count: %v", nvmlErrorString(ret))
+		return nil, fmt.Errorf("failed to get device count: %v", nvmlErrorString(ret))
 	}
 
 	glog.Infof("Found %d GPU devices", count)
@@ -402,7 +426,7 @@ func (hc *GPUHealthChecker) Start() error {
 		device, ret := provider.DeviceGetHandleByIndex(i)
 		if ret != nvml.SUCCESS {
 			hc.nvmlDevices = make(map[string]nvmlDevice)
-			return fmt.Errorf("failed to read device with index %d: %v", i, nvmlErrorString(ret))
+			return nil, fmt.Errorf("failed to read device with index %d: %v", i, nvmlErrorString(ret))
 		}
 
 		uuid, ret := device.GetUUID()
@@ -434,10 +458,32 @@ func (hc *GPUHealthChecker) Start() error {
 			hc.addDevice(deviceName, device)
 		}
 	}
+	return physicalDevices, nil
+}
 
+// Start registers NVML events and starts listening to them.
+func (hc *GPUHealthChecker) Start() error {
+	hc.mu.Lock()
+	defer hc.mu.Unlock()
+
+	if hc.running {
+		return fmt.Errorf("GPUHealthChecker is already running")
+	}
+
+	glog.Info("Starting GPU Health Checker")
+
+	hc.devMu.Lock()
+	physicalDevices, err := hc.populateNVMLDevicesLocked()
+	if err != nil {
+		hc.devMu.Unlock()
+		return err
+	}
+
+	provider := hc.nvmlProvider()
 	eventSet, ret := provider.EventSetCreate()
 	if ret != nvml.SUCCESS {
 		hc.nvmlDevices = make(map[string]nvmlDevice)
+		hc.devMu.Unlock()
 		return fmt.Errorf("failed to create event set: %v", nvmlErrorString(ret))
 	}
 
@@ -450,6 +496,7 @@ func (hc *GPUHealthChecker) Start() error {
 				glog.Errorf("Failed to free event set after error: %v", nvmlErrorString(freeRet))
 			}
 			hc.nvmlDevices = make(map[string]nvmlDevice)
+			hc.devMu.Unlock()
 			return fmt.Errorf("failed to get UUID for device %s: %v", name, nvmlErrorString(ret))
 		}
 
@@ -464,6 +511,7 @@ func (hc *GPUHealthChecker) Start() error {
 				glog.Errorf("Failed to free event set after error: %v", nvmlErrorString(freeRet))
 			}
 			hc.nvmlDevices = make(map[string]nvmlDevice)
+			hc.devMu.Unlock()
 			return fmt.Errorf("physical GPU %s not found for device %s", gpu, name)
 		}
 
@@ -483,10 +531,12 @@ func (hc *GPUHealthChecker) Start() error {
 				glog.Errorf("Failed to free event set after error: %v", nvmlErrorString(freeRet))
 			}
 			hc.nvmlDevices = make(map[string]nvmlDevice)
+			hc.devMu.Unlock()
 			return fmt.Errorf("failed to register device %s for NVML eventSet: %v", name, nvmlErrorString(ret))
 		}
 		registeredPhys[gpu] = true
 	}
+	hc.devMu.Unlock()
 
 	stopCh := make(chan struct{})
 	hc.eventSet = eventSet
@@ -656,10 +706,11 @@ func (gd *GPUDevice) parseMigDeviceUUID(UUID string) (string, uint32, uint32, er
 func (hc *GPUHealthChecker) monitorXidevent(eventData uint64) {
 	if _, ok := hc.monitorCriticalXid[eventData]; ok {
 		glog.Info("Monitoring XID event")
+		nodeName := hc.resolveNodeName()
 		// Set XID condition
-		node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+		node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 		if err != nil {
-			glog.Errorf("Failed to get node %s: %v", hc.nodeName, err)
+			glog.Errorf("Failed to get node %s: %v", nodeName, err)
 			return
 		}
 		conditionFound := false
@@ -706,9 +757,9 @@ func (hc *GPUHealthChecker) monitorXidevent(eventData uint64) {
 		}
 		_, err = hc.kubeClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 		if err != nil {
-			glog.Errorf("Failed to update node %s status to add XIDCriticalError condition: %v", hc.nodeName, err)
+			glog.Errorf("Failed to update node %s status to add XIDCriticalError condition: %v", nodeName, err)
 		} else {
-			glog.Infof("Successfully add XIDCriticalError condition from node %s.", hc.nodeName)
+			glog.Infof("Successfully add XIDCriticalError condition from node %s.", nodeName)
 		}
 	}
 }
@@ -732,9 +783,10 @@ func (hc *GPUHealthChecker) setXIDheartbeat(stopCh <-chan struct{}) {
 }
 
 func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
-	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	nodeName := hc.resolveNodeName()
+	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
-		glog.Errorf("Failed to get node %s for heartbeat update: %v", hc.nodeName, err)
+		glog.Errorf("Failed to get node %s for heartbeat update: %v", nodeName, err)
 		return
 	}
 
@@ -753,12 +805,13 @@ func (hc *GPUHealthChecker) updateLastHeartbeatTime() {
 	glog.Info("XID heartbeat check")
 	_, err = hc.kubeClient.CoreV1().Nodes().UpdateStatus(context.Background(), node, metav1.UpdateOptions{})
 	if err != nil {
-		glog.Errorf("Failed to update node %s status to update XIDCondition heartbeat: %v", hc.nodeName, err)
+		glog.Errorf("Failed to update node %s status to update XIDCondition heartbeat: %v", nodeName, err)
 	}
 }
 
 func (hc *GPUHealthChecker) recordXIDEvent(e nvmlEvent, cd callDevice) error {
-	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), hc.nodeName, metav1.GetOptions{})
+	nodeName := hc.resolveNodeName()
+	node, err := hc.kubeClient.CoreV1().Nodes().Get(context.Background(), nodeName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -770,6 +823,7 @@ func (hc *GPUHealthChecker) recordXIDEvent(e nvmlEvent, cd callDevice) error {
 		var affectedGpuIDs []string
 		var affectedGpuUUIDs []string
 
+		hc.devMu.Lock()
 		deviceIDs := make([]string, 0, len(hc.devices))
 		for id := range hc.devices {
 			deviceIDs = append(deviceIDs, id)
@@ -799,6 +853,7 @@ func (hc *GPUHealthChecker) recordXIDEvent(e nvmlEvent, cd callDevice) error {
 				affectedGpuUUIDs = append(affectedGpuUUIDs, uuid)
 			}
 		}
+		hc.devMu.Unlock()
 
 		if len(affectedGpuIDs) > 0 {
 			fmt.Fprintf(&sb, ", GPU UUID=%s", strings.Join(affectedGpuUUIDs, ", "))
@@ -824,7 +879,7 @@ func (hc *GPUHealthChecker) catchError(e nvmlEvent, cd callDevice) {
 
 	err := hc.recordXIDEvent(e, cd)
 	if err != nil {
-		glog.Errorf("Failed to record XID=%d for node %s with err %v", e.EventData, hc.nodeName, err)
+		glog.Errorf("Failed to record XID=%d for node %s with err %v", e.EventData, hc.resolveNodeName(), err)
 	}
 	hc.monitorXidevent(e.EventData)
 
@@ -838,9 +893,15 @@ func (hc *GPUHealthChecker) catchError(e nvmlEvent, cd callDevice) {
 	if e.DeviceUUID == "" {
 		// All devices are unhealthy
 		glog.Errorf("XidCriticalError: Xid=%d, All devices will go unhealthy.", e.EventData)
+		hc.devMu.Lock()
+		toSend := make([]pluginapi.Device, 0, len(hc.devices))
 		for id, d := range hc.devices {
 			d.Health = pluginapi.Unhealthy
 			hc.devices[id] = d
+			toSend = append(toSend, d)
+		}
+		hc.devMu.Unlock()
+		for _, d := range toSend {
 			select {
 			case hc.health <- d:
 			case <-hc.stop:
@@ -850,7 +911,8 @@ func (hc *GPUHealthChecker) catchError(e nvmlEvent, cd callDevice) {
 		return
 	}
 
-	founderrordevice := false
+	var toSend []pluginapi.Device
+	hc.devMu.Lock()
 	for _, d := range hc.devices {
 		// Please see https://github.com/NVIDIA/gpu-monitoring-tools/blob/148415f505c96052cb3b7fdf443b34ac853139ec/bindings/go/nvml/nvml.h#L1424
 		// for the rationale why gi and ci can be set as such when the UUID is a full GPU UUID and not a MIG device UUID.
@@ -874,16 +936,21 @@ func (hc *GPUHealthChecker) catchError(e nvmlEvent, cd callDevice) {
 			glog.Errorf("XidCriticalError: Xid=%d on Device=%s, uuid=%s, the device will go unhealthy.", e.EventData, d.ID, uuid)
 			d.Health = pluginapi.Unhealthy
 			hc.devices[d.ID] = d
-			select {
-			case hc.health <- d:
-			case <-hc.stop:
-				return
-			}
-			founderrordevice = true
+			toSend = append(toSend, d)
 		}
 	}
-	if !founderrordevice {
+	hc.devMu.Unlock()
+
+	if len(toSend) == 0 {
 		glog.Errorf("XidCriticalError: Xid=%d on unknown device.", e.EventData)
+		return
+	}
+	for _, d := range toSend {
+		select {
+		case hc.health <- d:
+		case <-hc.stop:
+			return
+		}
 	}
 }
 
@@ -956,5 +1023,7 @@ func (hc *GPUHealthChecker) Stop() {
 		}
 		hc.eventSet = nil
 	}
+	hc.devMu.Lock()
 	hc.nvmlDevices = make(map[string]nvmlDevice)
+	hc.devMu.Unlock()
 }

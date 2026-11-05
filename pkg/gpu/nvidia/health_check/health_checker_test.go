@@ -1062,3 +1062,105 @@ func TestStopUnderHealthChannelBackpressure(t *testing.T) {
 		t.Fatalf("expected eventSet.Free() called once, got %d", got)
 	}
 }
+
+func TestRefreshDevicesWhenGIIDsChangeAcrossReset(t *testing.T) {
+	node := makeNode(nil, nil, nil)
+	fakeClient := fake.NewSimpleClientset(&v1.NodeList{Items: []v1.Node{node}})
+
+	initialDevices := map[string]pluginapi.Device{
+		"nvidia0/gi1": {ID: "nvidia0/gi1", Health: pluginapi.Healthy},
+		"nvidia0/gi2": {ID: "nvidia0/gi2", Health: pluginapi.Healthy},
+	}
+	healthCh := make(chan pluginapi.Device, 4)
+	hc := NewGPUHealthChecker(initialDevices, healthCh, []int{79}, fakeClient)
+	hc.nodeName = "test-node"
+	hc.eventWaitTimeoutMs = 5
+	fakeRecorder := record.NewFakeRecorder(10)
+	hc.recorder = fakeRecorder
+
+	physGPU0 := &mockDevice{
+		uuid:           "GPU-parent-0",
+		minor:          0,
+		migCurrentMode: nvml.DEVICE_MIG_ENABLE,
+		migPendingMode: nvml.DEVICE_MIG_ENABLE,
+		maxMigs:        4,
+	}
+	mig0GI1 := &mockDevice{
+		uuid:   "MIG-11111111-1111-1111-1111-111111111111",
+		parent: physGPU0,
+		gi:     1,
+		ci:     0,
+	}
+	mig0GI2 := &mockDevice{
+		uuid:   "MIG-22222222-2222-2222-2222-222222222222",
+		parent: physGPU0,
+		gi:     2,
+		ci:     0,
+	}
+	physGPU0.migByIndex = map[int]nvmlDevice{
+		0: mig0GI1,
+		1: mig0GI2,
+	}
+
+	fakeNVML := &mockNVML{
+		devices: []nvmlDevice{physGPU0},
+		byUUID: map[string]nvmlDevice{
+			mig0GI1.uuid: mig0GI1,
+			mig0GI2.uuid: mig0GI2,
+		},
+	}
+	hc.nvml = fakeNVML
+
+	if err := hc.Start(); err != nil {
+		t.Fatalf("first Start() failed: %v", err)
+	}
+	hc.Stop()
+
+	// Simulate post-reset MIG re-partitioning with new GI IDs (gi3, gi4).
+	mig0GI3 := &mockDevice{
+		uuid:   "MIG-33333333-3333-3333-3333-333333333333",
+		parent: physGPU0,
+		gi:     3,
+		ci:     0,
+	}
+	mig0GI4 := &mockDevice{
+		uuid:   "MIG-44444444-4444-4444-4444-444444444444",
+		parent: physGPU0,
+		gi:     4,
+		ci:     0,
+	}
+	physGPU0.migByIndex = map[int]nvmlDevice{
+		0: mig0GI3,
+		1: mig0GI4,
+	}
+	fakeNVML.byUUID = map[string]nvmlDevice{
+		mig0GI3.uuid: mig0GI3,
+		mig0GI4.uuid: mig0GI4,
+	}
+
+	hc.RefreshDevices(map[string]pluginapi.Device{
+		"nvidia0/gi3": {ID: "nvidia0/gi3", Health: pluginapi.Healthy},
+		"nvidia0/gi4": {ID: "nvidia0/gi4", Health: pluginapi.Healthy},
+	})
+	if err := hc.Start(); err != nil {
+		t.Fatalf("second Start() after RefreshDevices failed: %v", err)
+	}
+	defer hc.Stop()
+
+	fakeNVML.eventSets[1].events <- nvmlEvent{
+		EventType:         nvml.EventTypeXidCriticalError,
+		EventData:         79,
+		DeviceUUID:        "GPU-parent-0",
+		GpuInstanceID:     3,
+		ComputeInstanceID: 0,
+	}
+
+	select {
+	case unhealthy := <-healthCh:
+		if unhealthy.ID != "nvidia0/gi3" || unhealthy.Health != pluginapi.Unhealthy {
+			t.Fatalf("expected nvidia0/gi3 unhealthy after GI renumbering, got %+v", unhealthy)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for MIG nvidia0/gi3 health update after RefreshDevices")
+	}
+}
