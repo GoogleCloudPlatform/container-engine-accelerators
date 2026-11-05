@@ -308,3 +308,64 @@ func Test_topology(t *testing.T) {
 		})
 	}
 }
+
+func TestListPhysicalGPUsAndHealthAcrossModes(t *testing.T) {
+	topo0 := &pluginapi.TopologyInfo{Nodes: []*pluginapi.NUMANode{{ID: 0}}}
+	topo1 := &pluginapi.TopologyInfo{Nodes: []*pluginapi.NUMANode{{ID: 1}}}
+
+	devDir := t.TempDir()
+	procDir := t.TempDir()
+	ngm := NewNvidiaGPUManager(devDir, procDir, nil, GPUConfig{
+		GPUPartitionSize: "3g.20gb",
+		GPUSharingConfig: GPUSharingConfig{
+			GPUSharingStrategy:     "time-sharing",
+			MaxSharedClientsPerGPU: 2,
+		},
+	})
+	ngm.SetDeviceHealth("nvidia0", pluginapi.Healthy, topo0)
+	ngm.SetDeviceHealth("nvidia1", pluginapi.Healthy, topo1)
+	ngm.SetDeviceHealth("nvidia0/gi1", pluginapi.Healthy, topo0)
+	ngm.SetDeviceHealth("nvidia0/gi2", pluginapi.Healthy, topo0)
+	ngm.SetDeviceHealth("nvidia1/gi1", pluginapi.Healthy, topo1)
+	ngm.SetDeviceHealth("nvidia1/gi2", pluginapi.Healthy, topo1)
+
+	// ListPhysicalDevices returns the partition map on MIG nodes, whereas
+	// ListPhysicalGPUs and PhysicalGPUIDs return the physical GPUs (nvidia0, nvidia1).
+	if got := ngm.PhysicalGPUIDs(); !reflect.DeepEqual(got, []string{"nvidia0", "nvidia1"}) {
+		t.Errorf("PhysicalGPUIDs() = %v, want [nvidia0 nvidia1]", got)
+	}
+	physGPUs := ngm.ListPhysicalGPUs()
+	if _, ok := physGPUs["nvidia0"]; !ok {
+		t.Error("ListPhysicalGPUs() missing nvidia0")
+	}
+	if _, ok := physGPUs["nvidia0/gi1"]; ok {
+		t.Error("ListPhysicalGPUs() must not contain MIG partitions")
+	}
+
+	// Setting health via virtual device ID (nvidia0/gi1/vgpu0) updates the
+	// backing MIG partition (nvidia0/gi1) and preserves its Topology.
+	ngm.SetDeviceHealth("nvidia0/gi1/vgpu0", pluginapi.Unhealthy, nil)
+	if got := ngm.DeviceHealth("nvidia0/gi1"); got != pluginapi.Unhealthy {
+		t.Errorf("DeviceHealth(nvidia0/gi1) = %q, want %q", got, pluginapi.Unhealthy)
+	}
+	if got := ngm.DeviceHealth("nvidia0/gi1/vgpu1"); got != pluginapi.Unhealthy {
+		t.Errorf("DeviceHealth(nvidia0/gi1/vgpu1) = %q, want %q", got, pluginapi.Unhealthy)
+	}
+	allDevs := ngm.ListDevices()
+	if dev := allDevs["nvidia0/gi1/vgpu0"]; dev.Health != pluginapi.Unhealthy || !reflect.DeepEqual(dev.Topology, topo0) {
+		t.Errorf("ListDevices()[nvidia0/gi1/vgpu0] = %+v, want Unhealthy with preserved topology", dev)
+	}
+	if dev := allDevs["nvidia0/gi2/vgpu0"]; dev.Health != pluginapi.Healthy {
+		t.Errorf("ListDevices()[nvidia0/gi2/vgpu0].Health = %q, want Healthy", dev.Health)
+	}
+
+	// Setting health via non-MIG virtual device ID (nvidia0/vgpu0) updates
+	// physical GPU nvidia0 and preserves its Topology.
+	ngm.SetDeviceHealth("nvidia0/vgpu0", pluginapi.Unhealthy, nil)
+	if got := ngm.DeviceHealth("nvidia0"); got != pluginapi.Unhealthy {
+		t.Errorf("DeviceHealth(nvidia0) = %q, want %q", got, pluginapi.Unhealthy)
+	}
+	if got := ngm.ListPhysicalGPUs()["nvidia0"].Topology; !reflect.DeepEqual(got, topo0) {
+		t.Errorf("nvidia0 topology = %+v, want %+v", got, topo0)
+	}
+}

@@ -16,10 +16,12 @@ package metrics
 
 import (
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 )
 
@@ -206,4 +208,59 @@ func TestMetricsUpdate(t *testing.T) {
 				"nvidia", "8732906554", "model1")) != 375 {
 		t.Fatalf("Wrong Result in MemoryUsedNodeGpu")
 	}
+}
+
+func TestMetricServer_StopStartAndRegisterer(t *testing.T) {
+	var nilServer *MetricServer
+	if nilServer.Registerer() == nil {
+		t.Fatal("nilServer.Registerer() returned nil")
+	}
+
+	ms := NewMetricServer(1000, 0, "/metrics")
+	reg := prometheus.NewRegistry()
+	ms.registerer = reg
+	if ms.Registerer() != reg {
+		t.Fatal("ms.Registerer() did not return configured registry")
+	}
+
+	var initCalls atomic.Int32
+	var httpCalls atomic.Int32
+	ms.initDevices = func() error {
+		initCalls.Add(1)
+		gpuDevices = map[string]*nvml.Device{"nvidia0": {}}
+		return nil
+	}
+	ms.startHTTP = func() {
+		httpCalls.Add(1)
+	}
+
+	if err := ms.Start(); err != nil {
+		t.Fatalf("first Start: %v", err)
+	}
+	// Idempotent second Start while running.
+	if err := ms.Start(); err != nil {
+		t.Fatalf("duplicate Start: %v", err)
+	}
+	if got := initCalls.Load(); got != 1 {
+		t.Errorf("initCalls after duplicate Start = %d, want 1", got)
+	}
+
+	ms.Stop()
+	// Idempotent second Stop.
+	ms.Stop()
+	if gpuDevices != nil {
+		t.Errorf("gpuDevices after Stop = %v, want nil", gpuDevices)
+	}
+
+	// Restart after GPU reset.
+	if err := ms.Start(); err != nil {
+		t.Fatalf("restart Start: %v", err)
+	}
+	if got := initCalls.Load(); got != 2 {
+		t.Errorf("initCalls after restart = %d, want 2", got)
+	}
+	if got := httpCalls.Load(); got != 1 {
+		t.Errorf("httpCalls after restart = %d, want 1 (httpOnce)", got)
+	}
+	ms.Stop()
 }
