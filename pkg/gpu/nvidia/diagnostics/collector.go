@@ -276,11 +276,13 @@ func (c *Collector) Run(ctx context.Context, trigger Trigger) Result {
 	return res
 }
 
-// groupAlive polls until the process group is gone or the timeout elapses.
+// groupAlive polls until the process group has no live (non-zombie) members or
+// the timeout elapses. Zombies are ignored: without a reaping init (e.g. a
+// container whose PID 1 doesn't wait), killed children stay as zombies forever.
 func groupAlive(pgid int, timeout time.Duration) bool {
 	deadline := time.Now().Add(timeout)
 	for {
-		if err := syscall.Kill(-pgid, 0); errors.Is(err, syscall.ESRCH) {
+		if err := syscall.Kill(-pgid, 0); errors.Is(err, syscall.ESRCH) || !groupHasLiveMember(pgid) {
 			return false
 		}
 		if time.Now().After(deadline) {
@@ -288,6 +290,35 @@ func groupAlive(pgid int, timeout time.Duration) bool {
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
+}
+
+// groupHasLiveMember reports whether any process in pgid is not a zombie.
+// It errs on the side of "alive" if /proc can't be read.
+func groupHasLiveMember(pgid int) bool {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return true
+	}
+	want := fmt.Sprint(pgid)
+	for _, e := range entries {
+		if e.Name()[0] < '0' || e.Name()[0] > '9' {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join("/proc", e.Name(), "stat"))
+		if err != nil {
+			continue
+		}
+		// Format: pid (comm) state ppid pgrp ...; comm may contain spaces or ')'.
+		i := bytes.LastIndexByte(b, ')')
+		if i < 0 {
+			continue
+		}
+		f := strings.Fields(string(b[i+1:]))
+		if len(f) >= 3 && f[2] == want && f[0] != "Z" && f[0] != "X" {
+			return true
+		}
+	}
+	return false
 }
 
 // tailBuffer is an io.Writer that keeps only the last max bytes written to it.
