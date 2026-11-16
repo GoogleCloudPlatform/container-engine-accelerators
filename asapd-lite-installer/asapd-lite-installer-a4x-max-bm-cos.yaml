@@ -53,6 +53,12 @@ spec:
         env:
         - name: LD_LIBRARY_PATH
           value: /asapd-lite/controller
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 19540
+          failureThreshold: 60
+          periodSeconds: 10
         livenessProbe:
           httpGet:
             path: /healthz
