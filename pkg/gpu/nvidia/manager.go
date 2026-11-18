@@ -24,6 +24,7 @@ import (
 	"os/exec"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -174,9 +175,43 @@ func NewNvidiaGPUManager(devDirectory, procDirectory string, mountPaths []plugin
 // ListPhysicalDevices lists all physical GPU devices (including partitions) available on this node.
 func (ngm *nvidiaGPUManager) ListPhysicalDevices() map[string]pluginapi.Device {
 	if ngm.gpuConfig.GPUPartitionSize == "" {
-		return ngm.devices
+		return ngm.ListPhysicalGPUs()
 	}
 	return ngm.migDeviceManager.ListGPUPartitionDevices()
+}
+
+// ListPhysicalGPUs returns the underlying physical GPU devices (e.g. nvidia0,
+// nvidia1) on this node regardless of whether MIG partitioning is enabled.
+// Reset target validation must use this map rather than ListPhysicalDevices so
+// that physical GPU targets are not validated against the MIG partition map.
+func (ngm *nvidiaGPUManager) ListPhysicalGPUs() map[string]pluginapi.Device {
+	ngm.devicesMutex.Lock()
+	defer ngm.devicesMutex.Unlock()
+
+	out := make(map[string]pluginapi.Device, len(ngm.devices))
+	for k, v := range ngm.devices {
+		out[k] = v
+	}
+	return out
+}
+
+// PhysicalGPUIDs returns the sorted physical GPU device names (e.g. "nvidia0",
+// "nvidia1") on the node, independent of MIG partitioning or GPU sharing.
+func (ngm *nvidiaGPUManager) PhysicalGPUIDs() []string {
+	ngm.devicesMutex.Lock()
+	defer ngm.devicesMutex.Unlock()
+
+	ids := make([]string, 0, len(ngm.devices))
+	for id := range ngm.devices {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	return ids
+}
+
+// MIGDeviceManager returns the underlying MIG DeviceManager.
+func (ngm *nvidiaGPUManager) MIGDeviceManager() *mig.DeviceManager {
+	return &ngm.migDeviceManager
 }
 
 func (ngm *nvidiaGPUManager) ListHealthCriticalXid() []int {
@@ -303,8 +338,8 @@ func (ngm *nvidiaGPUManager) discoverNumGPUs() (int, error) {
 	return deviceCount, nil
 }
 
-// isMpsHealthy checks whether MPS control daemon is running and healhty on the node.
-func (ngm *nvidiaGPUManager) isMpsHealthy() error {
+// IsMPSHealthy checks whether the MPS control daemon is running and healthy on the node.
+func IsMPSHealthy() error {
 	var out bytes.Buffer
 	reader, writer := io.Pipe()
 	defer writer.Close()
@@ -332,6 +367,11 @@ func (ngm *nvidiaGPUManager) isMpsHealthy() error {
 	return nil
 }
 
+// IsMPSHealthy checks whether MPS control daemon is running and healthy on the node.
+func (ngm *nvidiaGPUManager) IsMPSHealthy() error {
+	return IsMPSHealthy()
+}
+
 func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == gpusharing.MPS {
 		activeThreadLimit := numDevicesRequested * 100 / ngm.gpuConfig.GPUSharingConfig.MaxSharedClientsPerGPU
@@ -347,14 +387,49 @@ func (ngm *nvidiaGPUManager) Envs(numDevicesRequested int) map[string]string {
 	return map[string]string{}
 }
 
+// DeviceHealth returns the health status currently tracked for a physical GPU,
+// MIG partition, or virtual GPU device ID.
+func (ngm *nvidiaGPUManager) DeviceHealth(name string) string {
+	if gpusharing.IsVirtualDeviceID(name) {
+		if physID, err := gpusharing.VirtualToPhysicalDeviceID(name); err == nil {
+			name = physID
+		}
+	}
+
+	reg := regexp.MustCompile(nvidiaDeviceRE)
+	if reg.MatchString(name) {
+		ngm.devicesMutex.Lock()
+		defer ngm.devicesMutex.Unlock()
+		if dev, ok := ngm.devices[name]; ok {
+			return dev.Health
+		}
+		return ""
+	}
+	if dev, ok := ngm.migDeviceManager.ListGPUPartitionDevices()[name]; ok {
+		return dev.Health
+	}
+	return ""
+}
+
 // SetDeviceHealth sets the health status for a GPU device or partition if MIG is enabled
 func (ngm *nvidiaGPUManager) SetDeviceHealth(name string, health string, topology *pluginapi.TopologyInfo) {
 	ngm.devicesMutex.Lock()
 	defer ngm.devicesMutex.Unlock()
 
+	if gpusharing.IsVirtualDeviceID(name) {
+		if physID, err := gpusharing.VirtualToPhysicalDeviceID(name); err == nil {
+			name = physID
+		}
+	}
+
 	reg := regexp.MustCompile(nvidiaDeviceRE)
 
 	if reg.MatchString(name) {
+		if topology == nil {
+			if existing, ok := ngm.devices[name]; ok {
+				topology = existing.Topology
+			}
+		}
 		ngm.devices[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 	} else {
 		ngm.migDeviceManager.SetDeviceHealth(name, health, topology)
@@ -406,7 +481,7 @@ func (ngm *nvidiaGPUManager) Start() error {
 	}
 
 	if ngm.gpuConfig.GPUSharingConfig.GPUSharingStrategy == "mps" {
-		if err := ngm.isMpsHealthy(); err != nil {
+		if err := ngm.IsMPSHealthy(); err != nil {
 			return fmt.Errorf("NVIDIA MPS is not running on this node: %v", err)
 		}
 		ngm.mountPaths = append(ngm.mountPaths, pluginapi.Mount{HostPath: nvidiaMpsDir, ContainerPath: nvidiaMpsDir, ReadOnly: false})
