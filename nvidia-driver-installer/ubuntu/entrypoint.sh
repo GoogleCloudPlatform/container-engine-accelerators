@@ -25,6 +25,8 @@ NVIDIA_DRIVER_DOWNLOAD_URL="${NVIDIA_DRIVER_DOWNLOAD_URL:-$NVIDIA_DRIVER_DOWNLOA
 NVIDIA_INSTALL_DIR_HOST="${NVIDIA_INSTALL_DIR_HOST:-/var/lib/nvidia}"
 NVIDIA_INSTALL_DIR_CONTAINER="${NVIDIA_INSTALL_DIR_CONTAINER:-/usr/local/nvidia}"
 NVIDIA_INSTALLER_RUNFILE="$(basename "${NVIDIA_DRIVER_DOWNLOAD_URL}")"
+KERNEL_SOURCE_DOWNLOAD_COMMAND_DEFAULT='apt-get update && apt-get install -y linux-headers-${KERNEL_VERSION}'
+KERNEL_SOURCE_DOWNLOAD_COMMAND="${KERNEL_SOURCE_DOWNLOAD_COMMAND:-$KERNEL_SOURCE_DOWNLOAD_COMMAND_DEFAULT}"
 ROOT_MOUNT_DIR="${ROOT_MOUNT_DIR:-/root}"
 CACHE_FILE="${NVIDIA_INSTALL_DIR_CONTAINER}/.cache"
 KERNEL_VERSION="$(uname -r)"
@@ -69,7 +71,9 @@ update_container_ld_cache() {
 
 download_kernel_src() {
   echo "Downloading kernel sources..."
-  apt-get update && apt-get install -y linux-headers-${KERNEL_VERSION}
+  if [[ ${KERNEL_SOURCE_DOWNLOAD_COMMAND} ]]; then
+    eval ${KERNEL_SOURCE_DOWNLOAD_COMMAND}
+  fi
   echo "Downloading kernel sources... DONE."
 }
 
@@ -106,7 +110,7 @@ configure_nvidia_installation_dirs() {
   update_container_ld_cache
 
   # Install an exit handler to cleanup the overlayfs mount points.
-  trap "{ umount /lib/modules/${KERNEL_VERSION}/video; umount /usr/lib/x86_64-linux-gnu ; umount /usr/bin; }" EXIT
+  trap "{ umount /lib/modules/${KERNEL_VERSION}/video; umount /usr/lib/x86_64-linux-gnu ; umount -l /usr/bin; }" EXIT
   popd
   echo "Configuring installation directories... DONE."
 }
@@ -129,6 +133,7 @@ run_nvidia_installer() {
     --log-file-name="${NVIDIA_INSTALL_DIR_CONTAINER}/nvidia-installer.log" \
     --no-drm \
     --silent \
+    $(eval "echo ${NVIDIA_INSTALLER_EXTRA_ARGS}") \
     --accept-license
   popd
   echo "Running Nvidia installer... DONE."
