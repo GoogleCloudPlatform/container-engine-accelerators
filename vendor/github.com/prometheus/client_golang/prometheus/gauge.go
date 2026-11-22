@@ -62,7 +62,7 @@ type GaugeVecOpts struct {
 	GaugeOpts
 
 	// VariableLabels are used to partition the metric vector by the given set
-	// of labels. Each label value will be constrained with the optional Contraint
+	// of labels. Each label value will be constrained with the optional Constraint
 	// function, if provided.
 	VariableLabels ConstrainableLabels
 }
@@ -76,11 +76,12 @@ type GaugeVecOpts struct {
 // scenarios for Gauges and Counters, where the former tends to be Set-heavy and
 // the latter Inc-heavy.
 func NewGauge(opts GaugeOpts) Gauge {
-	desc := NewDesc(
+	desc := V2.NewDesc(
 		BuildFQName(opts.Namespace, opts.Subsystem, opts.Name),
 		opts.Help,
-		nil,
+		UnconstrainedLabels(nil),
 		opts.ConstLabels,
+		WithUnit(opts.Unit),
 	)
 	result := &gauge{desc: desc, labelPairs: desc.constLabelPairs}
 	result.init(result) // Init self-collection.
@@ -135,7 +136,7 @@ func (g *gauge) Sub(val float64) {
 
 func (g *gauge) Write(out *dto.Metric) error {
 	val := math.Float64frombits(atomic.LoadUint64(&g.valBits))
-	return populateMetric(GaugeValue, val, g.labelPairs, nil, out)
+	return populateMetric(GaugeValue, val, g.labelPairs, nil, out, nil)
 }
 
 // GaugeVec is a Collector that bundles a set of Gauges that all share the same
@@ -163,11 +164,12 @@ func (v2) NewGaugeVec(opts GaugeVecOpts) *GaugeVec {
 		opts.Help,
 		opts.VariableLabels,
 		opts.ConstLabels,
+		WithUnit(opts.Unit),
 	)
 	return &GaugeVec{
 		MetricVec: NewMetricVec(desc, func(lvs ...string) Metric {
-			if len(lvs) != len(desc.variableLabels) {
-				panic(makeInconsistentCardinalityError(desc.fqName, desc.variableLabels.labelNames(), lvs))
+			if len(lvs) != len(desc.variableLabels.names) {
+				panic(makeInconsistentCardinalityError(desc.fqName, desc.variableLabels.names, lvs))
 			}
 			result := &gauge{desc: desc, labelPairs: MakeLabelPairs(desc, lvs)}
 			result.init(result) // Init self-collection.
@@ -302,10 +304,11 @@ type GaugeFunc interface {
 // value of 1. Example:
 // https://github.com/prometheus/common/blob/8558a5b7db3c84fa38b4766966059a7bd5bfa2ee/version/info.go#L36-L56
 func NewGaugeFunc(opts GaugeOpts, function func() float64) GaugeFunc {
-	return newValueFunc(NewDesc(
+	return newValueFunc(V2.NewDesc(
 		BuildFQName(opts.Namespace, opts.Subsystem, opts.Name),
 		opts.Help,
-		nil,
+		UnconstrainedLabels(nil),
 		opts.ConstLabels,
+		WithUnit(opts.Unit),
 	), GaugeValue, function)
 }
