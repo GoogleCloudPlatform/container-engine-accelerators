@@ -20,15 +20,23 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
+	"strings"
+	"sync"
 
-	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/nvmlutil"
-	"github.com/NVIDIA/go-nvml/pkg/nvml"
 	"github.com/golang/glog"
 	pluginapi "k8s.io/kubelet/pkg/apis/deviceplugin/v1beta1"
 )
 
-const nvidiaDeviceRE = `^nvidia[0-9]*$`
+const nvidiaDeviceRE = `^nvidia([0-9]+)$`
+
+var (
+	nvidiaDeviceRegexp = regexp.MustCompile(nvidiaDeviceRE)
+	gpuFileRegexp      = regexp.MustCompile(`^gpu([0-9]+)$`)
+	giFileRegexp       = regexp.MustCompile(`^gi([0-9]+)$`)
+	deviceRegexp       = regexp.MustCompile(`DeviceFileMinor: ([0-9]+)`)
+)
 
 // Max number of GPU partitions that can be created for each partition size.
 // Source: https://docs.nvidia.com/datacenter/tesla/mig-user-guide/#partitioning
@@ -38,11 +46,13 @@ var (
 		"1g.5gb":  7,
 		"2g.10gb": 3,
 		"3g.20gb": 2,
+		"4g.20gb": 1,
 		"7g.40gb": 1,
 		//nvidia-a100-80gb, nvidia-h100-80gb
 		"1g.10gb": 7,
 		"2g.20gb": 3,
 		"3g.40gb": 2,
+		"4g.40gb": 1,
 		"7g.80gb": 1,
 		//nvidia-h100-80gb
 		"1g.20gb": 4,
@@ -85,6 +95,7 @@ var (
 
 // DeviceManager performs various management operations on mig devices.
 type DeviceManager struct {
+	mu                sync.RWMutex
 	devDirectory      string
 	procDirectory     string
 	gpuPartitionSpecs map[string][]pluginapi.DeviceSpec
@@ -104,17 +115,65 @@ func NewDeviceManager(devDirectory, procDirectory string) DeviceManager {
 // ListGPUPartitionDevices lists all the GPU partitions as devices that can be advertised as
 // resources available on the node.
 func (d *DeviceManager) ListGPUPartitionDevices() map[string]pluginapi.Device {
-	return d.gpuPartitions
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	out := make(map[string]pluginapi.Device, len(d.gpuPartitions))
+	for k, v := range d.gpuPartitions {
+		out[k] = v
+	}
+	return out
 }
 
-// DeviceSpec returns the device spec that inclues list of devices to allocate for a deviceID.
+// PartitionIDs returns the sorted MIG partition device IDs (e.g. "nvidia0/gi1",
+// "nvidia0/gi2") currently registered for the given physical GPU ("nvidia0").
+func (d *DeviceManager) PartitionIDs(gpu string) []string {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
+	prefix := gpu + "/"
+	var ids []string
+	for id := range d.gpuPartitions {
+		if strings.HasPrefix(id, prefix) {
+			ids = append(ids, id)
+		}
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		giI, okI := parseGIIndex(strings.TrimPrefix(ids[i], prefix))
+		giJ, okJ := parseGIIndex(strings.TrimPrefix(ids[j], prefix))
+		if okI && okJ && giI != giJ {
+			return giI < giJ
+		}
+		return ids[i] < ids[j]
+	})
+	return ids
+}
+
+func parseGIIndex(giName string) (int, bool) {
+	m := giFileRegexp.FindStringSubmatch(giName)
+	if len(m) != 2 {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, false
+	}
+	return n, true
+}
+
+// DeviceSpec returns the device spec that includes list of devices to allocate for a deviceID.
 func (d *DeviceManager) DeviceSpec(deviceID string) ([]pluginapi.DeviceSpec, error) {
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+
 	deviceSpecs, ok := d.gpuPartitionSpecs[deviceID]
 	if !ok {
 		return []pluginapi.DeviceSpec{}, fmt.Errorf("invalid allocation request with non-existing GPU partition: %s", deviceID)
 	}
 
-	return deviceSpecs, nil
+	out := make([]pluginapi.DeviceSpec, len(deviceSpecs))
+	copy(out, deviceSpecs)
+	return out, nil
 }
 
 // Start method performs the necessary initializations and starts the mig.DeviceManager.
@@ -128,29 +187,80 @@ func (d *DeviceManager) Start(partitionSize string) error {
 		return fmt.Errorf("%s is not a valid GPU partition size", partitionSize)
 	}
 
-	d.gpuPartitionSpecs = make(map[string][]pluginapi.DeviceSpec)
+	gpuIDs, err := d.discoverGPUIDs()
+	if err != nil {
+		return err
+	}
+	if len(gpuIDs) == 0 {
+		return fmt.Errorf("no NVIDIA GPU devices found in %s", d.devDirectory)
+	}
 
 	numPartitionsPerGPU, err := d.DiscoverAndMountMIGDevices()
 	if err != nil {
 		return err
 	}
 
-	numPartitionedGPUs := 0
 	for gpuID, numPartitions := range numPartitionsPerGPU {
 		if numPartitions != maxPartitionCount {
-			return fmt.Errorf("Number of partitions (%d) for GPU %s does not match expected partition count (%d)", numPartitions, gpuID, maxPartitionCount)
+			return fmt.Errorf("number of partitions (%d) for GPU %s does not match expected partition count (%d)", numPartitions, gpuID, maxPartitionCount)
 		}
-		numPartitionedGPUs++
 	}
 
-	numGPUs, err := d.discoverNumGPUs()
+	for _, gpuID := range gpuIDs {
+		numPartitions, ok := numPartitionsPerGPU[gpuID]
+		if !ok || numPartitions != maxPartitionCount {
+			return fmt.Errorf("not all GPUs are partitioned as expected: total number of GPUs: %d, number of partitioned GPUs: %d", len(gpuIDs), len(numPartitionsPerGPU))
+		}
+	}
+	if len(numPartitionsPerGPU) != len(gpuIDs) {
+		return fmt.Errorf("not all GPUs are partitioned as expected: total number of GPUs: %d, number of partitioned GPUs: %d", len(gpuIDs), len(numPartitionsPerGPU))
+	}
+
+	return nil
+}
+
+// DiscoverGPU rediscovers the MIG instances and /dev/nvidia-caps minors for a
+// single physical GPU (e.g. "nvidia0") and verifies that its partition count
+// matches partitionSize. Other GPUs' partition maps are left untouched.
+func (d *DeviceManager) DiscoverGPU(gpu, partitionSize string) error {
+	m := nvidiaDeviceRegexp.FindStringSubmatch(gpu)
+	if len(m) != 2 {
+		return fmt.Errorf("invalid physical GPU name %q", gpu)
+	}
+	gpuID := m[1]
+
+	maxPartitionCount, ok := gpuPartitionSizeMaxCount[partitionSize]
+	if !ok {
+		return fmt.Errorf("%s is not a valid GPU partition size", partitionSize)
+	}
+
+	specs, partitions, numPartitions, err := d.discoverGPUMIGDevices(gpuID)
 	if err != nil {
 		return err
 	}
-	if numPartitionedGPUs != numGPUs {
-		return fmt.Errorf("Not all GPUs are partitioned as expected. Total number of GPUs: %d, number of partitioned GPUs: %d", numGPUs, numPartitionedGPUs)
+	if numPartitions != maxPartitionCount {
+		return fmt.Errorf("number of partitions (%d) for GPU %s does not match expected partition count (%d)", numPartitions, gpu, maxPartitionCount)
 	}
 
+	prefix := "nvidia" + gpuID + "/"
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for id := range d.gpuPartitionSpecs {
+		if strings.HasPrefix(id, prefix) {
+			delete(d.gpuPartitionSpecs, id)
+		}
+	}
+	for id := range d.gpuPartitions {
+		if strings.HasPrefix(id, prefix) {
+			delete(d.gpuPartitions, id)
+		}
+	}
+	for id, spec := range specs {
+		d.gpuPartitionSpecs[id] = spec
+	}
+	for id, dev := range partitions {
+		d.gpuPartitions[id] = dev
+	}
 	return nil
 }
 
@@ -162,11 +272,9 @@ func (d *DeviceManager) DiscoverAndMountMIGDevices() (map[string]int, error) {
 		return nil, fmt.Errorf("failed to read capabilities directory (%s): %v", nvidiaCapDir, err)
 	}
 
-	gpuFileRegexp := regexp.MustCompile("gpu([0-9]+)")
-	giFileRegexp := regexp.MustCompile("gi([0-9]+)")
-	deviceRegexp := regexp.MustCompile("DeviceFileMinor: ([0-9]+)")
-
 	numPartitionsPerGPU := make(map[string]int)
+	allSpecs := make(map[string][]pluginapi.DeviceSpec)
+	allPartitions := make(map[string]pluginapi.Device)
 
 	for _, capFile := range capFiles {
 		m := gpuFileRegexp.FindStringSubmatch(capFile.Name())
@@ -176,133 +284,147 @@ func (d *DeviceManager) DiscoverAndMountMIGDevices() (map[string]int, error) {
 		}
 
 		gpuID := m[1]
-		giBasePath := path.Join(nvidiaCapDir, capFile.Name(), "mig")
-		giFiles, err := ioutil.ReadDir(giBasePath)
+		specs, partitions, numPartitions, err := d.discoverGPUMIGDevices(gpuID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read GPU instance capabilities dir (%s): %v", giBasePath, err)
+			return nil, err
 		}
-
-		numPartitions := 0
-		for _, giFile := range giFiles {
-			if !giFileRegexp.MatchString(giFile.Name()) {
-				continue
-			}
-
-			numPartitions++
-
-			gpuInstanceID := "nvidia" + gpuID + "/" + giFile.Name()
-			giAccessFile := path.Join(giBasePath, giFile.Name(), "access")
-			content, err := ioutil.ReadFile(giAccessFile)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read GPU Instance access file (%s): %v", giAccessFile, err)
-			}
-
-			m := deviceRegexp.FindStringSubmatch(string(content))
-			if len(m) != 2 {
-				return nil, fmt.Errorf("unexpected contents in GPU instance access file(%s): %v", giAccessFile, err)
-			}
-			giMinorDevice, err := strconv.Atoi(m[1])
-			if err != nil {
-				return nil, fmt.Errorf("failed to find minor device from GPU instance access file(%s): %v", giAccessFile, err)
-			}
-
-			ciAccessFile := path.Join(giBasePath, giFile.Name(), "ci0", "access")
-			content, err = ioutil.ReadFile(ciAccessFile)
-			if err != nil {
-				return nil, fmt.Errorf("unable to read Compute Instance access file (%s): %v", ciAccessFile, err)
-			}
-
-			m = deviceRegexp.FindStringSubmatch(string(content))
-			if len(m) != 2 {
-				return nil, fmt.Errorf("unexpected contents in compute instance access file(%s): %v", ciAccessFile, err)
-			}
-			ciMinorDevice, err := strconv.Atoi(m[1])
-			if err != nil {
-				return nil, fmt.Errorf("failed to find minor device from compute instance access file(%s): %v", ciAccessFile, err)
-			}
-
-			gpuDevice := path.Join(d.devDirectory, "nvidia"+gpuID)
-			if _, err := os.Stat(gpuDevice); err != nil {
-				return nil, fmt.Errorf("GPU device (%s) not fount: %v", gpuDevice, err)
-			}
-
-			giDevice := path.Join(d.devDirectory, "nvidia-caps", "nvidia-cap"+strconv.Itoa(giMinorDevice))
-			if _, err := os.Stat(giDevice); err != nil {
-				return nil, fmt.Errorf("GPU instance device (%s) not fount: %v", giDevice, err)
-			}
-
-			ciDevice := path.Join(d.devDirectory, "nvidia-caps", "nvidia-cap"+strconv.Itoa(ciMinorDevice))
-			if _, err := os.Stat(ciDevice); err != nil {
-				return nil, fmt.Errorf("Compute instance device (%s) not fount: %v", ciDevice, err)
-			}
-
-			glog.Infof("Discovered GPU partition: %s", gpuInstanceID)
-			d.gpuPartitionSpecs[gpuInstanceID] = []pluginapi.DeviceSpec{
-				{
-					ContainerPath: gpuDevice,
-					HostPath:      gpuDevice,
-					Permissions:   "mrw",
-				},
-				{
-					ContainerPath: giDevice,
-					HostPath:      giDevice,
-					Permissions:   "mrw",
-				},
-				{
-					ContainerPath: ciDevice,
-					HostPath:      ciDevice,
-					Permissions:   "mrw",
-				},
-			}
-			topologyInfo, err := d.topology(gpuID)
-			if err != nil {
-				glog.Errorf("unable to get topology for device with index %d: %v", gpuID, err)
-			}
-			d.gpuPartitions[gpuInstanceID] = pluginapi.Device{ID: gpuInstanceID, Health: pluginapi.Healthy, Topology: topologyInfo}
+		for id, spec := range specs {
+			allSpecs[id] = spec
+		}
+		for id, dev := range partitions {
+			allPartitions[id] = dev
 		}
 		numPartitionsPerGPU[gpuID] = numPartitions
 	}
+
+	d.mu.Lock()
+	d.gpuPartitionSpecs = allSpecs
+	d.gpuPartitions = allPartitions
+	d.mu.Unlock()
+
 	return numPartitionsPerGPU, nil
+}
+
+func (d *DeviceManager) discoverGPUMIGDevices(gpuID string) (map[string][]pluginapi.DeviceSpec, map[string]pluginapi.Device, int, error) {
+	nvidiaCapDir := path.Join(d.procDirectory, "driver/nvidia/capabilities")
+	giBasePath := path.Join(nvidiaCapDir, "gpu"+gpuID, "mig")
+	giFiles, err := ioutil.ReadDir(giBasePath)
+	if err != nil {
+		return nil, nil, 0, fmt.Errorf("failed to read GPU instance capabilities dir (%s): %v", giBasePath, err)
+	}
+
+	specs := make(map[string][]pluginapi.DeviceSpec)
+	partitions := make(map[string]pluginapi.Device)
+	numPartitions := 0
+
+	for _, giFile := range giFiles {
+		if !giFileRegexp.MatchString(giFile.Name()) {
+			continue
+		}
+
+		numPartitions++
+
+		gpuInstanceID := "nvidia" + gpuID + "/" + giFile.Name()
+		giAccessFile := path.Join(giBasePath, giFile.Name(), "access")
+		content, err := ioutil.ReadFile(giAccessFile)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to read GPU Instance access file (%s): %v", giAccessFile, err)
+		}
+
+		m := deviceRegexp.FindStringSubmatch(string(content))
+		if len(m) != 2 {
+			return nil, nil, 0, fmt.Errorf("unexpected contents in GPU instance access file(%s)", giAccessFile)
+		}
+		giMinorDevice, err := strconv.Atoi(m[1])
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to find minor device from GPU instance access file(%s): %v", giAccessFile, err)
+		}
+
+		ciAccessFile := path.Join(giBasePath, giFile.Name(), "ci0", "access")
+		content, err = ioutil.ReadFile(ciAccessFile)
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("unable to read Compute Instance access file (%s): %v", ciAccessFile, err)
+		}
+
+		m = deviceRegexp.FindStringSubmatch(string(content))
+		if len(m) != 2 {
+			return nil, nil, 0, fmt.Errorf("unexpected contents in compute instance access file(%s)", ciAccessFile)
+		}
+		ciMinorDevice, err := strconv.Atoi(m[1])
+		if err != nil {
+			return nil, nil, 0, fmt.Errorf("failed to find minor device from compute instance access file(%s): %v", ciAccessFile, err)
+		}
+
+		gpuDevice := path.Join(d.devDirectory, "nvidia"+gpuID)
+		if _, err := os.Stat(gpuDevice); err != nil {
+			return nil, nil, 0, fmt.Errorf("gpu device (%s) not found: %v", gpuDevice, err)
+		}
+
+		giDevice := path.Join(d.devDirectory, "nvidia-caps", "nvidia-cap"+strconv.Itoa(giMinorDevice))
+		if _, err := os.Stat(giDevice); err != nil {
+			return nil, nil, 0, fmt.Errorf("gpu instance device (%s) not found: %v", giDevice, err)
+		}
+
+		ciDevice := path.Join(d.devDirectory, "nvidia-caps", "nvidia-cap"+strconv.Itoa(ciMinorDevice))
+		if _, err := os.Stat(ciDevice); err != nil {
+			return nil, nil, 0, fmt.Errorf("compute instance device (%s) not found: %v", ciDevice, err)
+		}
+
+		glog.Infof("Discovered GPU partition: %s", gpuInstanceID)
+		specs[gpuInstanceID] = []pluginapi.DeviceSpec{
+			{
+				ContainerPath: gpuDevice,
+				HostPath:      gpuDevice,
+				Permissions:   "mrw",
+			},
+			{
+				ContainerPath: giDevice,
+				HostPath:      giDevice,
+				Permissions:   "mrw",
+			},
+			{
+				ContainerPath: ciDevice,
+				HostPath:      ciDevice,
+				Permissions:   "mrw",
+			},
+		}
+		topologyInfo, err := d.topology(gpuID)
+		if err != nil {
+			glog.Errorf("unable to get topology for device with index %s: %v", gpuID, err)
+		}
+		partitions[gpuInstanceID] = pluginapi.Device{ID: gpuInstanceID, Health: pluginapi.Healthy, Topology: topologyInfo}
+	}
+
+	return specs, partitions, numPartitions, nil
 }
 
 // SetDeviceHealth sets the health status for a GPU partition
 func (d *DeviceManager) SetDeviceHealth(name string, health string, topology *pluginapi.TopologyInfo) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if topology == nil {
+		if existing, ok := d.gpuPartitions[name]; ok {
+			topology = existing.Topology
+		}
+	}
 	d.gpuPartitions[name] = pluginapi.Device{ID: name, Health: health, Topology: topology}
 }
 
-// Discovers all NVIDIA GPU devices available on the local node by walking nvidiaGPUManager's devDirectory.
-func (d *DeviceManager) discoverNumGPUs() (int, error) {
-	numGPUs := 0
-
-	reg := regexp.MustCompile(nvidiaDeviceRE)
+func (d *DeviceManager) discoverGPUIDs() ([]string, error) {
 	files, err := ioutil.ReadDir(d.devDirectory)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read devices on node: %v", err)
+		return nil, fmt.Errorf("failed to read devices on node: %v", err)
 	}
 
+	var gpuIDs []string
 	for _, f := range files {
 		if f.IsDir() {
 			continue
 		}
-		if reg.MatchString(f.Name()) {
-			numGPUs++
+		if m := nvidiaDeviceRegexp.FindStringSubmatch(f.Name()); len(m) == 2 {
+			gpuIDs = append(gpuIDs, m[1])
 		}
 	}
-	return numGPUs, nil
-}
-
-func (d *DeviceManager) topology(deviceIndex string) (*pluginapi.TopologyInfo, error) {
-	index, err := strconv.Atoi(deviceIndex)
-	if err != nil {
-		return nil, fmt.Errorf("unable to convert deviceIndex %q string to int: %v", deviceIndex, err)
-	}
-
-	if nvmlutil.NvmlDeviceInfo == nil {
-		nvmlutil.NvmlDeviceInfo = &nvmlutil.DeviceInfo{}
-	}
-	device, ret := nvmlutil.NvmlDeviceInfo.DeviceHandleByIndex(index)
-	if ret != nvml.SUCCESS {
-		return nil, fmt.Errorf("failed to get mig device handle: %v", nvml.ErrorString(ret))
-	}
-	return nvmlutil.Topology(device, pciDevicesRoot)
+	return gpuIDs, nil
 }

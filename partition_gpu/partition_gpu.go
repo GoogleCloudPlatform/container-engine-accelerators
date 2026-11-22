@@ -15,17 +15,17 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
-	"regexp"
 	"strings"
 	"syscall"
 
+	"github.com/GoogleCloudPlatform/container-engine-accelerators/pkg/gpu/nvidia/mig"
 	"github.com/golang/glog"
 )
 
@@ -33,110 +33,6 @@ var (
 	nvidiaSmiPath = flag.String("nvidia-smi-path", "/usr/local/nvidia/bin/nvidia-smi", "Path where nvidia-smi is installed.")
 	gpuConfigFile = flag.String("gpu-config", "/etc/nvidia/gpu_config.json", "File with GPU configurations for device plugin")
 )
-
-var partitionSizeToProfileID = map[string]string{
-	//nvidia-tesla-a100
-	"1g.5gb":  "19",
-	"2g.10gb": "14",
-	"3g.20gb": "9",
-	"4g.20gb": "5",
-	"7g.40gb": "0",
-	//nvidia-a100-80gb, nvidia-h100-80gb
-	"1g.10gb": "19",
-	"2g.20gb": "14",
-	"3g.40gb": "9",
-	"4g.40gb": "5",
-	"7g.80gb": "0",
-	//nvidia-h100-80gb
-	"1g.20gb": "15",
-
-	//nvidia-h200-141gb
-	"1g.18gb":  "19",
-	"1g.35gb":  "15",
-	"2g.35gb":  "14",
-	"3g.71gb":  "9",
-	"4g.71gb":  "5",
-	"7g.141gb": "0",
-
-	//nvidia-b200, nvidia-gb200
-	"1g.23gb": "19",
-	//nvidia-b200
-	"1g.45gb":  "15",
-	"2g.45gb":  "14",
-	"3g.90gb":  "9",
-	"4g.90gb":  "5",
-	"7g.180gb": "0",
-
-	//nvidia-gb200
-	"1g.47gb":  "15",
-	"2g.47gb":  "14",
-	"3g.93gb":  "9",
-	"4g.93gb":  "5",
-	"7g.186gb": "0",
-
-	// nvidia-rtx-pro-6000
-	"1g.24gb":        "14",
-	"1g.24gb+me":     "21",
-	"1g.24gb+gfx":    "47",
-	"1g.24gb+me.all": "65",
-	"1g.24gb-me":     "67",
-	"2g.48gb":        "5",
-	"2g.48gb+gfx":    "35",
-	"2g.48gb+me.all": "64",
-	"2g.48gb-me":     "66",
-	"4g.96gb":        "0",
-	"4g.96gb+gfx":    "32",
-}
-
-var partitionSizeMaxCount = map[string]int{
-	//nvidia-tesla-a100
-	"1g.5gb":  7,
-	"2g.10gb": 3,
-	"3g.20gb": 2,
-	"4g.20gb": 1,
-	"7g.40gb": 1,
-	//nvidia-a100-80gb, nvidia-h100-80gb
-	"1g.10gb": 7,
-	"2g.20gb": 3,
-	"3g.40gb": 2,
-	"4g.40gb": 1,
-	"7g.80gb": 1,
-	//nvidia-h100-80gb
-	"1g.20gb": 4,
-	//nvidia-h200-141gb
-	"1g.18gb":  7,
-	"1g.35gb":  4,
-	"2g.35gb":  3,
-	"3g.71gb":  2,
-	"4g.71gb":  1,
-	"7g.141gb": 1,
-	//nvidia-b200, nvidia-gb200
-	"1g.23gb": 7,
-	//nvidia-b200
-	"1g.45gb":  4,
-	"2g.45gb":  3,
-	"3g.90gb":  2,
-	"4g.90gb":  1,
-	"7g.180gb": 1,
-	//nvidia-gb200
-	"1g.47gb":  4,
-	"2g.47gb":  3,
-	"3g.93gb":  2,
-	"4g.93gb":  1,
-	"7g.186gb": 1,
-	//nvidia-rtx-pro-6000
-	"1g.24gb":        4,
-	"1g.24gb+me":     1,
-	"1g.24gb+gfx":    4,
-	"1g.24gb+me.all": 1,
-	"1g.24gb-me":     4,
-	"2g.48gb":        2,
-	"2g.48gb+gfx":    2,
-	"2g.48gb+me.all": 1,
-	"2g.48gb-me":     2,
-	"4g.96gb":        1,
-	"4g.96gb+gfx":    1,
-}
 
 const (
 	SIGRTMIN         = 34
@@ -211,7 +107,7 @@ func main() {
 	glog.Infof("MIG mode is enabled on all GPUs, proceeding to create GPU partitions.")
 
 	// get the current partitions
-	desiredMaxCount := partitionSizeMaxCount[gpuConfig.GPUPartitionSize]
+	desiredMaxCount, _ := mig.PartitionMaxCount(gpuConfig.GPUPartitionSize)
 	isDesiredPartition := checkCurrentPartitionProfileCounts(desiredMaxCount)
 	if isDesiredPartition {
 		glog.Infof("Current GPU partition configuration matches the desired state. No changes needed.")
@@ -269,7 +165,7 @@ func enableMigMode() error {
 	return exec.Command(*nvidiaSmiPath, "-mig", "1").Run()
 }
 
-// checkGpuType checkes the GPU type used
+// checkGpuType checks the GPU type used
 func checkGpuType() (string, error) {
 	gpuType, err := exec.Command(*nvidiaSmiPath, "--query-gpu=gpu_name", "--format=csv,noheader").Output()
 	if err != nil {
@@ -300,161 +196,30 @@ func rebootNode() error {
 }
 
 func cleanupAllGPUPartitions() error {
-	args := []string{"mig", "-dci"}
-	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
-	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil && !strings.Contains(string(out), "No GPU instances found") &&
-		!strings.Contains(string(out), "No compute instances found") {
-		return fmt.Errorf("failed to destroy compute instance, nvidia-smi output: %s, error: %v ", string(out), err)
-	}
-	glog.Infof("Output:\n %s", string(out))
-
-	args = []string{"mig", "-dgi"}
-	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
-	out, err = exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil && !strings.Contains(string(out), "No GPU instances found") &&
-		!strings.Contains(string(out), "No compute instances found") {
-		return fmt.Errorf("failed to destroy gpu instance, nvidia-smi output: %s, error: %v ", string(out), err)
-	}
-	glog.Infof("Output:\n %s", string(out))
-	return nil
+	return mig.DestroyPartitions(context.Background(), mig.NewSMIFunc(*nvidiaSmiPath), "")
 }
 
 func createGPUPartitions(partitionSize string) error {
-	p, err := buildPartitionStr(partitionSize)
-	if err != nil {
-		return err
-	}
-
-	args := []string{"mig", "-cgi", p}
-	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
-	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil {
-		return fmt.Errorf("failed to create GPU Instances: output: %s, error: %v", string(out), err)
-	}
-	glog.Infof("Output:\n %s", string(out))
-
-	args = []string{"mig", "-cci"}
-	glog.Infof("Running %s %s", *nvidiaSmiPath, strings.Join(args, " "))
-	out, err = exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil {
-		return fmt.Errorf("failed to create compute instances: output: %s, error: %v", string(out), err)
-	}
-	glog.Infof("Output:\n %s", string(out))
-
-	return nil
-
+	return mig.CreatePartitions(context.Background(), mig.NewSMIFunc(*nvidiaSmiPath), "", partitionSize)
 }
 
 func buildPartitionStr(partitionSize string) (string, error) {
-	if partitionSize == "" {
-		return "", nil
-	}
-
-	p, ok := partitionSizeToProfileID[partitionSize]
-	if !ok {
-		return "", fmt.Errorf("%s is not a valid partition size", partitionSize)
-	}
-
-	partitionStr := p
-	for i := 1; i < partitionSizeMaxCount[partitionSize]; i++ {
-		partitionStr += fmt.Sprintf(",%s", p)
-	}
-
-	return partitionStr, nil
+	return mig.BuildPartitionStr(partitionSize)
 }
 
-// getCurrentPartitionProfileCounts checks for active MIG GPU instances,
-// and outputs a map of their profileIDs -> counts
+// checkCurrentPartitionProfileCounts checks for active MIG GPU instances,
+// and verifies whether their profileIDs and counts match desiredMaxCount.
 func checkCurrentPartitionProfileCounts(desiredMaxCount int) bool {
-	args := []string{"mig", "-lgi"}
-	out, err := exec.Command(*nvidiaSmiPath, args...).Output()
-	if err != nil {
-		glog.Errorf("failed to execute 'nvidia-smi mig -lgi': %v", err)
-		return false
-	}
-
-	glog.Infof("Output:\n %s", string(out))
-	outputText := string(out)
-	partitions, uniform, lgiError := parseLGIOutput(outputText)
-	if lgiError != nil {
-		glog.Errorf("failed to parse 'nvidia-smi mig -lgi' output: %v", lgiError)
-		return false
-	}
-	if !uniform {
-		glog.Info("Partitions are not uniform, partition reconstruction needed.")
-		return uniform
-	}
-	desiredPartition := checkDesired(partitions, desiredMaxCount)
-
-	return desiredPartition
+	return mig.CheckCurrentPartitionProfileCounts(context.Background(), mig.NewSMIFunc(*nvidiaSmiPath), "", desiredMaxCount)
 }
 
 // returns profile id map and if uniform
 func parseLGIOutput(lgiOutput string) (map[string][]string, bool, error) {
-	dataLineRegex, err := regexp.Compile(`^\s*(\d+)\s+(MIG\s+[\w\.\+\-]+)\s+(\d+)\s+(\d+)\s+([\d:]+)\s*$`)
-	if err != nil {
-		glog.Errorf("Internal error: failed to compile regex: %v", err)
-		return make(map[string][]string), false, err
-	}
-
-	gpuProfileIDsMap := make(map[string][]string)
-	profileIDFirst := ""
-
-	scanner := bufio.NewScanner(strings.NewReader(lgiOutput))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-
-		if strings.Contains(line, "====") {
-			continue
-		}
-		if !strings.HasPrefix(line, "|") || !strings.HasSuffix(line, "|") {
-			continue
-		}
-
-		contentInPipes := strings.TrimSpace(line[1 : len(line)-1])
-		matches := dataLineRegex.FindStringSubmatch(contentInPipes)
-
-		if len(matches) == 6 {
-			gpuIndex := matches[1]
-			profileID := matches[3]
-			if profileIDFirst == "" {
-				profileIDFirst = profileID
-			} else {
-				if profileIDFirst != profileID {
-					return gpuProfileIDsMap, false, nil
-				}
-			}
-			gpuProfileIDsMap[gpuIndex] = append(gpuProfileIDsMap[gpuIndex], profileID)
-			glog.Infof("Parsed GI on GPU %s: Profile ID %s", gpuIndex, profileID)
-		} else if contentInPipes != "" {
-			glog.Infof("Line did not match expected GI data format: '%s' (Content: '%s')", line, contentInPipes)
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return gpuProfileIDsMap, false, err
-	}
-
-	if len(gpuProfileIDsMap) == 0 {
-		return gpuProfileIDsMap, false, nil
-	}
-	glog.Infof("map: %v", gpuProfileIDsMap)
-	return gpuProfileIDsMap, true, nil
+	return mig.ParseLGIOutput(lgiOutput)
 }
 
 func checkDesired(partitions map[string][]string, desiredMaxCount int) bool {
-	if len(partitions) == 0 {
-		return false
-	}
-
-	for _, profileIDsOnGpu := range partitions {
-		if len(profileIDsOnGpu) != desiredMaxCount {
-			return false
-		}
-	}
-
-	return true
+	return mig.CheckDesired(partitions, desiredMaxCount)
 }
 
 func runNvidiaSmiStatus() {

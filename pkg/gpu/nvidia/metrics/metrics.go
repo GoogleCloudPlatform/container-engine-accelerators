@@ -17,6 +17,7 @@ package metrics
 import (
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/NVIDIA/go-nvml/pkg/nvml"
@@ -118,6 +119,14 @@ const metricsResetInterval = time.Minute
 
 // MetricServer exposes GPU metrics for all containers and nodes in prometheus format on the specified port.
 type MetricServer struct {
+	mu                   sync.Mutex
+	wg                   sync.WaitGroup
+	running              bool
+	stop                 chan struct{}
+	httpOnce             sync.Once
+	registerer           prometheus.Registerer
+	initDevices          func() error
+	startHTTP            func()
 	collectionInterval   int
 	port                 int
 	metricsEndpointPath  string
@@ -126,6 +135,7 @@ type MetricServer struct {
 
 func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *MetricServer {
 	return &MetricServer{
+		registerer:           prometheus.DefaultRegisterer,
 		collectionInterval:   collectionInterval,
 		port:                 port,
 		metricsEndpointPath:  metricsEndpointPath,
@@ -133,40 +143,87 @@ func NewMetricServer(collectionInterval, port int, metricsEndpointPath string) *
 	}
 }
 
-// Start performs necessary initializations and starts the metric server.
-func (m *MetricServer) Start() error {
-	glog.Infoln("Starting metrics server")
+// Registerer returns the Prometheus Registerer used by the metrics server.
+func (m *MetricServer) Registerer() prometheus.Registerer {
+	if m != nil && m.registerer != nil {
+		return m.registerer
+	}
+	return prometheus.DefaultRegisterer
+}
 
+func defaultInitDevices() error {
 	driverVersion, ret := nvml.SystemGetDriverVersion()
 	if ret != nvml.SUCCESS {
 		return fmt.Errorf("failed to query nvml: %v", nvml.ErrorString(ret))
 	}
 	glog.Infof("nvml initialized successfully. Driver version: %s", driverVersion)
 
-	err := DiscoverGPUDevices()
-	if err != nil {
+	if err := DiscoverGPUDevices(); err != nil {
 		return fmt.Errorf("failed to discover GPU devices: %v", err)
 	}
-
-	go func() {
-		http.Handle(m.metricsEndpointPath, promhttp.Handler())
-		err := http.ListenAndServe(fmt.Sprintf(":%d", m.port), nil)
-		if err != nil {
-			glog.Infof("Failed to start metric server: %v", err)
-		}
-	}()
-
-	go m.collectMetrics()
 	return nil
 }
 
-func (m *MetricServer) collectMetrics() {
+// Start performs necessary initializations and starts the metric server.
+func (m *MetricServer) Start() error {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.running {
+		return nil
+	}
+
+	glog.Infoln("Starting metrics server")
+
+	initFn := m.initDevices
+	if initFn == nil {
+		initFn = defaultInitDevices
+	}
+	if err := initFn(); err != nil {
+		return err
+	}
+
+	m.httpOnce.Do(func() {
+		if m.startHTTP != nil {
+			m.startHTTP()
+			return
+		}
+		go func() {
+			http.Handle(m.metricsEndpointPath, promhttp.Handler())
+			err := http.ListenAndServe(fmt.Sprintf(":%d", m.port), nil)
+			if err != nil {
+				glog.Infof("Failed to start metric server: %v", err)
+			}
+		}()
+	})
+
+	stopCh := make(chan struct{})
+	m.stop = stopCh
+	m.running = true
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.collectMetrics(stopCh)
+	}()
+	return nil
+}
+
+func (m *MetricServer) collectMetrics(stopCh <-chan struct{}) {
 	gmc = &mCollector{}
-	t := time.NewTicker(time.Millisecond * time.Duration(m.collectionInterval))
+	interval := time.Millisecond * time.Duration(m.collectionInterval)
+	if interval <= 0 {
+		interval = 30 * time.Second
+	}
+	t := time.NewTicker(interval)
 	defer t.Stop()
 
 	for {
 		select {
+		case <-stopCh:
+			return
 		case <-t.C:
 			devices, err := GetDevicesForAllContainers()
 			if err != nil {
@@ -252,6 +309,20 @@ func (m *MetricServer) resetMetricsIfNeeded() {
 	}
 }
 
-// Stop performs cleanup operations and stops the metric server.
+// Stop performs cleanup operations and stops the metric server collection loop.
+// Stop is idempotent and allows Start to be called again after a GPU reset.
 func (m *MetricServer) Stop() {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if !m.running {
+		return
+	}
+	m.running = false
+	close(m.stop)
+	m.wg.Wait()
+	gpuDevices = nil
 }
