@@ -1,23 +1,28 @@
 # NRI Device Injector Plugin
 
-Based on [containerd NRI](https://github.com/containerd/nri/tree/main) and the [example plugin](https://github.com/containerd/nri/tree/main/plugins/device-injector), this device injector plugin injects devices into containers specified by pod annotations. 
+Based on [containerd NRI](https://github.com/containerd/nri/tree/main) and the [example plugin](https://github.com/containerd/nri/tree/main/plugins/device-injector), this device injector plugin injects allowlisted NVIDIA GPU and GPUDirect character devices into containers specified by pod annotations.
+
+## Flags
+
+- `--allowed-namespaces`: Comma-separated namespaces whose pods may use `devices.gke.io/container.*` annotations. Empty (`""`) rejects every annotation, and `"*"` allows all namespaces (the Standard cluster manifest sets `--allowed-namespaces=default`).
+- `--allow-mig-capabilities`: Allow injecting `/dev/nvidia-caps/nvidia-cap[0-9]+` devices from pod annotations (default `false`).
 
 ## To annotate pod with device injections
-Devices are annotated with the key `devices.gke.io/container.$CONTAINER_NAME` to have devices injected into `$CONTAINER_NAME`. Full annotation of a device is 
-```
+Devices are annotated with the key `devices.gke.io/container.$CONTAINER_NAME` to have devices injected into `$CONTAINER_NAME`:
+```yaml
 annotations:
     devices.gke.io/container.$CONTAINER_NAME: |+
         - path: $PATH
-          type: $TYPE
-          major: $MAJOR
-          minor: $MINOR
-          file_mode: $FILE_MODE
-          uid: $UID
-          gid: $GID
 ```
-`path` is madatory, and the rest can be omitted.
+Only `path` is accepted. Device major/minor numbers, permissions, UID, and GID are read directly from the host device node via `lstat`. Permitted character device paths are:
+- `/dev/nvidia[0-9]+`
+- `/dev/nvidiactl`
+- `/dev/nvidia-uvm`
+- `/dev/dmabuf_import_helper`
+- `/dev/nvidia-caps/nvidia-cap[0-9]+` (only when `--allow-mig-capabilities` is enabled)
+
 Example annotation to inject 3 GPU devices into container `test`:
-```
+```yaml
 annotations:
     devices.gke.io/container.test: |+
         - path: /dev/nvidia0
