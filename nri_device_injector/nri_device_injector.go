@@ -16,8 +16,12 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
 	"golang.org/x/sys/unix"
 	"sigs.k8s.io/yaml"
@@ -28,49 +32,62 @@ import (
 )
 
 const (
-	deviceKeyPrefix = "devices.gke.io"
-	// Key prefix for device injection to a container, followed by container name
+	deviceKeyPrefix    = "devices.gke.io"
 	ctrDeviceKeyPrefix = deviceKeyPrefix + "/container."
 	pluginName         = "device_injector_nri"
 	pluginIdx          = "10"
-	// Device types.
-	blockDevice = "b"
-	charDevice  = "c"
-	fifoDevice  = "p"
+	charDevice         = "c"
+)
+
+var (
+	allowedNamespacesFlag = flag.String(
+		"allowed-namespaces",
+		"*",
+		`Comma-separated namespaces whose pods may use devices.gke.io/container.* annotations. Empty ("") rejects every annotation, "*" allows all namespaces.`,
+	)
+	allowMIGCapabilitiesFlag = flag.Bool(
+		"allow-mig-capabilities",
+		false,
+		"Allow injecting /dev/nvidia-caps/nvidia-cap[0-9]+ devices from pod annotations.",
+	)
+
+	baseDevicePathPattern = regexp.MustCompile(`^/dev/(nvidia[0-9]+|nvidiactl|nvidia-uvm|dmabuf_import_helper)$`)
+	migCapDevicePattern   = regexp.MustCompile(`^/dev/nvidia-caps/nvidia-cap[0-9]+$`)
 )
 
 type device struct {
-	Path     string `json:"path"`
-	Type     string `json:"type"`
-	Major    int64  `json:"major"`
-	Minor    int64  `json:"minor"`
-	FileMode uint32 `json:"file_mode"`
-	UID      uint32 `json:"uid"`
-	GID      uint32 `json:"gid"`
+	Path string `json:"path"`
 }
 
+type lstatFunc func(string, *unix.Stat_t) error
+
 type plugin struct {
-	stub stub.Stub
+	stub              stub.Stub
+	lstat             lstatFunc
+	allowedNamespaces map[string]bool
+	allowMIGCaps      bool
 }
 
 func main() {
-	var (
-		opts []stub.Option
-		err  error
-	)
+	flag.Parse()
 
-	opts = append(opts, stub.WithPluginName(pluginName))
-	opts = append(opts, stub.WithPluginIdx(pluginIdx))
+	opts := []stub.Option{
+		stub.WithPluginName(pluginName),
+		stub.WithPluginIdx(pluginIdx),
+	}
 
-	p := &plugin{}
-
+	p := &plugin{
+		lstat:             unix.Lstat,
+		allowedNamespaces: parseAllowedNamespaces(*allowedNamespacesFlag),
+		allowMIGCaps:      *allowMIGCapabilitiesFlag,
+	}
+	var err error
 	if p.stub, err = stub.New(p, append(opts, stub.WithOnClose(p.onClose))...); err != nil {
 		log.Errorf("Failed to create plugin stub: %v", err)
 		os.Exit(1)
 	}
 
-	err = p.stub.Run(context.Background())
-	if err != nil {
+	if err := p.stub.Run(context.Background()); err != nil {
 		log.Errorf("plugin exited with error %v", err)
 		os.Exit(1)
 	}
@@ -80,40 +97,59 @@ func (p *plugin) onClose() {
 	log.Info("NRI connection closed")
 }
 
-// CreateContainer handles CreateContainer requests relayed to the plugin by containerd NRI.
-// The plugin makes adjustment on containers with device injection annotations.
-// When multiple annotations annotate devices with the same path, only the first one will be injected.
+func parseAllowedNamespaces(raw string) map[string]bool {
+	allowed := make(map[string]bool)
+	for _, part := range strings.Split(raw, ",") {
+		if ns := strings.TrimSpace(part); ns != "" {
+			allowed[ns] = true
+		}
+	}
+	return allowed
+}
+
+func (p *plugin) namespaceAllowed(ns string) bool {
+	return ns != "" && (p.allowedNamespaces["*"] || p.allowedNamespaces[ns])
+}
+
+// CreateContainer handles CreateContainer requests from containerd NRI.
 func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, container *api.Container) (*api.ContainerAdjustment, []*api.ContainerUpdate, error) {
-	if pod == nil {
+	if pod == nil || container == nil {
 		return nil, nil, nil
 	}
 
-	var (
-		ctrName = container.Name
-		l       = log.WithFields(log.Fields{"container": ctrName, "pod": pod.Name, "namespace": pod.Namespace})
-
-		devices []device
-		err     error
-	)
-
+	ctrName := container.Name
+	l := log.WithFields(log.Fields{"container": ctrName, "pod": pod.Name, "namespace": pod.Namespace})
 	defer l.Info("Finished CreateContainer")
 	l.Info("Started CreateContainer")
-	devices, err = getDevices(ctrName, pod.Annotations)
+
+	rawAnnotation, hasAnnotation := pod.Annotations[ctrDeviceKeyPrefix+ctrName]
+	if !hasAnnotation || strings.TrimSpace(rawAnnotation) == "" {
+		l.Debug("No devices annotated")
+		return &api.ContainerAdjustment{}, nil, nil
+	}
+
+	if !p.namespaceAllowed(pod.Namespace) {
+		err := fmt.Errorf("namespace %q is not allowed to use %s annotations", pod.Namespace, ctrDeviceKeyPrefix)
+		l.WithError(err).Warn("Rejected device injection")
+		return nil, nil, err
+	}
+
+	devices, err := parseDevices(ctrName, pod.Annotations, p.allowMIGCaps)
 	if err != nil {
-		l.WithError(err).Warn("Failed to get device from pod annotation")
+		l.WithError(err).Warn("Failed to parse devices from pod annotation")
 		return nil, nil, err
 	}
 	adjust := &api.ContainerAdjustment{}
-
 	if len(devices) == 0 {
-		l.Debug("No devices annotated...")
+		l.Debug("No devices annotated")
 		return adjust, nil, nil
 	}
+
 	for _, d := range devices {
 		l.WithField("device", d.Path).Info("Annotated device")
-		deviceNRI, err := d.toNRIDevice()
+		deviceNRI, err := toNRIDevice(d.Path, p.allowMIGCaps, p.lstat)
 		if err != nil {
-			l.WithField("device", d.Path).WithError(err).Warn("Failed to get device from path")
+			l.WithField("device", d.Path).WithError(err).Warn("Failed to resolve host device")
 			return nil, nil, err
 		}
 		adjust.AddDevice(deviceNRI)
@@ -122,78 +158,85 @@ func (p *plugin) CreateContainer(_ context.Context, pod *api.PodSandbox, contain
 	return adjust, nil, nil
 }
 
-// getDevices returns parsed devices from pod annotations of device injections.
-func getDevices(ctrName string, podAnnotations map[string]string) ([]device, error) {
-	var (
-		deviceKey string = ctrDeviceKeyPrefix + ctrName
-
-		annotation    []byte
-		parsedDevices []device
-		devices       []device
-	)
-
-	if value, ok := podAnnotations[deviceKey]; ok {
-		annotation = []byte(value)
-	}
-	if annotation == nil {
+func parseDevices(ctrName string, podAnnotations map[string]string, allowMIGCaps bool) ([]device, error) {
+	deviceKey := ctrDeviceKeyPrefix + ctrName
+	value, ok := podAnnotations[deviceKey]
+	if !ok {
 		return nil, nil
 	}
 
-	if err := yaml.Unmarshal(annotation, &parsedDevices); err != nil {
+	var parsedDevices []device
+	if err := yaml.UnmarshalStrict([]byte(value), &parsedDevices); err != nil {
 		return nil, fmt.Errorf("invalid device annotation %q: %w", deviceKey, err)
 	}
-	paths := make(map[string]bool)
+
+	seen := make(map[string]bool, len(parsedDevices))
+	var devices []device
 	for _, d := range parsedDevices {
-		if _, got := paths[d.Path]; got {
-			continue
-		} else {
-			paths[d.Path] = true
-			devices = append(devices, d)
+		if err := validateDevicePath(d.Path, allowMIGCaps); err != nil {
+			return nil, fmt.Errorf("invalid device annotation %q: %v", deviceKey, err)
 		}
+		if seen[d.Path] {
+			continue
+		}
+		seen[d.Path] = true
+		devices = append(devices, d)
 	}
 	return devices, nil
 }
 
-// toNRIDevice retrieves device's major, minor and type from its path, and returns a NRI device
-func (d *device) toNRIDevice() (*api.LinuxDevice, error) {
-	var (
-		stat unix.Stat_t
-	)
-	if err := unix.Lstat(d.Path, &stat); err != nil {
-		return nil, fmt.Errorf("failed to get info from device path %s: %v", d.Path, err)
+func validateDevicePath(path string, allowMIGCaps bool) error {
+	if path == "" {
+		return fmt.Errorf("device path cannot be empty")
+	}
+	if filepath.Clean(path) != path {
+		return fmt.Errorf("device path %q must be canonical", path)
+	}
+	if baseDevicePathPattern.MatchString(path) {
+		return nil
+	}
+	if allowMIGCaps && migCapDevicePattern.MatchString(path) {
+		return nil
+	}
+	return fmt.Errorf("device path %q is not in the allowlist", path)
+}
+
+func toNRIDevice(path string, allowMIGCaps bool, lstat lstatFunc) (*api.LinuxDevice, error) {
+	if err := validateDevicePath(path, allowMIGCaps); err != nil {
+		return nil, err
+	}
+	if lstat == nil {
+		lstat = unix.Lstat
 	}
 
-	var (
-		devNumber = uint64(stat.Rdev)
-		major     = unix.Major(devNumber)
-		minor     = unix.Minor(devNumber)
-		mode      = stat.Mode
-		devType   string
-	)
-	switch mode & unix.S_IFMT {
-	case unix.S_IFBLK:
-		devType = blockDevice
-	case unix.S_IFCHR:
-		devType = charDevice
-	case unix.S_IFIFO:
-		devType = fifoDevice
-	default:
-		return nil, fmt.Errorf("invalid device type %v from device path %v", mode, d.Path)
+	// Reject symlinked parent directories under /dev.
+	if dir := filepath.Dir(path); dir != "/dev" {
+		var dirStat unix.Stat_t
+		if err := lstat(dir, &dirStat); err != nil {
+			return nil, fmt.Errorf("lstat parent directory %q: %v", dir, err)
+		}
+		if (dirStat.Mode & unix.S_IFMT) != unix.S_IFDIR {
+			return nil, fmt.Errorf("parent path %q is not a directory (mode %#o)", dir, dirStat.Mode)
+		}
 	}
-	apiDev := &api.LinuxDevice{
-		Path:  d.Path,
-		Type:  devType,
-		Major: int64(major),
-		Minor: int64(minor),
+
+	var stat unix.Stat_t
+	if err := lstat(path, &stat); err != nil {
+		return nil, fmt.Errorf("lstat device path %q: %v", path, err)
 	}
-	if d.FileMode != 0 {
-		apiDev.FileMode = api.FileMode(d.FileMode)
+	if (stat.Mode & unix.S_IFMT) != unix.S_IFCHR {
+		return nil, fmt.Errorf("device path %q is not a character device (mode %#o)", path, stat.Mode)
 	}
-	if d.UID != 0 {
-		apiDev.Uid = api.UInt32(d.UID)
-	}
-	if d.GID != 0 {
-		apiDev.Gid = api.UInt32(d.GID)
-	}
-	return apiDev, nil
+
+	devNumber := uint64(stat.Rdev)
+	fileMode := os.FileMode(stat.Mode) & os.ModePerm
+	return &api.LinuxDevice{
+		Path:     path,
+		Type:     charDevice,
+		Major:    int64(unix.Major(devNumber)),
+		Minor:    int64(unix.Minor(devNumber)),
+		FileMode: api.FileMode(fileMode),
+		Uid:      api.UInt32(stat.Uid),
+		Gid:      api.UInt32(stat.Gid),
+	}, nil
 }

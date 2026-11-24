@@ -55,6 +55,8 @@ spec:
       containers:
         - image: "gcr.io/gke-release/nri-device-injector@sha256:6e79483d52abdc28454bf186320b10a56b0f117a10e8d65d5c74dbb821a76970"
           name: device-injector
+          args:
+            - "--allowed-namespaces=default"
           resources:
             requests:
               cpu: 150m
