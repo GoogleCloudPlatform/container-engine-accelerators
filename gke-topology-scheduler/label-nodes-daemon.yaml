@@ -32,4 +32,4 @@ spec:
       - name: scripts-volume
         configMap:
           name: topology-scheduler-scripts
-      serviceAccount: topology-scheduler
+      serviceAccountName: topology-scheduler
